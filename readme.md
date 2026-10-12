@@ -11,12 +11,13 @@
 
 ---
 
-## 1. 清单（在用 28 个扩展 = 26 npm + 2 git）
+## 1. 清单（在用 29 个扩展 = 27 npm + 2 git）
 
-**实际在用 28 个**。
+**实际在用 29 个**。
 > 2026-10-06 增补 3 个：联网（`pi-web-access`）、会话级撤销（`@bacnh85/pi-checkpoint`）、完成通知（`pi-notify`）。PR 插件（`@henryqw/pi-pr`）装后即卸，见 §7.7。
 > 2026-10-08 精简：卸 `pi-budget-guard`（与 `pi-meter` 功能三层全重叠，见 §7.12）与 `pi-warm-cache`（本机不生效的死安装，见 §7.12）；补装 `@arhen/pi-core-subagent`、`pi-ocr`（此前清单漂移：列了但实际未装）；新增 `pi-deepseek-cache`（DeepSeek 后端专用，与 §5.5 原判相悳 —— **2026-10-09 已验实并卸载，见 §7.13**）。
 > 2026-10-09 压缩侧换血（见 §7.13）：装 `pi-cache-compact`（provider 无关的压缩调用缓存，本机实测命中 68.6%）；卸 `pi-deepseek-cache`（绑定 DeepSeek）与 `pi-compaction-cache`（被 cache-compact 取代，且同抢 `session_before_compact`）。29 → 28。
+> 2026-10-10 增补 `@izhimu/pi-caveman`（caveman 输出压缩层，默认 `ultracave`，见 §3.12）：28 → 29。
 
 **不锁版本**：安装命令一律不带 `@版本号`（取 npm 最新），本清单不维护版本矩阵。要查本机实际装的版本：
 
@@ -69,6 +70,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `npm:pi-cache-compact` | 压缩调用复用前缀缓存：把摘要请求拼成活会话的**严格续写**（同 system + tools + messages + 追加一问） | **2026-10-09 装，provider 无关**（源码 0 处 "deepseek"）。实测压缩调用 `cacheRead: 81920`（本机代理命中 68.6%），Pi 默认压缩同一前缀必为 0。**零配置可用**，取证配置见 §3.3；必须装在 `pi-prefix-stabilizer` 之后，见 §2.2 |
 | `npm:@bacnh85/pi-checkpoint` | 会话级撤销：`/undo` `/redo` `/checkpoint` | 2026-10-06 装。**必须在 git 仓库内**，否则三个命令静默 no-op；写 `refs/pi-checkpoints/*`，不碰分支/tag/stash；坑：只还原已跟踪文件，本轮新增的未跟踪文件留在原地（见 §3.8）。只在无交互 `pi -p` 下验证过不报错，`/undo` 本身未实测 |
 | ~~`npm:pi-cwd-guard`~~ | cwd/路径闸：曾保护 .env/密钥、拦破坏性路径 | **已卸载**（2026-10-08，见 §7.10） |
+| `npm:@izhimu/pi-caveman` | 输出压缩层（caveman / ultracave / megacave 三模式） | 2026-10-10 装。**挂 `before_agent_start` 注入打法规则 + `turn_end` 统计 token**，不注册常驻工具；`/caveman` `/ultracave` `/megacave` 即时切换并持久化。本机默认 **`ultracave`**（碎句，官方标称 −75% 输出 token），配置见 §3.12。自带 3 个 skill（`caveman` / `ultracave` / `megacave`），按需 `omnify` 可捞 |
 
 ### 1.2 本地扩展（不走 `pi install`，放 `~/.pi/agent/extensions/`）
 
@@ -92,8 +94,9 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `cangjie-skill`（仓颉） | `git clone github.com/kangarooking/cangjie-skill` | 把书 / 长视频 / 播客 / 课程蒸馏成可执行 skills |
 | `goutoujunshi`（狗头军师） | `git clone github.com/shengjidaguai-china/goutoujunshi` | 恋爱军师与情绪支持 |
 | `pimeter` | **不用装**：`npm:pi-meter` 自带（`~/.pi/agent/npm/node_modules/pi-meter/skills/pimeter/`） | 花费账单怎么看：本机走本地代理，内置价格表对不上，**数字仅供参考**（见 §1.1 pi-meter 行） |
+| `caveman` / `ultracave` / `megacave` | **不用装**：`npm:@izhimu/pi-caveman` 自带（`~/.pi/agent/npm/node_modules/@izhimu/pi-caveman/skills/`） | 输出压缩的三套打法规则。当前驻留 `ultracave`（见 §3.12）；规则本体由扩展在 `before_agent_start` 按需注入，**与「skill 不常驻注入」的纪律不冲突**（§7.17） |
 
-> skill 不再常驻注入系统提示词（见 §6.2），需要时用 `omnify` 检索。实测本机技能清单 = 上述 3 条（`pi list`/agent 技能面板可见）。
+> skill 不再常驻注入系统提示词（见 §6.2），需要时用 `omnify` 检索。实测本机技能清单 = 上述 3 条自装 + `pi-meter` 自带 `pimeter` + `pi-caveman` 自带 3 条（`pi list`/agent 技能面板可见）。
 
 ---
 
@@ -136,6 +139,9 @@ for p in pi-secret-guard pi-mono-context-guard pi-meter @narumitw/pi-plan-mode; 
   pi install "npm:$p" || echo "[失败] $p"
 done
 
+# 输出压缩（caveman 层；默认模式靠 §3.12 的 config.json，装完即用，重启会话后生效）
+pi install "npm:@izhimu/pi-caveman"
+
 # 本地扩展（含 pi-pet-autostart.ts，宠物默认启用就靠它）
 node install-local-extensions.mjs
 # 项目级/用户级配置：把仓库 config/ 拷进 pi 真正读取的位置（`.pi/` 是运行时目录，仓库里整体忽略）
@@ -154,7 +160,7 @@ node install-project-config.mjs
 >
 > 若 `pi update --extensions` 也超时，同一改写继续生效（git 源的 update 就是 git pull）；装完即可 `/reload`。
 
-装完自查：`pi list` 应见 **28 个扩展**（26 npm + 2 git）
+装完自查：`pi list` 应见 **29 个扩展**（27 npm + 2 git）
 
 ### 2.2 硬顺序约束
 
@@ -347,7 +353,7 @@ npm rebuild better-sqlite3  # 批完必须重编，批准本身不建原生 bind
 > | `"git:github.com/qq458249269/pi-dsh-pet"` | **照旧加载**（本机踩了一个月才发现） | 重复注册 `/pet` `/pet-stop` `/pet-say` `/pet-status`（本地薄客户端也注册同名 + `/pet-auto`）；多一条 `session_start → ensureHost()` 走 `state.json` 单一来源；终端刷 `[pi-dsh-pet] /feed 连接断开，2s 后重连`，headless 跑不完（§7.13 的 exit 124 噪音一半来自它） |
 > | `{"source": "git:...", "extensions": []}` | **不加载** ✅ | 干净：`pi list` 该行显示 `git:github.com/qq458249269/pi-dsh-pet (filtered)`，终端只剩本地客户端的 `[pi-pet-autostart]` |
 >
-> 验证法（改完 `/reload` 后跑）：`timeout 70 pi --no-session -p "reply with: ok"` → 输出里应**不出现** `[pi-dsh-pet]` 前缀的行；`pi list` 应出现 `(filtered)` 且条目数不变（28）。上游源码留着做参考（`~/.pi/agent/git/github.com/qq458249269/pi-dsh-pet/pi/extensions/index.ts`），本机跑的是本地薄客户端。
+> 验证法（改完 `/reload` 后跑）：`timeout 70 pi --no-session -p "reply with: ok"` → 输出里应**不出现** `[pi-dsh-pet]` 前缀的行；`pi list` 应出现 `(filtered)` 且条目数不变（29）。上游源码留着做参考（`~/.pi/agent/git/github.com/qq458249269/pi-dsh-pet/pi/extensions/index.ts`），本机跑的是本地薄客户端。
 
 **首次开窗要下 Electron ≈100MB**（上游在 Windows 自动设 `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`）；包里 91 个透明 WebM，`assets/thumb` 解包 48MB。
 
@@ -502,6 +508,21 @@ cd() {
 
 > `lastChangelogVersion: "1.1.0"`、`collapseChangelog: true`、`treeFilterMode: "default"` 是宿主自维护的，不要手改。
 > 改完 `settings.json` 一律 **`/reload`**（本会话不重启）——但注意：**会话中途改 `packages`/`extensions` 会改变已开扩展的加载面**，顺序是先改配置再开新会话（§9.6 教训）。
+
+### 3.12 `pi-caveman`：默认 ultracave 模式（2026-10-10）
+
+**本机生产配置**：`%APPDATA%\caveman\config.json` = `{"defaultMode":"ultracave"}`
+
+```json
+{ "defaultMode": "ultracave" }
+```
+
+- **两个落盘点**，都不是 `settings.json`：① `%APPDATA%\caveman\config.json`（用户级默认模式，写 `defaultMode`，照 readme「Manual config file format」即可持久化）；② `~/.pi/.caveman-active`（**会话 flag**，内容就是模式名，`/caveman <mode>`、`/ultracave`、`/megacave` 切换时同步写它）。flag 优先级高于 config，所以本机现况两处都写 `ultracave`，重开会话不回落默认 `caveman`。
+- **模式解析顺序**（源码 `extensions/caveman.ts`）：`CAVEMAN_DEFAULT_MODE` 环境变量 → 仓库级 `.caveman/config.json` / `.caveman.json`（从 cwd 向上找 64 层）→ 用户级 `%APPDATA%\caveman\config.json` → fallback `caveman`。**legacy 别名**：`full`/`lite`→`caveman`、**`ultra`→`ultracave`**、`wenyan*`→`megacave`。
+- **命令**（均即时生效并持久化到上面两个文件）：`/caveman`（切 caveman）、`/caveman <caveman|ultracave|megacave|off|status>`、`/ultracave`、`/megacave`、`/caveman off`、`/caveman status`（别名 `/caveman-status`）。自然语言也能切（"be brief" / "normal mode" 等，带否定词防护）。
+- **省钱统计**：`/caveman status` 看本会话输出 token 与按官方压缩比估算的节省（caveman ≈65% / ultracave ≈75% / megacave ≈80%，官方标称值，**本机未复测**）。
+- **对前缀缓存的影响**：首轮注入整份 skill 规则、后续轮次只发轻量提醒；**切模式 = 换一次 system 前缀文本**，切完第一次 `cacheRead` 归 0，之后继续复用（原理同 §2.2 的 prefix-stabilizer）。故：**模式定下来就别反复切**。
+- 想彻底关就 `/caveman off`（只删 flag，config 留档），或 `pi remove npm:@izhimu/pi-caveman`（**连带删 `%APPDATA%\caveman\`，否则留死配置**，§2.4 纪律）。
 
 ---
 
@@ -1017,6 +1038,24 @@ const AGENT_DIRS = [".agents/agents", ".claude/agents", ".pi/agents"] as const;
 
 **教训**：诊断里出现具体版本号与文件路径时，先跑 `pi.exe --version` 和 `fd` 确认它们对当前 exe 成立，再动手改代码。跨版本的旧结论会被当成现状（那个 `json-parse.js` 是 0.87.1 的，exe 早已是 1.1.0）。
 
+### 7.17 `pi-caveman`：唯一会**改写 system 前缀文本**的扩展（2026-10-10）
+
+与本清单里其它 28 个扩展不同，`pi-caveman` 会在 `before_agent_start` **往 system prompt 注入规则文本**（首轮注入整份 skill，后续轮次只发轻量提醒），所以它与 §6 的静态前缀优化、与 §2.2 的 prefix-stabilizer 是同一根问题域：
+
+| 关注点 | 结论 |
+|---|---|
+| 对 wire 工具集 | **零影响**。它不注册任何工具，`tools` 部分字节数与装之前完全一致 |
+| 对 skill 常驻注入 | 它自带 3 个 skill（`caveman` / `ultracave` / `megacave`）。装法是 `pi.skills: ["./skills"]`，与本机「skill 不再常驻注入 system」（§6.2，由 `pi-lean-sections.ts` 压 `<skills>` 块）的机制不冲突；要查规则文本时 `omnify` 搜得到 |
+| 对前缀缓存 | **切换模式必然让首轮 `cacheRead: 0`**（system 文本变了）；同模式内连续对话不影响。**模式定下来就别反复切**，切多了等于反复自毁缓存 |
+| 与 `pi-prefix-stabilizer` | 不抢钩子（它只 hook `session_start`/`before_agent_start`/`input`/`turn_end`，压缩侧那个钩子是 `session_before_compact`），**不构成新的硬顺序约束**（§2.2 无需改） |
+| 与 `pi-cache-compact` | 同上，两者互不干扰 |
+
+**使用纪律**（与本手册「少切、少动」倾向一致）：
+
+1. 模式**只切一次**，切完就长期驻留；`/caveman status` 随时可查。
+2. 觉得输出变得难读、影响定位问题时，先确认是不是它干的（`/caveman off` 或 `/caveman` 切回），而不是怀疑别的扩展。
+3. 官方标称的省下 65%/75%/80% 输出 token 是它自己的口径，**本机未复测**；省的是输出侧，缓存命中与输入侧成本不受它影响。
+
 ---
 
 ### 7.17 配置源外迁 `config/`：`.pi/` 回到「纯运行时目录」（2026-10-10）
@@ -1084,6 +1123,8 @@ const AGENT_DIRS = [".agents/agents", ".claude/agents", ".pi/agents"] as const;
 | subagent 报 `2 model(s) available …` 后卡住 | `~/.pi/subagent.json` 的 `modelPolicy` 没锁 `default.model` | 写 `{"modelPolicy":{"default":{"model":"<provider>/<id>"}}}`（本机 `1/1`） |
 | `pi --no-session -p ...` 不退出（shell 报 exit 124） | 桌宠的 `/feed` 长连接或宿主进程挂着父会话；headless 永远不会自己走完 | 用 `timeout 70 pi ...` 包一层（§7.13 已记录）；屏蔽上游扩展后刷屏的重连日志也会消失（§7.15） |
 | 装东西后 pi-memory 报 `Could not locate the bindings file. Tried:` | 树被重解析，better-sqlite3 换了版本 → `allowScripts` 对不上 → 原生 binding 没编 | `npm install-scripts approve better-sqlite3 && npm rebuild better-sqlite3`（详见 §3.1） |
+| 输出突然变碎句 / 忽然变得啰嗦 | caveman 模式被切了（自然语言触发、别名、或 flag 被写） | `/caveman status` 看当前模式；切回 `/ultracave`（= `/caveman ultra`）。配置与 flag 两个落盘点见 §3.12 |
+| 切了 caveman 模式后本轮 `cacheRead: 0` | 换了 system 前缀文本，首轮必然重算 | **正常现象**，别反复切；第二轮起恢复。原理同 §2.2 的 prefix-stabilizer |
 
 **磁盘布局速查**
 
@@ -1098,7 +1139,9 @@ const AGENT_DIRS = [".agents/agents", ".claude/agents", ".pi/agents"] as const;
 | `~/.pi/agent/state/` | 跨会话记账，**2026-10-09 清理后只剩 `pi-pet-autostart.json`**（记「本 pid 已弹过窗 + 落在哪只宠物上」） |
 | `~/.pi/agent/git/` | git 源扩展（lazy-tools fork + dsh-pet，后者扩展被屏蔽，见 §3.6） |
 | `~/.pi/agent/npm/node_modules/` | npm 源扩展 |
-| `~/.pi/agent/npm/package.json` | 26 个 dep + `allowScripts`（见 §3.1） |
+| `~/.pi/agent/npm/package.json` | 27 个 dep + `allowScripts`（见 §3.1） |
+| `%APPDATA%\caveman\config.json` | `pi-caveman` 的默认模式（`defaultMode`，见 §3.12）——**不在 `~/.pi/agent/` 下**，在 Roaming |
+| `~/.pi/.caveman-active` | `pi-caveman` 的会话 flag（内容就是模式名，优先级高于上面的 config，见 §3.12） |
 | `~/.pi/agent/config/` | **已空**（smart-context 包卸载后配置已删，新装带 `startupConfig` 的包才会写） |
 本目录名写死在 `dist/config.js:403`。本仓库这份是**生成物**：canonical 在 `config/pi-project/settings.json`，跑 `node install-project-config.mjs` 拷入 |
 | `<仓库>/config/pi-project/*` | **项目级配置的 canonical 源**：`settings.json`（→ 拷进 `<仓库>/.pi/`）、`zvec.json`（留档件，不参与同步，见 §7.11） |
@@ -1114,7 +1157,7 @@ const AGENT_DIRS = [".agents/agents", ".claude/agents", ".pi/agents"] as const;
 
 在另一台机器上照本清单完整走一遍。**配置值与 §1–§7 全部一致，唯一差异是路径前缀**（本机 `yxh`，原记录机 `yinxuehao`；`compaction-cache.json` 的 `logPath` 已是本机路径）。
 
-2026-09-30 卸载 `pi-web-access` 后为 **18 项 / 5664B / 5 个工具**（详见 §1 与 §7.4）；2026-10-09 压缩侧换血（compaction-cache → cache-compact）后为 **28 项**（§7.13）。本节 §9.4 表里那行「`smart-context` / `compaction-cache` 已合规，未动」是快照原文，**勿照抄**。
+2026-10-09 压缩侧换血（compaction-cache → cache-compact）后为 **28 项**（§7.13）；2026-10-10 增补 `@izhimu/pi-caveman` 后为 **29 项**（27 npm + 2 git，§3.12）。本节 §9.4 表里那行「`smart-context` / `compaction-cache` 已合规，未动」是快照原文，**勿照抄**。
 
 ### 9.1 拉代码：未提交改动先备份再 fast-forward
 
