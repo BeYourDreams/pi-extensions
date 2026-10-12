@@ -663,7 +663,7 @@ cd() {
 > **只列非 hidden**：`.next/.nuxt/.venv/.turbo` 这些 fd 本就跳（除非 `hidden:true`），列进来是冗余。
 
 **另建 fd 全局 ignore 文件 `%APPDATA%\fd\ignore`**（`~/.config/fd/ignore` 是 POSIX 写法），内容与上表一致。好处：手工敲的 `fd`、以及 `~/.bashrc` 里 `alias find='fd'` 的交互式 shell 都自动生效，不依赖本扩展。
-> ⚠️ 但它**只在 fd 被调用时生效**，且同样**只在 git 仓库内认 `.gitignore`**——家目录 / `C:\Windows` 下依旧无效（见 §5 规则 E）。
+> ⚠️ 但它**只在 fd 被调用时生效**，且同样**只在 git 仓库内认 `.gitignore`**——家目录 / `C:\Windows` 下依旧无效（这类根已不再硬拦，见 §4.2 末）。
 
 **验证**：`/fd-check`（fd 可执行文件解析）。回归：`.sc-test/probe-fd.mjs`。回退：删 `extensions/pi-fd.ts` 再 `/reload`（`fd` 懒加载与否都不影响其余工具）。
 
@@ -682,7 +682,7 @@ cd() {
 **`powershell` 工具没有 `timeout` 参数**（§5 表里已记「注入不了」）。裸 `find` = `find .` = 从当前目录
 **递归打印整棵树**，无任何剪枝；放到大仓 / 家目录 / 系统盘就是几小时。bash 侧没这问题——守卫会把
 `find`/`find.exe` 归入搜索档、30s 默认超时（实测 `judgeBashCommand("find.exe . -maxdepth 6") → 30`）。
-**换 fd 也不会自动好**：见 §4.1 尾注——fd 的 ignore 规则在非 git 目录同样失效，真正要治的是**搜索根**，已由 §5 规则 E 拦。
+**换 fd 也不会自动好**：见 §4.1 尾注——fd 的 ignore 规则在非 git 目录同样失效。**2026-10-13 已撤规则 E**（原按家目录/AppData/系统盘/盘根硬拦搜索根）：误伤远多于收益——`cd C:\Users\me\proj && find . -maxdepth 2` 里 `cd` 的实参被当成搜索根，整条命令被 block。现在只保留 30s 超时兜底，搜索纪律靠文字层：查文件名 `fd`、查内容 `rg`，要治全局扫描就缩 `path`/`cwd`。
 
 **四层封锁**（前两层管模型，后两层管你自己）：
 

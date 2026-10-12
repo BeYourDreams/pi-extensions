@@ -236,7 +236,7 @@ export default function piFd(pi: ExtensionAPI): void {
 			"Up to 200 results.",
 		promptSnippet: "Find files/dirs by regex path match (type/extension/glob/age filters; pass timeoutMs)",
 		promptGuidelines: [
-			"查文件名/目录用 fd（可按 type/extension/glob/changedWithin 过滤），查文件内容用 grep。别用 bash 的 find：它不读 .gitignore、也不跳编译目录，慢一个量级。",
+"查文件名/目录一律用 fd 工具（可按 type/extension/glob/changedWithin 过滤），查文件内容一律用 rg（ripgrep）。bash 的 find/grep 不再被硬拦，但仍别用：find 不读 .gitignore、也不跳编译目录，慢一个量级。",
 			"fd 已默认跳过 node_modules/dist/target 等编译目录，maxDepth 只是再压一层深度，不能替代这个——深层大目录照样慢，先缩 path。",
 			"每次 fd 必须显式传 timeoutMs（毫秒，1s–120s，默认 30s）：搜索只会在超时那一刻停下并返回部分结果，别让它裸跑。",
 		],
