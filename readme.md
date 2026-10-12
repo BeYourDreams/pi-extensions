@@ -20,6 +20,8 @@
 > 2026-10-10 增补 `@izhimu/pi-caveman`（caveman 输出压缩层，默认 `ultracave`，见 §3.12）：28 → 29。
 > 2026-10-12 三层压缩补齐（29 → 30）：装 `pi-ponytail`（懒扩展打法层，默认 `ultra`，见 §3.13）与 `pi-rtk`（输入侧 token 削减，见 §3.14）；卸 `pi-secret-guard`（凭据拦截，已无提交侧闸，见 §7.19）。
 > 2026-10-12 压缩层三合一（30 → **28**）：装 `npm:@xynogen/pix-optimizer`（caveman + rtk + ponytail 合成一个扩展，一个 `/optimizer` 面板，见 §3.15），卸当天刚装的 `@izhimu/pi-caveman` / `pi-ponytail` / `pi-rtk`（3 → 1，26 npm + 2 git）。同日新增全局规则文件 `~/.pi/agent/AGENTS.md`（思考用最小充分推理 + 简单题直接答、`find`→`fd`、`grep`→`rg`），见 §5「全局规则」。
+> 2026-10-12 rtk 二进制修复：`winget install rtk-ai.rtk` 报 `unable to verify the first certificate`（本机 TLS 链被自定义根 CA/代理劫持，winget 的 schannel 不信）。**绕开 winget**，直接 curl release zip 装到查找路径 `~/.pi/agent/bin/rtk.exe`（`--ssl-no-revoke` 破证书问题），checksum 与 release 的 `checksums.txt` 逐位对上，`rtk --version` → 0.51.0 可跑。命令见 §3.15「二进制手动兜底」，排障见 §8。
+> 2026-10-12 清单瘦身：§1.1 / §1.2 / §1.3 / §4 的 **15 条已卸载行全部移除**（§1.1 删 9 条：`pi-edit-guard` §7.1 / `smart-context` §3.2 / `compaction-cache` §7.13 / `warm-cache` §7.12 / `budget-guard` §7.12 / `zvec` §7.11 / `secret-guard` §7.19 / `deepseek-cache` §7.13 / `cwd-guard` §7.10；§1.2 删 `no-find.ts` §7.9；§1.3 删 `ponytail-*` 5 skill §7.20；§4 删 5 条）。清单只留在用条目（仍 28 个），完整卸装理由与原始记录仍在对应 §3 / §7 小节。
 
 **不锁版本**：安装命令一律不带 `@版本号`（取 npm 最新），本清单不维护版本矩阵。要查本机实际装的版本：
 
@@ -39,17 +41,13 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `npm:pi-one-ui` | TUI 统一美化（Header/Context/WorkingLine/Editor/Footer） | 取代旧 `alps-pi`；要求 Node ≥22.19、Pi ≥0.84 |
 | `npm:pi-cache-guardian` | 缓存命中巡检 + 前缀漂移告警 | 与 §6 的 prefix-stabilizer 是同一根因的两端，一并用 |
 | `npm:@tian.zuo/pi-find` | `grep` / `find` 工具 | **覆盖内建同名工具**（替换，不是并列）。本机只用它的 `grep`；`find` 已降为懒加载兜底（见 §4.1） |
-| ~~`npm:pi-edit-guard`~~ | 覆盖内建 `edit` + 注册 `undo` | **已卸载**（见 §7.1），要装的话注意与 smart-edit 争 `edit` 槽。它空出来的「撤销」位：本机有 git + `edit` 精确替换（撤销走 git / 编辑历史），会话级撤销由 `@bacnh85/pi-checkpoint`（`/undo`）补上 |
 | `npm:@trycedar/pi-mdiff` | `md_inspect` / `md_diff` / `md_edit` | Markdown 结构化编辑，`.md` 改动优先用它 |
 | `npm:pi-mcp-adapter` | 一个 `mcp` 代理工具替代成百上千个 MCP 工具定义 | 装完重启自动读 `.mcp.json` |
 | `npm:pi-agent-browser-native` | 原生 `agent_browser*` 工具（8 个） | 0.9.3 起直接遍历宿主的 `sessionManager.buildSessionProjection()`，不再走 `getCurrentSystemMessage` 旧路径。Pi 1.0.0+ 宿主自带该 API，**不需要**兼容补丁。**但它声明 `node >=24.21.0`，本机 24.16.0 → 装卸时必有 `EBADENGINE` 警告（无害，见开头基线注）** |
 | `npm:@agenticup/pi-loop` | `loop` 递归深潜工具 | 入口是 `extensions/loop.ts`，不是 `dist/index.js` |
 | `npm:@arhen/pi-core-subagent` | 子代理（后台默认） | 2026-10-06 装；2026-10-08 发现清单漂移（列了但实际未装）后补装。`subagent`/`subagent_status`/`await_subagent`/`steer_subagent` 等；模型继承 leader（`1/1`），不读旧 `~/.pi/subagent.json` |
 | `git:github.com/qq458249269/pi-lazy-tools` | 按需工具加载（`omnify` 一站式：搜索 / 补参 / 代理执行） | **fork，含 jiti 加载器补丁**；npm 版 `@wolido/pi-lazy-tools` 已下架。**0.4.0 是 breaking**：常驻名单从自建 `~/.pi/lazy-tools.json` 改读 pi 的 `defaultTools`（见 §3.4）。本地 clone 在 `D:\AI\pi-lazy-tools`，改完直接 commit + push，`pi update --extensions` 就能带上 |
-| ~~`npm:@zhushanwen/pi-smart-context`~~ | 智能压缩：注册 `compact_context` 交 agent 自决 | **已卸载**（`pi uninstall npm:@zhushanwen/pi-smart-context`）：阈值提醒实测触发过（`sessions/*-pi-dsh-pet-*/12-29-47` 落在 89.5K/128K 与 91.9K/128K 两档），但 `compact_context` 作为 toolCall 出现 **0 次**，压缩收益 0。理由与数据见 §3.2 |
 | `npm:pi-prefix-stabilizer` | 系统提示词前缀稳定 + 漂移检测 | 与 cache-compact 有先后要求，见 §2.2 |
-| ~~`npm:pi-compaction-cache`~~ | 摘要调用复用已缓存前缀 | **已卸载**（2026-10-09，见 §7.13）：被 `pi-cache-compact` 取代，两者抢同一个 `session_before_compact`，只能留一个。旧必做配置在 §3.3 留档 |
-| ~~`npm:pi-warm-cache`~~ | 空闲期按厂商 TTL 续前缀缓存 | **已卸载**（2026-10-08，死安装，见 §7.12）；本机代理属未注册路由，当时纯静默待命 |
 | `npm:@henryqw/pi-ask-question` | `ask_question` 交互式提问（单题，1–3 选项 + 自定义答案，首项为推荐） | 歧义时问用户，比猜省事 |
 | `npm:@ssk_dev/rpiv-todo-lean` | `todo` 任务清单工具 + TUI overlay | `ctrl+shift+t` 折叠；`/todos` 看全量 |
 | `npm:@aboutlo/pi-smart-edit` | 覆盖内建 `edit`，容忍引号/空白不匹配 | **已生效**；`edit` 归它，匹配走「精确 → NFKC 归一化行」 |
@@ -59,19 +57,14 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `npm:pi-notify` | `agent_end` → Windows toast | 2026-10-06 装，零配置零依赖。Windows Terminal 走 PowerShell toast（`WT_SESSION` 判定），其他终端 OSC 777/9/99。subagent / `loop` 后台跑完靠它收通知。实测：headless 也发（OSC 777 直接打在 stdout） |
 
 | `npm:pi-test-runner` | 项目感知的测试运行工具 | 2026-10-07 装。结构化跑测试，替代手写 `bash npm test`；懒加载 |
-| ~~`npm:pi-budget-guard`~~ | 会话花费追踪 + 预算上限 | **已卸载**（2026-10-08，见 §7.12）。与 `pi-meter` 在追踪/告警/拦截三层全重叠，meter 是超集；原 2026-10-07 装 |
-| ~~`npm:pi-zvec`~~ | 本地语义代码搜索（BM25 + embedding，每项目索引） | **已卸载**（2026-10-08，见 §7.11）。原 2026-10-07 装（**自动模式**索引，卸载时连项目索引目录一并删除） |
 | `npm:pi-ocr` | 多后端 OCR（MinerU 免费云 / Ollama 本地 / Pix2Text），零配置 | 2026-10-07 列装但实际漂移未装，2026-10-08 补装。截图/PDF 出文本；懒加载 |
 | `npm:@chendpoc/pi-memory` | 跨会话记忆（MEMORY.md ground truth + JSONL sidecar 检索） | 2026-10-07 装。备选 `pi-session-memory` 因 `node:sqlite` 在 Pi 内嵌运行时缺失（`ResolveMessage: No such built-in module: node:sqlite`）加载即败，已卸，见 §7.6 |
-| ~~`npm:pi-secret-guard`~~ | 曾拦截提交 API key / 凭据到 git | **已卸载**（2026-10-12，见 §7.19）。原 2026-10-07 装 |
 | `npm:pi-mono-context-guard` | 上下文体积硬闸：自动截断 read/rg 超长输出 | 2026-10-07 装。cache-guardian 只告警，这是截断侧；懒加载 |
 | `npm:pi-meter` | 花费追踪 + 预算告警 + auto-downshift + 硬截断 | 2026-10-07 装。**唯一预算侧**（budget-guard 2026-10-08 已卸，追踪/告警/拦截/降级全并于此）；本机走本地代理，auto-downshift 与内置价格表可能对不上，费用数字仅供参考；懒加载 |
 | `npm:@narumitw/pi-plan-mode` | `/plan` 只读规划模式（Codex 风格） | 2026-10-07 装；懒加载 |
 | `npm:@narumitw/pi-lsp` | LSP 工具（语言无关，共享 runner，可配置） | 2026-10-07 装（此前只在增补注里提过，本行 2026-10-08 补录）；懒加载 |
-| ~~`npm:pi-deepseek-cache`~~ | DeepSeek 前缀缓存：命中率遥测 + 前缀守卫 + 缓存友好压缩 | **已卸载**（2026-10-09，见 §7.13）：全部功能绑定 DeepSeek 后端（DeepSeek 价格表换算 + `deepseek-flash` 压缩调用 + 注册表查 deepseek provider），本机代理（localhost:20128 的「GPT-6 Astra」）三条全失效。2026-10-08 装 |
 | `npm:pi-cache-compact` | 压缩调用复用前缀缓存：把摘要请求拼成活会话的**严格续写**（同 system + tools + messages + 追加一问） | **2026-10-09 装，provider 无关**（源码 0 处 "deepseek"）。实测压缩调用 `cacheRead: 81920`（本机代理命中 68.6%），Pi 默认压缩同一前缀必为 0。**零配置可用**，取证配置见 §3.3；必须装在 `pi-prefix-stabilizer` 之后，见 §2.2 |
 | `npm:@bacnh85/pi-checkpoint` | 会话级撤销：`/undo` `/redo` `/checkpoint` | 2026-10-06 装。**必须在 git 仓库内**，否则三个命令静默 no-op；写 `refs/pi-checkpoints/*`，不碰分支/tag/stash；坑：只还原已跟踪文件，本轮新增的未跟踪文件留在原地（见 §3.8）。只在无交互 `pi -p` 下验证过不报错，`/undo` 本身未实测 |
-| ~~`npm:pi-cwd-guard`~~ | cwd/路径闸：曾保护 .env/密钥、拦破坏性路径 | **已卸载**（2026-10-08，见 §7.10） |
 | `npm:@xynogen/pix-optimizer` | **压缩三合一**：caveman（输出，ASD-STE100 四档）+ ponytail（做法，YAGNI 三档）+ RTK（输入，bash 命令改写） | 2026-10-12 装。**取代**当天先装后卸的 `@izhimu/pi-caveman` / `pi-ponytail` / `pi-rtk`（三者功能被本包重写合并，3 → 1）。不注册任何工具；唯一入口是 `/optimizer`（**只有交互面板，无文本参数形**），状态存 `~/.pi/agent/pix.json` 的 `optimizer` 段。本机全开 **`caveman: ultra` / `rtk: on` / `ponytail: ultra`**，配置见 §3.15。RTK 首次加载时自动下 `rtk` 二进制到 `~/.pi/agent/bin`（带 checksum 校验） |
 
 ### 1.2
@@ -84,7 +77,6 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `pi-lean-sections.ts` | 压 wire 上 system 的 `<docs>` / `<skills>` 两块（见 §6.2） |
 | `pi-fd.ts` | 注册 `fd` 工具（fd 原生接口），**取代 pi-find 那个只认 glob 的 `find`**（见 §4.1） |
 | `pi-bash-guard.ts` | **不注册工具**，只挂 `tool_call`：**所有** bash 命令没传 `timeout` 就按档注入（搜索 30s / 构建 1800s / 其余 300s，硬的 1 小时上限）、永不返回的命令（编辑器/分页器/前台 dev server/常驻容器）与后台化的搜索直接 block、给 `fd` 工具补 `timeoutMs`（见 §5 铁律二） |
-| ~~`no-find.ts`~~ | 曾挂 `tool_call` 钩子把命令行里的 `find` block 掉并提示改用 `fd`；**已卸载**（2026-10-08，§7.9）：本机恢复 `find`，4 层封锁全撤 |
 | `pi-pet-autostart.ts` | 让 `pi-dsh-pet` **默认常驻且整机只留一只**：TUI 会话一开就派发 `/pet`，已有宠物窗就复用不新开，跨会话/多开 pi 也只一只。不注册工具，只挂 `session_start` + `/pet-auto` 开关。配置见 §3.6 |
 
 > 曾经的 `pi-shell.ts`（把 `bash`+`powershell` 合成 `shell`）**已删除**：它不是 pi 内置也不是 npm 包，纯本仓库自写；它带的 `-156B` 收益抵不上维护成本，改用内建 `bash`（见 §6.1）。注意它在 `session_start` 里会无条件隐藏 `bash`/`powershell`，所以 `shell` 与 `bash` 只能二选一。
@@ -96,8 +88,6 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `cangjie-skill`（仓颉） | `git clone github.com/kangarooking/cangjie-skill` | 把书 / 长视频 / 播客 / 课程蒸馏成可执行 skills |
 | `goutoujunshi`（狗头军师） | `git clone github.com/shengjidaguai-china/goutoujunshi` | 恋爱军师与情绪支持 |
 | `pimeter` | **不用装**：`npm:pi-meter` 自带（`~/.pi/agent/npm/node_modules/pi-meter/skills/pimeter/`） | 花费账单怎么看：本机走本地代理，内置价格表对不上，**数字仅供参考**（见 §1.1 pi-meter 行） |
-规则是 system prompt 片段，`/optimizer` 切档，见 §3.15） |
-| ~~`ponytail` / `ponytail-review` / `ponytail-audit` / `ponytail-debt` / `ponytail-help`~~ | **已无**：随 `npm:pi-ponytail` 于 2026-10-12 卸载；等价能力由 `npm:@xynogen/pix-optimizer` 的 ponytail 提供（`lite`/`full`/`ultra`，**不附带 skill**，规则是 system prompt 片段，`/optimizer` 切档，见 §3.15） |
 
 > skill 不再常驻注入系统提示词（见 §6.2），需要时用 `omnify` 检索。实测本机技能清单 = 上述 3 条自装 + `pi-meter` 自带 `pimeter`；2026-10-12 后 **pi-caveman / pi-ponytail 自带的 8 条 skill 随包卸载消失**（`pi list`/agent 技能面板可见）。
 
@@ -544,6 +534,7 @@ cd() {
 - **ponytail 同理**：只管「**写什么**」——YAGNI 阶梯（该不该存在 → stdlib → 原生平台 → 已装依赖 → 一行 → 最小可用），**验证、错误处理、安全、可访问性永不裁**。与 caveman 正交，一个管写法一个管做法。
 - **RTK 两层自动生效**：① prompt 层注入 RTK 规则（叫模型自己给命令加前缀）；② 执行层**改写 `bash` 调用**，给已知首词（`git` `gh` `cargo` `npm` `pnpm` `docker` `kubectl` `ls` `grep` …）加 `rtk` 前缀。**命令链按 `&&` `||` `;` `|` 拆开后逐段加前缀**：`git add . && git push` → `rtk git add . && rtk git push`；引号内的运算符不算，解析不了就原样放行。**`rtk` 二进制缺失时绝不改写**。
 - **二进制来源**：查找顺序 `binary.json` → `~/.pi/agent/bin` → `PATH`（`@xynogen/pix-runtime` 的 Binaries）。RTK 开着且找不到时，**pi 首次加载会从 `rtk-ai/rtk` 下最新 release 到 `~/.pi/agent/bin`**，用 release 自带的 `checksums.txt` 校验，footer 打一行版本与来源，**不阻塞启动也不阻塞工具调用**。跳过条件：设了 `PI_OFFLINE` / `/optimizer` 里 RTK 关 / `binary.json` 指的路径不存在。`binary.json` 钉了路径时，改写用的就是那个带引号的路径。
+- **二进制手动兜底（2026-10-12 实测，winget/代理下载失败时走这条）**：`winget install rtk-ai.rtk` 报 TLS 握手失败（见 AGENTS.md「下载」铁律），直接绕开：`curl -sSL --ssl-no-revoke -o ~/.pi/agent/bin/rtk.zip https://github.com/rtk-ai/rtk/releases/latest/download/rtk-x86_64-pc-windows-msvc.zip && unzip ~/.pi/agent/bin/rtk.zip rtk.exe -d ~/.pi/agent/bin/`，完事删 zip。本机 0.51.0 已用此法装好。GitHub 直连被墙/超时时，改用 ghproxy 镜像（`https://ghproxy.net/` 或 `https://mirror.ghproxy.com/` 前缀拼 release URL）再取。
 - **对前缀缓存的影响**：caveman / ponytail 都往 system prompt 注入规则文本，**切档 = 换一次前缀文本 = 下一轮 `cacheRead` 归 0**（原理同 §2.2 prefix-stabilizer、§7.17）。**定下来就别反复切。**
 - **卸载**：`pi remove npm:@xynogen/pix-optimizer`，再删 `pix.json` 的 `optimizer` 段（§2.4 纪律）。`~/.pi/agent/bin/rtk` 是自动下载物，留删皆可。
 
@@ -570,19 +561,14 @@ cd() {
 | `pi-notify` | 无工具（`agent_end` 钩子 → Windows toast / OSC） |
 
 | `pi-test-runner` | 测试运行工具 |
-| ~~`pi-budget-guard`~~ | **已卸载** 2026-10-08（与 pi-meter 重叠），见 §7.12 |
-| ~~`pi-zvec`~~ | `zg_search` 等（**已卸载** 2026-10-08，见 §7.11） |
 | `pi-ocr` | OCR 工具 |
 | `@chendpoc/pi-memory` | 记忆工具 + 生命周期钩子 |
 | `pi-mono-context-guard` | 无工具（拦截钩子 + 命令） |
-| ~~`pi-secret-guard`~~ | **已卸载** 2026-10-12（凭据拦截钩子），见 §7.19 |
 | `pi-meter` | 1 个工具 + 预算命令 |
-| ~~`pi-deepseek-cache`~~ | **已卸载** 2026-10-09（全部功能绑定 DeepSeek 后端），见 §7.13 |
 | `pi-cache-compact` | 无工具（纯 `session_before_compact` 钩子；拒绝接管时打一行终端通知） |
 | `@narumitw/pi-plan-mode` | 工具 + `/plan` 模式切换 |
 | `pi-agent-browser-native` | `agent_browser` 及 7 个配套 |
 | `pi-lazy-tools`（fork） | `omnify`（0.4.0 起四合一；`load_tools`/`call_tool` 已撤。只代理执行、**不切 active 集**） |
-| ~~`pi-warm-cache`~~ | **已卸载** 2026-10-08（本机不生效的死安装），见 §7.12 |
 | `pi-prefix-stabilizer` / `pi-cache-compact` / `pi-cache-guardian` | 无工具（纯事件钩子） |
 | `@xynogen/pix-optimizer` | 无工具（纯事件钩子 + `/optimizer` **交互面板**；RTK 改写挂在 bash 工具调用上，见 §3.15） |
 
@@ -1230,6 +1216,7 @@ git rm config/agent/rtk-config.json     # 不删的话 install-project-config.mj
 | 输出突然变「懒」/ 突然开始砍功能（YAGNI 口吻） | ponytail 档位生效（本机默认就钉在 `ultra`，§3.15） | `/optimizer` 调档；持久化改 `pix.json` 的 `optimizer.ponytail`。它只管「写什么」，验证/错误处理/安全/可访问性永不裁 |
 | bash 命令前莫名多出 `rtk ` 前缀 | RTK 执行层在改写命令（模型忘了加前缀时的兜底） | **预期行为**，省的是回显 token；`/optimizer` 里 RTK 关掉即停止；二进制缺失时它不会改写（§3.15） |
 | 第一次开 pi 时 footer 出现下载 `rtk` 二进制的一行 | RTK 开着且 PATH/`binary.json` 里都找不到 `rtk` | **预期行为**，下到 `~/.pi/agent/bin` 且用 `checksums.txt` 校验过；离线时设 `PI_OFFLINE` 跳过（届时改写也不生效） |
+| `winget install rtk-ai.rtk` 报 `unable to verify the first certificate` | 本机 TLS 链被自定义根 CA/代理劫持（MITM），winget/schannel 不信链上的叶子证书 | **别用 winget**，按 §3.15 的手动兜底 curl release 到 `~/.pi/agent/bin/`；curl 加 `--ssl-no-revoke`、node 加 `--use-system-ca`，GitHub 不通时先走 `ghproxy.net` 镜像（AGENTS.md「下载」铁律） |
 
 **磁盘布局速查**
 
