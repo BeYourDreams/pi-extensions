@@ -11,13 +11,14 @@
 
 ---
 
-## 1. 清单（在用 29 个扩展 = 27 npm + 2 git）
+## 1. 清单（在用 30 个扩展 = 28 npm + 2 git）
 
-**实际在用 29 个**。
+**实际在用 30 个**。
 > 2026-10-06 增补 3 个：联网（`pi-web-access`）、会话级撤销（`@bacnh85/pi-checkpoint`）、完成通知（`pi-notify`）。PR 插件（`@henryqw/pi-pr`）装后即卸，见 §7.7。
 > 2026-10-08 精简：卸 `pi-budget-guard`（与 `pi-meter` 功能三层全重叠，见 §7.12）与 `pi-warm-cache`（本机不生效的死安装，见 §7.12）；补装 `@arhen/pi-core-subagent`、`pi-ocr`（此前清单漂移：列了但实际未装）；新增 `pi-deepseek-cache`（DeepSeek 后端专用，与 §5.5 原判相悳 —— **2026-10-09 已验实并卸载，见 §7.13**）。
 > 2026-10-09 压缩侧换血（见 §7.13）：装 `pi-cache-compact`（provider 无关的压缩调用缓存，本机实测命中 68.6%）；卸 `pi-deepseek-cache`（绑定 DeepSeek）与 `pi-compaction-cache`（被 cache-compact 取代，且同抢 `session_before_compact`）。29 → 28。
 > 2026-10-10 增补 `@izhimu/pi-caveman`（caveman 输出压缩层，默认 `ultracave`，见 §3.12）：28 → 29。
+> 2026-10-12 三层压缩补齐（29 → 30）：装 `pi-ponytail`（懒扩展打法层，默认 `ultra`，见 §3.13）与 `pi-rtk`（输入侧 token 削减，见 §3.14）；卸 `pi-secret-guard`（凭据拦截，已无提交侧闸，见 §7.18）。
 
 **不锁版本**：安装命令一律不带 `@版本号`（取 npm 最新），本清单不维护版本矩阵。要查本机实际装的版本：
 
@@ -61,7 +62,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | ~~`npm:pi-zvec`~~ | 本地语义代码搜索（BM25 + embedding，每项目索引） | **已卸载**（2026-10-08，见 §7.11）。原 2026-10-07 装（**自动模式**索引，卸载时连项目索引目录一并删除） |
 | `npm:pi-ocr` | 多后端 OCR（MinerU 免费云 / Ollama 本地 / Pix2Text），零配置 | 2026-10-07 列装但实际漂移未装，2026-10-08 补装。截图/PDF 出文本；懒加载 |
 | `npm:@chendpoc/pi-memory` | 跨会话记忆（MEMORY.md ground truth + JSONL sidecar 检索） | 2026-10-07 装。备选 `pi-session-memory` 因 `node:sqlite` 在 Pi 内嵌运行时缺失（`ResolveMessage: No such built-in module: node:sqlite`）加载即败，已卸，见 §7.6 |
-| `npm:pi-secret-guard` | 拦截提交 API key / 凭据到 git | 2026-10-07 装。误提交 key 不可逆，故必装；懒加载 |
+| ~~`npm:pi-secret-guard`~~ | 曾拦截提交 API key / 凭据到 git | **已卸载**（2026-10-12，见 §7.18）。原 2026-10-07 装 |
 | `npm:pi-mono-context-guard` | 上下文体积硬闸：自动截断 read/rg 超长输出 | 2026-10-07 装。cache-guardian 只告警，这是截断侧；懒加载 |
 | `npm:pi-meter` | 花费追踪 + 预算告警 + auto-downshift + 硬截断 | 2026-10-07 装。**唯一预算侧**（budget-guard 2026-10-08 已卸，追踪/告警/拦截/降级全并于此）；本机走本地代理，auto-downshift 与内置价格表可能对不上，费用数字仅供参考；懒加载 |
 | `npm:@narumitw/pi-plan-mode` | `/plan` 只读规划模式（Codex 风格） | 2026-10-07 装；懒加载 |
@@ -71,8 +72,10 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `npm:@bacnh85/pi-checkpoint` | 会话级撤销：`/undo` `/redo` `/checkpoint` | 2026-10-06 装。**必须在 git 仓库内**，否则三个命令静默 no-op；写 `refs/pi-checkpoints/*`，不碰分支/tag/stash；坑：只还原已跟踪文件，本轮新增的未跟踪文件留在原地（见 §3.8）。只在无交互 `pi -p` 下验证过不报错，`/undo` 本身未实测 |
 | ~~`npm:pi-cwd-guard`~~ | cwd/路径闸：曾保护 .env/密钥、拦破坏性路径 | **已卸载**（2026-10-08，见 §7.10） |
 | `npm:@izhimu/pi-caveman` | 输出压缩层（caveman / ultracave / megacave 三模式） | 2026-10-10 装。**挂 `before_agent_start` 注入打法规则 + `turn_end` 统计 token**，不注册常驻工具；`/caveman` `/ultracave` `/megacave` 即时切换并持久化。本机默认 **`ultracave`**（碎句，官方标称 −75% 输出 token），配置见 §3.12。自带 3 个 skill（`caveman` / `ultracave` / `megacave`），按需 `omnify` 可捞 |
+| `npm:pi-ponytail` | Ponytail 懒扩展打法层（YAGNI：先问需求是否该存在，stdlib/原生/已装依赖优先，最小 working diff，`ponytail:` 注释标记刻意从简） | 2026-10-12 装。**挂 `before_agent_start` 注入打法规则**，与 caveman 同型但管「写什么」而非「怎么说」；`/ponytail lite\|full\|ultra\|off` 会话切换、`/ponytail default <mode>` 持久化默认。本机默认 **`ultra`**，配置见 §3.13。自带 5 个 skill（`ponytail` / `ponytail-review` / `ponytail-audit` / `ponytail-debt` / `ponytail-help`），按需 `omnify` 可捞 |
+| `npm:pi-rtk` | RTK token 削减：拦 `tool_result` 过滤输出（源码去注释/构建噪声/测试聚合/git 压缩/搜索分组/lint 汇总 + ANSI 剥离 + 智能截断），官方标称 60–90% 输入 token 削减 | 2026-10-12 装。**注册 `rtk_configure` 工具**（agent 可运行时自调参数）+ `/rtk-stats` `/rtk-on` `/rtk-off` 等命令。用户级配置 `~/.pi/agent/rtk-config.json`（canonical 在仓库 `config/agent/`，走 `install-project-config.mjs` 同步），见 §3.14；懒加载 |
 
-### 1.2 本地扩展（不走 `pi install`，放 `~/.pi/agent/extensions/`）
+### 1.2
 
 仓库 `extensions/` 是 canonical 源，`node install-local-extensions.mjs` 幂等同步到用户目录（`--check` 只体检、有漂移 exit 1）。
 
@@ -95,8 +98,9 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `goutoujunshi`（狗头军师） | `git clone github.com/shengjidaguai-china/goutoujunshi` | 恋爱军师与情绪支持 |
 | `pimeter` | **不用装**：`npm:pi-meter` 自带（`~/.pi/agent/npm/node_modules/pi-meter/skills/pimeter/`） | 花费账单怎么看：本机走本地代理，内置价格表对不上，**数字仅供参考**（见 §1.1 pi-meter 行） |
 | `caveman` / `ultracave` / `megacave` | **不用装**：`npm:@izhimu/pi-caveman` 自带（`~/.pi/agent/npm/node_modules/@izhimu/pi-caveman/skills/`） | 输出压缩的三套打法规则。当前驻留 `ultracave`（见 §3.12）；规则本体由扩展在 `before_agent_start` 按需注入，**与「skill 不常驻注入」的纪律不冲突**（§7.17） |
+| `ponytail` / `ponytail-review` / `ponytail-audit` / `ponytail-debt` / `ponytail-help` | **不用装**：`npm:pi-ponytail` 自带（`~/.pi/agent/npm/node_modules/pi-ponytail/skills/`） | 懒扩展打法规则五件套。当前驻留 `ultra`（见 §3.13）；规则本体同由扩展在 `before_agent_start` 按需注入，纪律同 §7.17 |
 
-> skill 不再常驻注入系统提示词（见 §6.2），需要时用 `omnify` 检索。实测本机技能清单 = 上述 3 条自装 + `pi-meter` 自带 `pimeter` + `pi-caveman` 自带 3 条（`pi list`/agent 技能面板可见）。
+> skill 不再常驻注入系统提示词（见 §6.2），需要时用 `omnify` 检索。实测本机技能清单 = 上述 3 条自装 + `pi-meter` 自带 `pimeter` + `pi-caveman` 自带 3 条 + `pi-ponytail` 自带 5 条（`pi list`/agent 技能面板可见）。
 
 ---
 
@@ -134,13 +138,15 @@ for p in @narumitw/pi-lsp pi-test-runner pi-ocr @chendpoc/pi-memory @arhen/pi-co
   pi install "npm:$p" || echo "[失败] $p"
 done
 
-# 钩子层（不注册常驻工具：凭据拦截 / 截超长 read+rg 输出 / 预算与花费 / 只读规划模式）
-for p in pi-secret-guard pi-mono-context-guard pi-meter @narumitw/pi-plan-mode; do
+# 钩子层（不注册常驻工具：截超长 read+rg 输出 / 预算与花费 / 只读规划模式；凭据拦截 pi-secret-guard 已于 2026-10-12 卸，见 §7.18）
+for p in pi-mono-context-guard pi-meter @narumitw/pi-plan-mode; do
   pi install "npm:$p" || echo "[失败] $p"
 done
 
-# 输出压缩（caveman 层；默认模式靠 §3.12 的 config.json，装完即用，重启会话后生效）
+# 三层压缩（caveman 压输出 / ponytail 压做法 / rtk 压输入；默认模式靠 §3.12 / §3.13 的 config.json，rtk 配置见 §3.14，装完即用，重启会话后生效）
 pi install "npm:@izhimu/pi-caveman"
+pi install "npm:pi-ponytail"
+pi install "npm:pi-rtk"
 
 # 本地扩展（含 pi-pet-autostart.ts，宠物默认启用就靠它）
 node install-local-extensions.mjs
@@ -160,7 +166,7 @@ node install-project-config.mjs
 >
 > 若 `pi update --extensions` 也超时，同一改写继续生效（git 源的 update 就是 git pull）；装完即可 `/reload`。
 
-装完自查：`pi list` 应见 **29 个扩展**（27 npm + 2 git）
+装完自查：`pi list` 应见 **30 个扩展**（28 npm + 2 git）
 
 ### 2.2 硬顺序约束
 
@@ -524,6 +530,54 @@ cd() {
 - **对前缀缓存的影响**：首轮注入整份 skill 规则、后续轮次只发轻量提醒；**切模式 = 换一次 system 前缀文本**，切完第一次 `cacheRead` 归 0，之后继续复用（原理同 §2.2 的 prefix-stabilizer）。故：**模式定下来就别反复切**。
 - 想彻底关就 `/caveman off`（只删 flag，config 留档），或 `pi remove npm:@izhimu/pi-caveman`（**连带删 `%APPDATA%\caveman\`，否则留死配置**，§2.4 纪律）。
 
+### 3.13 `pi-ponytail`：默认 ultra 模式（2026-10-12）
+
+**本机生产配置**：`~/.config/ponytail/config.json` = `{"defaultMode":"ultra"}`
+
+```json
+{ "defaultMode": "ultra" }
+```
+
+管的是「**写什么**」（YAGNI：先问需求该不该存在 → stdlib → 原生平台特性 → 已装依赖 → 一行 → 才写最小代码），`pi-caveman` 管的是「**怎么说**」（输出压缩），两者互不覆盖，同为 `before_agent_start` 注入型（§7.17）。
+
+- **落盘点与 §3.12 不同**：ponytail 只认一个文件 —— `$XDG_CONFIG_HOME/ponytail/config.json` 或 `~/.config/ponytail/config.json`（源码 `getConfigDir()`；Windows 上 `XDG_CONFIG_HOME` 未设时**仍走 `~/.config`，不用 `%APPDATA%`**）。无会话 flag 文件，切换靠会话条目 `ponytail-mode`（`pi.appendEntry`）。
+- **模式解析顺序**：`PONYTAIL_DEFAULT_MODE` 环境变量 → 上述 config.json → 兜底 `full`。有效值 `off|full|lite|ultra`（本机默认 `ultra`，最严）。
+- **命令**：`/ponytail`（切默认模式）、`/ponytail lite|full|ultra|off`、`/ponytail status`、`/ponytail default <mode>`（**写默认到 config.json，重开会话不回落**）、`/ponytail-review` `/ponytail-audit` `/ponytail-debt` `/ponytail-help`。自然语言「stop ponytail」/「normal mode」临时关（仅本会话）。
+- **注入方式**：`before_agent_start` 把 skill 本体**按模式过滤后**追加到 system（`filterSkillBodyForMode`：表行与示例行只留当前模式那档），标题行固定 `PONYTAIL MODE ACTIVE — level: <mode>`。
+- **与 smart-edit / mono-context-guard 无冲突**：只拼 system 文本，不碰工具与 hook。
+- 卸载：`pi remove npm:pi-ponytail` 后**删 `~/.config/ponytail/`**，否则留死配置（§2.4 纪律）。
+
+### 3.14 `pi-rtk`：输入侧 token 削减 + 必做配置（2026-10-12）
+
+**本机生产配置**：仓库 canonical `config/agent/rtk-config.json` → `install-project-config.mjs` 同步到 `~/.pi/agent/rtk-config.json`（即上游 readme 的 User-level Config 位置）：
+
+```json
+{
+  "enabled": true,
+  "logSavings": true,
+  "showUpdateEvery": 10,
+  "techniques": {
+    "ansiStripping": true,
+    "truncation": { "enabled": true, "maxChars": 10000 },
+    "sourceCodeFiltering": { "enabled": true, "level": "minimal" },
+    "smartTruncation": { "enabled": true, "maxLines": 200 },
+    "testOutputAggregation": true,
+    "buildOutputFiltering": true,
+    "gitCompaction": true,
+    "searchResultGrouping": true,
+    "linterAggregation": true
+  }
+}
+```
+
+**零配置也能跑（全部字段有 `DEFAULT_CONFIG` 兜底）**，上面这份是为了显式钉住与入仓备份。注意 config 只写在 `~/.pi/agent/`（用户级），**不随仓库 `.pi/` 走**：项目级仅在 `<项目>/.pi/rtk-config.json` 放同名文件才生效（优先级：项目 > 用户）。
+
+- **挂钩点**：`tool_result` 事件（改内容，不 block 工具调用）—— 按工具与命令类型分派：源码文件去注释（`minimal`）/ 只留签名（`aggressive`）、构建输出只留 error+warning、测试结果聚合只留失败、git diff/status/log 压缩、搜索结果按文件分组、lint 按规则聚合，外加 ANSI 剥离与超长截断（`maxChars` 10000 / `maxLines` 200）。上游基于 RTK（Rust Token Killer）规范，标称省 60–90% 输入 token，**本机未复测**。
+- **注册 `rtk_configure` 工具**（唯一常驻工具），供 agent 自己调参数。**已知副作用**：源码过滤 + 智能截断会让 `edit` 报「old text 不匹配」（读到的内容被滤过）；扩展自己在 `before_agent_start` 就注入了应急提示，agent 应先 `rtk_configure` 关 `sourceCodeFiltering` → 重读 → 改 → 再开回来。
+- **与 `pi-mono-context-guard` 的叠加面**：后者管 `tool_call`（read 自动 `limit: 120`、rg 自动 `| head -60`、重复 read 阻断），rtk 管 `tool_result`（过滤内容）。两者不抢同一 hook 面，且 `120 < 200`，所以 rtk 的行截断在 read 上通常不生效 —— **实测过长的 bash/grep 输出仍会被 rtk 的 `maxChars` 截**，这与 mono 的 head 注入是两层叠加，别当成冲突。
+- **命令**：`/rtk-stats`（token 节省统计）、`/rtk-on` `/rtk-off`、`/rtk-clear`、`/rtk-what`（当前各技术开关）、`/rtk-toggle-<技术名>`（`ansiStripping` / `truncation` / `sourceCodeFiltering` / `smartTruncation` / `testOutputAggregation` / `buildOutputFiltering` / `gitCompaction` / `searchResultGrouping` / `linterAggregation`）。统计只在内存，重开会话清零。
+- 卸载：`pi remove npm:pi-rtk`（`~/.pi/agent/rtk-config.json` 留档无碍；仓库 `config/agent/rtk-config.json` 要手工删，否则下次同步又把配置拷回去）。
+
 ---
 
 ## 4. 工具归属（谁注册了什么）
@@ -551,7 +605,8 @@ cd() {
 | ~~`pi-zvec`~~ | `zg_search` 等（**已卸载** 2026-10-08，见 §7.11） |
 | `pi-ocr` | OCR 工具 |
 | `@chendpoc/pi-memory` | 记忆工具 + 生命周期钩子 |
-| `pi-secret-guard` / `pi-mono-context-guard` | 无工具（拦截钩子 + 命令） |
+| `pi-mono-context-guard` | 无工具（拦截钩子 + 命令） |
+| ~~`pi-secret-guard`~~ | **已卸载** 2026-10-12（凭据拦截钩子），见 §7.18 |
 | `pi-meter` | 1 个工具 + 预算命令 |
 | ~~`pi-deepseek-cache`~~ | **已卸载** 2026-10-09（全部功能绑定 DeepSeek 后端），见 §7.13 |
 | `pi-cache-compact` | 无工具（纯 `session_before_compact` 钩子；拒绝接管时打一行终端通知） |
@@ -560,6 +615,9 @@ cd() {
 | `pi-lazy-tools`（fork） | `omnify`（0.4.0 起四合一；`load_tools`/`call_tool` 已撤。只代理执行、**不切 active 集**） |
 | ~~`pi-warm-cache`~~ | **已卸载** 2026-10-08（本机不生效的死安装），见 §7.12 |
 | `pi-prefix-stabilizer` / `pi-cache-compact` / `pi-cache-guardian` | 无工具（纯事件钩子） |
+| `@izhimu/pi-caveman` | 无工具（`before_agent_start` + `turn_end` 钩子 + `/caveman` 系命令，见 §3.12） |
+| `pi-ponytail` | 无工具（`before_agent_start` 钩子 + `/ponytail` 系命令，见 §3.13） |
+| `pi-rtk` | `rtk_configure`（**注册，常驻**）+ `/rtk-stats` `/rtk-on` `/rtk-off` `/rtk-what` `/rtk-toggle-*`；过滤本体挂 `tool_result`，见 §3.14 |
 
 **一道闸：`defaultTools`**（0.4.0 前是「`defaultTools` 管注册 + `resident` 管常驻」两道，0.4.0 起合并）：
 
@@ -896,7 +954,7 @@ sed -i 's/spawn(ZG_BIN, args, { cwd: opts.cwd, stdio: \["ignore", "pipe", "pipe"
 
 ### 7.8 `pi-ask-permission` 卸载（2026-10-30 前后）
 
-替代 gate 靠 secret-guard 等钩子组合。
+替代 gate 靠 secret-guard 等钩子组合（**注**：secret-guard 已于 2026-10-12 卸载，见 §7.18；现在提交侧无拦截闸）。
 
 ### 7.9 `no-find` 全局卸载（2026-10-08）
 
@@ -913,7 +971,7 @@ sed -i 's/spawn(ZG_BIN, args, { cwd: opts.cwd, stdio: \["ignore", "pipe", "pipe"
 
 ### 7.10 `pi-cwd-guard` 卸载（2026-10-08）
 
-`pi remove npm:pi-cwd-guard`（`~/.pi/agent/settings.json` 的 packages 同步移除，npm 目录副本删除）。随之消失：cwd/路径权限闸、破坏性命令与 cwd 外路径访问的批准提示、`.env`/密钥写保护。`.env` 防误写改回常规默契；提交侧凭据拦截由 `pi-secret-guard`（仍装）兜底。
+`.env` 防误写改回常规默契；提交侧凭据拦截曾由 `pi-secret-guard` 兜底 —— **该包已于 2026-10-12 卸载**，提交侧现无拦截（§7.18）。
 
 ### 7.11 `pi-zvec` 卸载（2026-10-08）
 
@@ -1071,6 +1129,7 @@ const AGENT_DIRS = [".agents/agents", ".claude/agents", ".pi/agents"] as const;
 | 项目级 | `config/pi-project/settings.json` | `<仓库>/.pi/settings.json` | `node install-project-config.mjs` |
 | 项目级留档 | `config/pi-project/zvec.json` | 不落（`pi-zvec` 已卸，§7.11） | 手动（重装 zvec 时） |
 | 用户级脚本 | `config/agent/bash-prelude.sh` | `~/.pi/agent/bash-prelude.sh`（§3.9 的 `shellCommandPrefix` 指它） | 同上 |
+| 用户级 rtk | `config/agent/rtk-config.json` | `~/.pi/agent/rtk-config.json`（pi-rtk 读，见 §3.14） | 同上 |
 | 用户级快照 | `config/agent/settings.snapshot-2025-09-15.json` | 不落（脚本对 `settings.snapshot-*` 一律跳过） | — |
 
 - **恢复来源**：`.pi/settings.json`、`.pi/zvec.json` 取自 git 历史（`15c714b` 删除前）；`bash-prelude.sh` 取自 §3.9 全文；用户级快照取自 `.backup-20250915/settings.json`（`51e457d` 删除前，含 §3.11 多个键的取值）。
@@ -1078,6 +1137,30 @@ const AGENT_DIRS = [".agents/agents", ".claude/agents", ".pi/agents"] as const;
 - **根目录放 `settings.json` 无效**（pi 不读它）→ 是「源放 `config/` + 脚本拷进 `.pi/`」，不是「把文件挪到仓库根」。
 - 机器侧同时补回：`~/.pi/agent/settings.json` 的 §3.11 十三键（备份留 `settings.json.bak.2026-10-10-pre-config-restore`）、`bash-prelude.sh`、`~/.pi/agents/default.md`（§7.16）与 proper-lockfile 补丁 ×2（§7.14）。两个 fix 脚本 `--check` 全绿。
 - 顺手修的两处 readme 失真：§5 与 §8 表引用的 `.sc-test/probe-bash-guard.mjs`（从未入库、现不存在）。
+
+### 7.18 `pi-secret-guard` 卸载 + 压缩层补齐（2026-10-12）
+
+一轮做完（顺序：`pi remove` → `pi install` → 写两个 config → 同步 → `/reload`）：
+
+```bash
+pi remove npm:pi-secret-guard        # 凭据拦截钩子，本机不再需要
+pi install npm:pi-ponytail           # 做法层压缩（YAGNI），默认 ultra
+pi install npm:pi-rtk                # 输入层 token 削减
+# 默认模式两个 config（均非 settings.json）：
+mkdir -p ~/.config/ponytail && echo '{ "defaultMode": "ultra" }' > ~/.config/ponytail/config.json
+printf '%s\n' "$APPDATA/caveman/config.json"   # 已存在，defaultMode=ultracave，不用动
+node install-project-config.mjs      # config/agent/rtk-config.json → ~/.pi/agent/
+```
+
+结果：29 → **30 个扩展**（28 npm + 2 git）。§1.1 / §1.3 / §2.1 / §3.13 / §3.14 / §4 / §9 同步。
+
+**卸载代价（明说）**：提交 API key / 凭据到 git 的拦截**没了**，且 `pi-cwd-guard` 早已卸（§7.10），所以 `.env` 写保护与提交侧**都没有闸**了。规矩回落到纪律层：`.env` / 密钥文件不手改、不 `git add`，提交前自己看 `git diff --cached`。再想装回来：`pi install npm:pi-secret-guard`。
+
+**新装两个的坑**：
+
+- `pi-ponytail` 与 `pi-caveman` **都改写 system 前缀**（`before_agent_start` 注入，§7.17 同类风险）：两者都只追加、不改前段结构，实测共存无冲突；但**任一换模式 = 换一次前缀文本**，切完第一次 `cacheRead` 归 0。日常别来回切。
+- `pi-rtk` 会**滤掉源码里的注释与空白**，导致 `edit` 报 old text 不匹配。扩展自带应急提示 + `rtk_configure` 工具：关 `sourceCodeFiltering` → 重读 → 改 → 开回来。真要常用编辑就别开 `sourceCodeFiltering`，改用 `/rtk-toggle-truncation` 之外的其余技术（§3.14）。
+- `pi-rtk` 的 `tool_result` 过滤与 `pi-mono-context-guard` 的 `tool_call` 注入是**两层叠加不是冲突**（§3.14 已对账）；若怀疑多砍了什么，`/rtk-what` 看开关、`/rtk-off` 一键关。
 
 ---
 
@@ -1125,6 +1208,9 @@ const AGENT_DIRS = [".agents/agents", ".claude/agents", ".pi/agents"] as const;
 | 装东西后 pi-memory 报 `Could not locate the bindings file. Tried:` | 树被重解析，better-sqlite3 换了版本 → `allowScripts` 对不上 → 原生 binding 没编 | `npm install-scripts approve better-sqlite3 && npm rebuild better-sqlite3`（详见 §3.1） |
 | 输出突然变碎句 / 忽然变得啰嗦 | caveman 模式被切了（自然语言触发、别名、或 flag 被写） | `/caveman status` 看当前模式；切回 `/ultracave`（= `/caveman ultra`）。配置与 flag 两个落盘点见 §3.12 |
 | 切了 caveman 模式后本轮 `cacheRead: 0` | 换了 system 前缀文本，首轮必然重算 | **正常现象**，别反复切；第二轮起恢复。原理同 §2.2 的 prefix-stabilizer |
+| 输出突然变「懒」/ 突然开始砍功能（YAGNI 口吻） | ponytail 模式生效（默认就是 `ultra`，§3.13）或被切 | `/ponytail status` 看当前/默认；切回 `/ponytail full` 或 `/ponytail off`。持久化默认改 `~/.config/ponytail/config.json` |
+| `edit` 报 “old text must match exactly” 但代码看着没变 | `pi-rtk` 的 `sourceCodeFiltering` / `smartTruncation` 滤掉了注释或行 | 用 `rtk_configure` 关 `sourceCodeFiltering` → 重读 → 改 → 开回来；或 `/rtk-off`（§3.14） |
+| 想知道输入侧省了多少 | rtk 统计只在内存 | `/rtk-stats`；重开会话归零。开关全貌 `/rtk-what` |
 
 **磁盘布局速查**
 
@@ -1157,7 +1243,7 @@ const AGENT_DIRS = [".agents/agents", ".claude/agents", ".pi/agents"] as const;
 
 在另一台机器上照本清单完整走一遍。**配置值与 §1–§7 全部一致，唯一差异是路径前缀**（本机 `yxh`，原记录机 `yinxuehao`；`compaction-cache.json` 的 `logPath` 已是本机路径）。
 
-2026-10-09 压缩侧换血（compaction-cache → cache-compact）后为 **28 项**（§7.13）；2026-10-10 增补 `@izhimu/pi-caveman` 后为 **29 项**（27 npm + 2 git，§3.12）。本节 §9.4 表里那行「`smart-context` / `compaction-cache` 已合规，未动」是快照原文，**勿照抄**。
+2026-10-09 压缩侧换血（compaction-cache → cache-compact）后为 **28 项**（§7.13）；2026-10-10 增补 `@izhimu/pi-caveman` 后为 **29 项**（27 npm + 2 git，§3.12）；2026-10-12 装 `pi-ponytail` + `pi-rtk`、卸 `pi-secret-guard` 后为 **30 项**（28 npm + 2 git，§3.13 / §3.14 / §7.18）。
 
 ### 9.1 拉代码：未提交改动先备份再 fast-forward
 
