@@ -11,14 +11,15 @@
 
 ---
 
-## 1. 清单（在用 30 个扩展 = 28 npm + 2 git）
+## 1. 清单（在用 28 个扩展 = 26 npm + 2 git）
 
-**实际在用 30 个**。
+**实际在用 28 个**。
 > 2026-10-06 增补 3 个：联网（`pi-web-access`）、会话级撤销（`@bacnh85/pi-checkpoint`）、完成通知（`pi-notify`）。PR 插件（`@henryqw/pi-pr`）装后即卸，见 §7.7。
 > 2026-10-08 精简：卸 `pi-budget-guard`（与 `pi-meter` 功能三层全重叠，见 §7.12）与 `pi-warm-cache`（本机不生效的死安装，见 §7.12）；补装 `@arhen/pi-core-subagent`、`pi-ocr`（此前清单漂移：列了但实际未装）；新增 `pi-deepseek-cache`（DeepSeek 后端专用，与 §5.5 原判相悳 —— **2026-10-09 已验实并卸载，见 §7.13**）。
 > 2026-10-09 压缩侧换血（见 §7.13）：装 `pi-cache-compact`（provider 无关的压缩调用缓存，本机实测命中 68.6%）；卸 `pi-deepseek-cache`（绑定 DeepSeek）与 `pi-compaction-cache`（被 cache-compact 取代，且同抢 `session_before_compact`）。29 → 28。
 > 2026-10-10 增补 `@izhimu/pi-caveman`（caveman 输出压缩层，默认 `ultracave`，见 §3.12）：28 → 29。
-> 2026-10-12 三层压缩补齐（29 → 30）：装 `pi-ponytail`（懒扩展打法层，默认 `ultra`，见 §3.13）与 `pi-rtk`（输入侧 token 削减，见 §3.14）；卸 `pi-secret-guard`（凭据拦截，已无提交侧闸，见 §7.18）。
+> 2026-10-12 三层压缩补齐（29 → 30）：装 `pi-ponytail`（懒扩展打法层，默认 `ultra`，见 §3.13）与 `pi-rtk`（输入侧 token 削减，见 §3.14）；卸 `pi-secret-guard`（凭据拦截，已无提交侧闸，见 §7.19）。
+> 2026-10-12 压缩层三合一（30 → **28**）：装 `npm:@xynogen/pix-optimizer`（caveman + rtk + ponytail 合成一个扩展，一个 `/optimizer` 面板，见 §3.15），卸当天刚装的 `@izhimu/pi-caveman` / `pi-ponytail` / `pi-rtk`（3 → 1，26 npm + 2 git）。同日新增全局规则文件 `~/.pi/agent/AGENTS.md`（思考用最小充分推理 + 简单题直接答、`find`→`fd`、`grep`→`rg`），见 §5「全局规则」。
 
 **不锁版本**：安装命令一律不带 `@版本号`（取 npm 最新），本清单不维护版本矩阵。要查本机实际装的版本：
 
@@ -62,7 +63,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | ~~`npm:pi-zvec`~~ | 本地语义代码搜索（BM25 + embedding，每项目索引） | **已卸载**（2026-10-08，见 §7.11）。原 2026-10-07 装（**自动模式**索引，卸载时连项目索引目录一并删除） |
 | `npm:pi-ocr` | 多后端 OCR（MinerU 免费云 / Ollama 本地 / Pix2Text），零配置 | 2026-10-07 列装但实际漂移未装，2026-10-08 补装。截图/PDF 出文本；懒加载 |
 | `npm:@chendpoc/pi-memory` | 跨会话记忆（MEMORY.md ground truth + JSONL sidecar 检索） | 2026-10-07 装。备选 `pi-session-memory` 因 `node:sqlite` 在 Pi 内嵌运行时缺失（`ResolveMessage: No such built-in module: node:sqlite`）加载即败，已卸，见 §7.6 |
-| ~~`npm:pi-secret-guard`~~ | 曾拦截提交 API key / 凭据到 git | **已卸载**（2026-10-12，见 §7.18）。原 2026-10-07 装 |
+| ~~`npm:pi-secret-guard`~~ | 曾拦截提交 API key / 凭据到 git | **已卸载**（2026-10-12，见 §7.19）。原 2026-10-07 装 |
 | `npm:pi-mono-context-guard` | 上下文体积硬闸：自动截断 read/rg 超长输出 | 2026-10-07 装。cache-guardian 只告警，这是截断侧；懒加载 |
 | `npm:pi-meter` | 花费追踪 + 预算告警 + auto-downshift + 硬截断 | 2026-10-07 装。**唯一预算侧**（budget-guard 2026-10-08 已卸，追踪/告警/拦截/降级全并于此）；本机走本地代理，auto-downshift 与内置价格表可能对不上，费用数字仅供参考；懒加载 |
 | `npm:@narumitw/pi-plan-mode` | `/plan` 只读规划模式（Codex 风格） | 2026-10-07 装；懒加载 |
@@ -71,9 +72,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `npm:pi-cache-compact` | 压缩调用复用前缀缓存：把摘要请求拼成活会话的**严格续写**（同 system + tools + messages + 追加一问） | **2026-10-09 装，provider 无关**（源码 0 处 "deepseek"）。实测压缩调用 `cacheRead: 81920`（本机代理命中 68.6%），Pi 默认压缩同一前缀必为 0。**零配置可用**，取证配置见 §3.3；必须装在 `pi-prefix-stabilizer` 之后，见 §2.2 |
 | `npm:@bacnh85/pi-checkpoint` | 会话级撤销：`/undo` `/redo` `/checkpoint` | 2026-10-06 装。**必须在 git 仓库内**，否则三个命令静默 no-op；写 `refs/pi-checkpoints/*`，不碰分支/tag/stash；坑：只还原已跟踪文件，本轮新增的未跟踪文件留在原地（见 §3.8）。只在无交互 `pi -p` 下验证过不报错，`/undo` 本身未实测 |
 | ~~`npm:pi-cwd-guard`~~ | cwd/路径闸：曾保护 .env/密钥、拦破坏性路径 | **已卸载**（2026-10-08，见 §7.10） |
-| `npm:@izhimu/pi-caveman` | 输出压缩层（caveman / ultracave / megacave 三模式） | 2026-10-10 装。**挂 `before_agent_start` 注入打法规则 + `turn_end` 统计 token**，不注册常驻工具；`/caveman` `/ultracave` `/megacave` 即时切换并持久化。本机默认 **`ultracave`**（碎句，官方标称 −75% 输出 token），配置见 §3.12。自带 3 个 skill（`caveman` / `ultracave` / `megacave`），按需 `omnify` 可捞 |
-| `npm:pi-ponytail` | Ponytail 懒扩展打法层（YAGNI：先问需求是否该存在，stdlib/原生/已装依赖优先，最小 working diff，`ponytail:` 注释标记刻意从简） | 2026-10-12 装。**挂 `before_agent_start` 注入打法规则**，与 caveman 同型但管「写什么」而非「怎么说」；`/ponytail lite\|full\|ultra\|off` 会话切换、`/ponytail default <mode>` 持久化默认。本机默认 **`ultra`**，配置见 §3.13。自带 5 个 skill（`ponytail` / `ponytail-review` / `ponytail-audit` / `ponytail-debt` / `ponytail-help`），按需 `omnify` 可捞 |
-| `npm:pi-rtk` | RTK token 削减：拦 `tool_result` 过滤输出（源码去注释/构建噪声/测试聚合/git 压缩/搜索分组/lint 汇总 + ANSI 剥离 + 智能截断），官方标称 60–90% 输入 token 削减 | 2026-10-12 装。**注册 `rtk_configure` 工具**（agent 可运行时自调参数）+ `/rtk-stats` `/rtk-on` `/rtk-off` 等命令。用户级配置 `~/.pi/agent/rtk-config.json`（canonical 在仓库 `config/agent/`，走 `install-project-config.mjs` 同步），见 §3.14；懒加载 |
+| `npm:@xynogen/pix-optimizer` | **压缩三合一**：caveman（输出，ASD-STE100 四档）+ ponytail（做法，YAGNI 三档）+ RTK（输入，bash 命令改写） | 2026-10-12 装。**取代**当天先装后卸的 `@izhimu/pi-caveman` / `pi-ponytail` / `pi-rtk`（三者功能被本包重写合并，3 → 1）。不注册任何工具；唯一入口是 `/optimizer`（**只有交互面板，无文本参数形**），状态存 `~/.pi/agent/pix.json` 的 `optimizer` 段。本机全开 **`caveman: ultra` / `rtk: on` / `ponytail: ultra`**，配置见 §3.15。RTK 首次加载时自动下 `rtk` 二进制到 `~/.pi/agent/bin`（带 checksum 校验） |
 
 ### 1.2
 
@@ -97,10 +96,10 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `cangjie-skill`（仓颉） | `git clone github.com/kangarooking/cangjie-skill` | 把书 / 长视频 / 播客 / 课程蒸馏成可执行 skills |
 | `goutoujunshi`（狗头军师） | `git clone github.com/shengjidaguai-china/goutoujunshi` | 恋爱军师与情绪支持 |
 | `pimeter` | **不用装**：`npm:pi-meter` 自带（`~/.pi/agent/npm/node_modules/pi-meter/skills/pimeter/`） | 花费账单怎么看：本机走本地代理，内置价格表对不上，**数字仅供参考**（见 §1.1 pi-meter 行） |
-| `caveman` / `ultracave` / `megacave` | **不用装**：`npm:@izhimu/pi-caveman` 自带（`~/.pi/agent/npm/node_modules/@izhimu/pi-caveman/skills/`） | 输出压缩的三套打法规则。当前驻留 `ultracave`（见 §3.12）；规则本体由扩展在 `before_agent_start` 按需注入，**与「skill 不常驻注入」的纪律不冲突**（§7.17） |
-| `ponytail` / `ponytail-review` / `ponytail-audit` / `ponytail-debt` / `ponytail-help` | **不用装**：`npm:pi-ponytail` 自带（`~/.pi/agent/npm/node_modules/pi-ponytail/skills/`） | 懒扩展打法规则五件套。当前驻留 `ultra`（见 §3.13）；规则本体同由扩展在 `before_agent_start` 按需注入，纪律同 §7.17 |
+规则是 system prompt 片段，`/optimizer` 切档，见 §3.15） |
+| ~~`ponytail` / `ponytail-review` / `ponytail-audit` / `ponytail-debt` / `ponytail-help`~~ | **已无**：随 `npm:pi-ponytail` 于 2026-10-12 卸载；等价能力由 `npm:@xynogen/pix-optimizer` 的 ponytail 提供（`lite`/`full`/`ultra`，**不附带 skill**，规则是 system prompt 片段，`/optimizer` 切档，见 §3.15） |
 
-> skill 不再常驻注入系统提示词（见 §6.2），需要时用 `omnify` 检索。实测本机技能清单 = 上述 3 条自装 + `pi-meter` 自带 `pimeter` + `pi-caveman` 自带 3 条 + `pi-ponytail` 自带 5 条（`pi list`/agent 技能面板可见）。
+> skill 不再常驻注入系统提示词（见 §6.2），需要时用 `omnify` 检索。实测本机技能清单 = 上述 3 条自装 + `pi-meter` 自带 `pimeter`；2026-10-12 后 **pi-caveman / pi-ponytail 自带的 8 条 skill 随包卸载消失**（`pi list`/agent 技能面板可见）。
 
 ---
 
@@ -138,16 +137,13 @@ for p in @narumitw/pi-lsp pi-test-runner pi-ocr @chendpoc/pi-memory @arhen/pi-co
   pi install "npm:$p" || echo "[失败] $p"
 done
 
-# 钩子层（不注册常驻工具：截超长 read+rg 输出 / 预算与花费 / 只读规划模式；凭据拦截 pi-secret-guard 已于 2026-10-12 卸，见 §7.18）
+# 钩子层（不注册常驻工具：截超长 read+rg 输出 / 预算与花费 / 只读规划模式；凭据拦截 pi-secret-guard 已于 2026-10-12 卸，见 §7.19）
 for p in pi-mono-context-guard pi-meter @narumitw/pi-plan-mode; do
   pi install "npm:$p" || echo "[失败] $p"
 done
 
-# 三层压缩（caveman 压输出 / ponytail 压做法 / rtk 压输入；默认模式靠 §3.12 / §3.13 的 config.json，rtk 配置见 §3.14，装完即用，重启会话后生效）
-pi install "npm:@izhimu/pi-caveman"
-pi install "npm:pi-ponytail"
-pi install "npm:pi-rtk"
-
+# 压缩三合一（caveman 压输出 / ponytail 压做法 / rtk 压输入；一个包一个 `/optimizer` 面板，状态在 ~/.pi/agent/pix.json，见 §3.15，装完即用，重启会话后生效）
+pi install "npm:@xynogen/pix-optimizer"   # 取代已卸的 @izhimu/pi-caveman + pi-ponytail + pi-rtk（§7.20）
 # 本地扩展（含 pi-pet-autostart.ts，宠物默认启用就靠它）
 node install-local-extensions.mjs
 # 项目级/用户级配置：把仓库 config/ 拷进 pi 真正读取的位置（`.pi/` 是运行时目录，仓库里整体忽略）
@@ -166,7 +162,7 @@ node install-project-config.mjs
 >
 > 若 `pi update --extensions` 也超时，同一改写继续生效（git 源的 update 就是 git pull）；装完即可 `/reload`。
 
-装完自查：`pi list` 应见 **30 个扩展**（28 npm + 2 git）
+装完自查：`pi list` 应见 **28 个扩展**（26 npm + 2 git）
 
 ### 2.2 硬顺序约束
 
@@ -515,68 +511,41 @@ cd() {
 > `lastChangelogVersion: "1.1.0"`、`collapseChangelog: true`、`treeFilterMode: "default"` 是宿主自维护的，不要手改。
 > 改完 `settings.json` 一律 **`/reload`**（本会话不重启）——但注意：**会话中途改 `packages`/`extensions` 会改变已开扩展的加载面**，顺序是先改配置再开新会话（§9.6 教训）。
 
-### 3.12 `pi-caveman`：默认 ultracave 模式（2026-10-10）
+### 3.12 ~~`pi-caveman`~~（**已卸载 2026-10-12**，能力并入 `pix-optimizer`，见 §3.15）
 
-**本机生产配置**：`%APPDATA%\caveman\config.json` = `{"defaultMode":"ultracave"}`
+原输出压缩层，三模式 `caveman` / `ultracave` / `megacave`。两个落盘点 `%APPDATA%\caveman\config.json` 与会话 flag `~/.pi/.caveman-active` **已随卸载删除**。等级语义也在新包里换了名字：现在是 `lite|full|ultra|micro`，不再有 `caveman|ultracave|megacave`。
 
-```json
-{ "defaultMode": "ultracave" }
-```
+### 3.13 ~~`pi-ponytail`~~（**已卸载 2026-10-12**，能力并入 `pix-optimizer`，见 §3.15）
 
-- **两个落盘点**，都不是 `settings.json`：① `%APPDATA%\caveman\config.json`（用户级默认模式，写 `defaultMode`，照 readme「Manual config file format」即可持久化）；② `~/.pi/.caveman-active`（**会话 flag**，内容就是模式名，`/caveman <mode>`、`/ultracave`、`/megacave` 切换时同步写它）。flag 优先级高于 config，所以本机现况两处都写 `ultracave`，重开会话不回落默认 `caveman`。
-- **模式解析顺序**（源码 `extensions/caveman.ts`）：`CAVEMAN_DEFAULT_MODE` 环境变量 → 仓库级 `.caveman/config.json` / `.caveman.json`（从 cwd 向上找 64 层）→ 用户级 `%APPDATA%\caveman\config.json` → fallback `caveman`。**legacy 别名**：`full`/`lite`→`caveman`、**`ultra`→`ultracave`**、`wenyan*`→`megacave`。
-- **命令**（均即时生效并持久化到上面两个文件）：`/caveman`（切 caveman）、`/caveman <caveman|ultracave|megacave|off|status>`、`/ultracave`、`/megacave`、`/caveman off`、`/caveman status`（别名 `/caveman-status`）。自然语言也能切（"be brief" / "normal mode" 等，带否定词防护）。
-- **省钱统计**：`/caveman status` 看本会话输出 token 与按官方压缩比估算的节省（caveman ≈65% / ultracave ≈75% / megacave ≈80%，官方标称值，**本机未复测**）。
-- **对前缀缓存的影响**：首轮注入整份 skill 规则、后续轮次只发轻量提醒；**切模式 = 换一次 system 前缀文本**，切完第一次 `cacheRead` 归 0，之后继续复用（原理同 §2.2 的 prefix-stabilizer）。故：**模式定下来就别反复切**。
-- 想彻底关就 `/caveman off`（只删 flag，config 留档），或 `pi remove npm:@izhimu/pi-caveman`（**连带删 `%APPDATA%\caveman\`，否则留死配置**，§2.4 纪律）。
+原懒扩展打法层，自带 5 个 skill（`ponytail` / `-review` / `-audit` / `-debt` / `-help`）。落盘点 `~/.config/ponytail/config.json` **已删**。新包同名档位 `lite|full|ultra`，但**不再有 skill**，规则是 system prompt 片段。
 
-### 3.13 `pi-ponytail`：默认 ultra 模式（2026-10-12）
+### 3.14 ~~`pi-rtk`~~（**已卸载 2026-10-12**，能力并入 `pix-optimizer`，见 §3.15）
 
-**本机生产配置**：`~/.config/ponytail/config.json` = `{"defaultMode":"ultra"}`
+**两者机制不同，别照搬旧结论**：本包是纯 JS 的「拦 `tool_result` 过滤内容」实现（`~/.pi/agent/rtk-config.json` + `rtk_configure` 工具 + `/rtk-*` 一堆命令），**不依赖 `rtk` 二进制**；`pix-optimizer` 的 RTK 是「注入 prompt + 改写 bash 命令加 `rtk` 前缀」，**用官方 Rust 二进制**。所以「源码去注释导致 `edit` 报 old text 不匹配」「`/rtk-what` 看开关」「`rtk_configure` 应急」那一整套连同它的问题**全部随卸载消失**。仓库 `config/agent/rtk-config.json`（已 `git rm`）与 `~/.pi/agent/rtk-config.json` 均已删（§2.4 纪律）。
 
-```json
-{ "defaultMode": "ultra" }
-```
+### 3.15 `@xynogen/pix-optimizer`：压缩三合一，本机三档全 ultra（2026-10-12）
 
-管的是「**写什么**」（YAGNI：先问需求该不该存在 → stdlib → 原生平台特性 → 已装依赖 → 一行 → 才写最小代码），`pi-caveman` 管的是「**怎么说**」（输出压缩），两者互不覆盖，同为 `before_agent_start` 注入型（§7.17）。
-
-- **落盘点与 §3.12 不同**：ponytail 只认一个文件 —— `$XDG_CONFIG_HOME/ponytail/config.json` 或 `~/.config/ponytail/config.json`（源码 `getConfigDir()`；Windows 上 `XDG_CONFIG_HOME` 未设时**仍走 `~/.config`，不用 `%APPDATA%`**）。无会话 flag 文件，切换靠会话条目 `ponytail-mode`（`pi.appendEntry`）。
-- **模式解析顺序**：`PONYTAIL_DEFAULT_MODE` 环境变量 → 上述 config.json → 兜底 `full`。有效值 `off|full|lite|ultra`（本机默认 `ultra`，最严）。
-- **命令**：`/ponytail`（切默认模式）、`/ponytail lite|full|ultra|off`、`/ponytail status`、`/ponytail default <mode>`（**写默认到 config.json，重开会话不回落**）、`/ponytail-review` `/ponytail-audit` `/ponytail-debt` `/ponytail-help`。自然语言「stop ponytail」/「normal mode」临时关（仅本会话）。
-- **注入方式**：`before_agent_start` 把 skill 本体**按模式过滤后**追加到 system（`filterSkillBodyForMode`：表行与示例行只留当前模式那档），标题行固定 `PONYTAIL MODE ACTIVE — level: <mode>`。
-- **与 smart-edit / mono-context-guard 无冲突**：只拼 system 文本，不碰工具与 hook。
-- 卸载：`pi remove npm:pi-ponytail` 后**删 `~/.config/ponytail/`**，否则留死配置（§2.4 纪律）。
-
-### 3.14 `pi-rtk`：输入侧 token 削减 + 必做配置（2026-10-12）
-
-**本机生产配置**：仓库 canonical `config/agent/rtk-config.json` → `install-project-config.mjs` 同步到 `~/.pi/agent/rtk-config.json`（即上游 readme 的 User-level Config 位置）：
+**本机生产配置**：`~/.pi/agent/pix.json`（**新建文件**，本机此前无）
 
 ```json
 {
-  "enabled": true,
-  "logSavings": true,
-  "showUpdateEvery": 10,
-  "techniques": {
-    "ansiStripping": true,
-    "truncation": { "enabled": true, "maxChars": 10000 },
-    "sourceCodeFiltering": { "enabled": true, "level": "minimal" },
-    "smartTruncation": { "enabled": true, "maxLines": 200 },
-    "testOutputAggregation": true,
-    "buildOutputFiltering": true,
-    "gitCompaction": true,
-    "searchResultGrouping": true,
-    "linterAggregation": true
+  "optimizer": {
+    "caveman": "ultra",
+    "rtk": "on",
+    "ponytail": "ultra"
   }
 }
 ```
 
-**零配置也能跑（全部字段有 `DEFAULT_CONFIG` 兜底）**，上面这份是为了显式钉住与入仓备份。注意 config 只写在 `~/.pi/agent/`（用户级），**不随仓库 `.pi/` 走**：项目级仅在 `<项目>/.pi/rtk-config.json` 放同名文件才生效（优先级：项目 > 用户）。
-
-- **挂钩点**：`tool_result` 事件（改内容，不 block 工具调用）—— 按工具与命令类型分派：源码文件去注释（`minimal`）/ 只留签名（`aggressive`）、构建输出只留 error+warning、测试结果聚合只留失败、git diff/status/log 压缩、搜索结果按文件分组、lint 按规则聚合，外加 ANSI 剥离与超长截断（`maxChars` 10000 / `maxLines` 200）。上游基于 RTK（Rust Token Killer）规范，标称省 60–90% 输入 token，**本机未复测**。
-- **注册 `rtk_configure` 工具**（唯一常驻工具），供 agent 自己调参数。**已知副作用**：源码过滤 + 智能截断会让 `edit` 报「old text 不匹配」（读到的内容被滤过）；扩展自己在 `before_agent_start` 就注入了应急提示，agent 应先 `rtk_configure` 关 `sourceCodeFiltering` → 重读 → 改 → 再开回来。
-- **与 `pi-mono-context-guard` 的叠加面**：后者管 `tool_call`（read 自动 `limit: 120`、rg 自动 `| head -60`、重复 read 阻断），rtk 管 `tool_result`（过滤内容）。两者不抢同一 hook 面，且 `120 < 200`，所以 rtk 的行截断在 read 上通常不生效 —— **实测过长的 bash/grep 输出仍会被 rtk 的 `maxChars` 截**，这与 mono 的 head 注入是两层叠加，别当成冲突。
-- **命令**：`/rtk-stats`（token 节省统计）、`/rtk-on` `/rtk-off`、`/rtk-clear`、`/rtk-what`（当前各技术开关）、`/rtk-toggle-<技术名>`（`ansiStripping` / `truncation` / `sourceCodeFiltering` / `smartTruncation` / `testOutputAggregation` / `buildOutputFiltering` / `gitCompaction` / `searchResultGrouping` / `linterAggregation`）。统计只在内存，重开会话清零。
-- 卸载：`pi remove npm:pi-rtk`（`~/.pi/agent/rtk-config.json` 留档无碍；仓库 `config/agent/rtk-config.json` 要手工删，否则下次同步又把配置拷回去）。
+- **一个包顶三个**：上游把 `pi-caveman` 与 `pi-rtk-optimizer`、`ponytail` 规则合成一个扩展（README 自述是 rewritten、非 copy，全 MIT）。一个 `/optimizer` 面板管三档，状态只存 `pix.json` 的 `optimizer` 段 —— `persist.ts` 走 `@xynogen/pix-runtime/config` 的 `updateConfig()`；老版 `optimizer.json` sidecar 会被导入一次后**永不再写**（避免两个真相源互相覆盖）。
+- **不注册任何工具**。`/optimizer` **只有交互面板**（←→ 循环改值、↑↓ 移动、esc 关），**没有文本参数形** —— `/optimizer ultra` 这类写法不成立，要切档就开面板；headless 下打印纯文本状态。状态栏一格同时显示 `Cv` / `Rk` / `Pt`，启用=accent、禁用=dim；字形跟全局 `pix-pretty` 模式（`nerd` 默认，无 Nerd Font 就 `/pix` 切 `unicode`/`ascii`，或设 `PRETTY_ICONS`）。
+- **档位与默认值**（源码 `pix-runtime/src/sections/optimizer.ts`）：caveman `off|lite|full|ultra|micro` 默认 `off`、ponytail `off|lite|full|ultra` 默认 `off`、rtk `off|on` 默认 `on`。非法值被 section 解析器夹回默认，**不是**报错。**本机三档全开**。
+- **caveman 语义与旧包不同**：现在是 [ASD-STE100](https://asd-ste100.org) 两层 —— L1 定词与句（must/only/there is…），L2 定回复形状（下一动作先说、编号步骤、无前言无收尾），**且刻意保留冠词**。所以旧 `ultracave` 的碎句腔不再是它，L3 `micro` 是实验性的 prompt 极简化。
+- **ponytail 同理**：只管「**写什么**」——YAGNI 阶梯（该不该存在 → stdlib → 原生平台 → 已装依赖 → 一行 → 最小可用），**验证、错误处理、安全、可访问性永不裁**。与 caveman 正交，一个管写法一个管做法。
+- **RTK 两层自动生效**：① prompt 层注入 RTK 规则（叫模型自己给命令加前缀）；② 执行层**改写 `bash` 调用**，给已知首词（`git` `gh` `cargo` `npm` `pnpm` `docker` `kubectl` `ls` `grep` …）加 `rtk` 前缀。**命令链按 `&&` `||` `;` `|` 拆开后逐段加前缀**：`git add . && git push` → `rtk git add . && rtk git push`；引号内的运算符不算，解析不了就原样放行。**`rtk` 二进制缺失时绝不改写**。
+- **二进制来源**：查找顺序 `binary.json` → `~/.pi/agent/bin` → `PATH`（`@xynogen/pix-runtime` 的 Binaries）。RTK 开着且找不到时，**pi 首次加载会从 `rtk-ai/rtk` 下最新 release 到 `~/.pi/agent/bin`**，用 release 自带的 `checksums.txt` 校验，footer 打一行版本与来源，**不阻塞启动也不阻塞工具调用**。跳过条件：设了 `PI_OFFLINE` / `/optimizer` 里 RTK 关 / `binary.json` 指的路径不存在。`binary.json` 钉了路径时，改写用的就是那个带引号的路径。
+- **对前缀缓存的影响**：caveman / ponytail 都往 system prompt 注入规则文本，**切档 = 换一次前缀文本 = 下一轮 `cacheRead` 归 0**（原理同 §2.2 prefix-stabilizer、§7.17）。**定下来就别反复切。**
+- **卸载**：`pi remove npm:@xynogen/pix-optimizer`，再删 `pix.json` 的 `optimizer` 段（§2.4 纪律）。`~/.pi/agent/bin/rtk` 是自动下载物，留删皆可。
 
 ---
 
@@ -606,7 +575,7 @@ cd() {
 | `pi-ocr` | OCR 工具 |
 | `@chendpoc/pi-memory` | 记忆工具 + 生命周期钩子 |
 | `pi-mono-context-guard` | 无工具（拦截钩子 + 命令） |
-| ~~`pi-secret-guard`~~ | **已卸载** 2026-10-12（凭据拦截钩子），见 §7.18 |
+| ~~`pi-secret-guard`~~ | **已卸载** 2026-10-12（凭据拦截钩子），见 §7.19 |
 | `pi-meter` | 1 个工具 + 预算命令 |
 | ~~`pi-deepseek-cache`~~ | **已卸载** 2026-10-09（全部功能绑定 DeepSeek 后端），见 §7.13 |
 | `pi-cache-compact` | 无工具（纯 `session_before_compact` 钩子；拒绝接管时打一行终端通知） |
@@ -615,9 +584,9 @@ cd() {
 | `pi-lazy-tools`（fork） | `omnify`（0.4.0 起四合一；`load_tools`/`call_tool` 已撤。只代理执行、**不切 active 集**） |
 | ~~`pi-warm-cache`~~ | **已卸载** 2026-10-08（本机不生效的死安装），见 §7.12 |
 | `pi-prefix-stabilizer` / `pi-cache-compact` / `pi-cache-guardian` | 无工具（纯事件钩子） |
-| `@izhimu/pi-caveman` | 无工具（`before_agent_start` + `turn_end` 钩子 + `/caveman` 系命令，见 §3.12） |
-| `pi-ponytail` | 无工具（`before_agent_start` 钩子 + `/ponytail` 系命令，见 §3.13） |
-| `pi-rtk` | `rtk_configure`（**注册，常驻**）+ `/rtk-stats` `/rtk-on` `/rtk-off` `/rtk-what` `/rtk-toggle-*`；过滤本体挂 `tool_result`，见 §3.14 |
+| `@xynogen/pix-optimizer` | 无工具（纯事件钩子 + `/optimizer` **交互面板**；RTK 改写挂在 bash 工具调用上，见 §3.15） |
+
+
 
 **一道闸：`defaultTools`**（0.4.0 前是「`defaultTools` 管注册 + `resident` 管常驻」两道，0.4.0 起合并）：
 
@@ -771,6 +740,20 @@ pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传
 4. **改 `.md` 优先 `md_edit`**：散文/列表用 `md_edit`（锚定标题+块序号，不受换行重排影响），代码块用 `edit`，`.mdx` 一律用 `edit`。
 ~~`pi-deepseek-cache`（绑定 DeepSeek）~~ **2026-10-09 已卸**（§7.13）：实测遥测半边可用、压缩半边必败（接管条件 `ctx.modelRegistry.find("deepseek", …)` 在本机注册表里根本没有 deepseek provider，代理也拒 `deepseek-flash` 这个模型 ID），按 DeepSeek 价格表换算的「省钱估算」属虚构。**要压缩缓存就装 `pi-cache-compact`**（provider 无关，§7.13 实测命中 68.6%）。
 6. **纯 UI 类扩展可以放心装**：`pi-tps` / `pi-one-ui` / `pi-dsh-pet` / `pi-pet-autostart` 这类只挂事件钩子、只注册命令的扩展，**不注册任何工具**，不进 `defaultTools`，wire 字节不变（§3.6 有 bench 实测：装宠物前后都是 5664B）。反过来，任何**注册工具**的扩展都要重新算 §6.3 那笔账。
+**全局规则：行为约定写 `~/.pi/agent/AGENTS.md`（2026-10-12 新建）**
+
+pi 的用户级 context 文件（`docs/configuration.md`：`<agent-dir>/AGENTS.override.md` / `AGENTS.md` / `CLAUDE.md` **跨所有工作目录生效**；同目录的 `AGENTS.override.md` 可临时顶掉 `AGENTS.md`）。本机分两块（思考 + 搜索工具），短且稳：
+
+| 规则 | 用意 |
+|---|---|
+| Think: Minimal sufficient reasoning — goal, constraints, key intermediates, decision, verify. No restatement, repetition, pleasantries, divergence. Simple → answer directly; complex → budget flexible, correctness first. | 思考照走但不铺草稿。与 §3.15 的 caveman 是两层：那管「说给用户听的话」，这条管内部 think |
+| Use `fd` not `find`（文件名/路径搜索一律走 `fd`，不裸跑 `find`） | 呼应 §4.1 与 §4.2；`fd` 默认排除编译目录 |
+| Use `rg` not `grep`/`egrep`/`fgrep`（内容搜索走 `rg`，不裸跑 `grep`） | 同上；`grep` 工具（pi-find）与 `fd` 一样是懒加载（§3.4） |
+| `find`/`grep` 工具仅作兜底，必须缩 `path`；`fd` 工具显式传 `timeoutMs` | 兜底路径见 §5 铁律二与 §4.1 |
+
+- 它进的是**每轮 system 前缀**，所以改它等于改前缀（原理同 §2.2 / §7.17）：别拿它当 scratchpad，也别塞会变的文本。
+- 与扩展注入的规则是叠加关系、互不覆盖：本机是 AGENTS.md 这些条 + pix-optimizer 的 caveman/ponytail 档位规则（§3.15）。
+
 
 ---
 
@@ -954,7 +937,7 @@ sed -i 's/spawn(ZG_BIN, args, { cwd: opts.cwd, stdio: \["ignore", "pipe", "pipe"
 
 ### 7.8 `pi-ask-permission` 卸载（2026-10-30 前后）
 
-替代 gate 靠 secret-guard 等钩子组合（**注**：secret-guard 已于 2026-10-12 卸载，见 §7.18；现在提交侧无拦截闸）。
+替代 gate 靠 secret-guard 等钩子组合（**注**：secret-guard 已于 2026-10-12 卸载，见 §7.19；现在提交侧无拦截闸）。
 
 ### 7.9 `no-find` 全局卸载（2026-10-08）
 
@@ -971,7 +954,7 @@ sed -i 's/spawn(ZG_BIN, args, { cwd: opts.cwd, stdio: \["ignore", "pipe", "pipe"
 
 ### 7.10 `pi-cwd-guard` 卸载（2026-10-08）
 
-`.env` 防误写改回常规默契；提交侧凭据拦截曾由 `pi-secret-guard` 兜底 —— **该包已于 2026-10-12 卸载**，提交侧现无拦截（§7.18）。
+`.env` 防误写改回常规默契；提交侧凭据拦截曾由 `pi-secret-guard` 兜底 —— **该包已于 2026-10-12 卸载**，提交侧现无拦截（§7.19）。
 
 ### 7.11 `pi-zvec` 卸载（2026-10-08）
 
@@ -1096,27 +1079,29 @@ const AGENT_DIRS = [".agents/agents", ".claude/agents", ".pi/agents"] as const;
 
 **教训**：诊断里出现具体版本号与文件路径时，先跑 `pi.exe --version` 和 `fd` 确认它们对当前 exe 成立，再动手改代码。跨版本的旧结论会被当成现状（那个 `json-parse.js` 是 0.87.1 的，exe 早已是 1.1.0）。
 
-### 7.17 `pi-caveman`：唯一会**改写 system 前缀文本**的扩展（2026-10-10）
+### 7.17 `@xynogen/pix-optimizer`：唯一会**改写 system 前缀文本**的扩展（2026-10-10 首记，2026-10-12 换包）
 
-与本清单里其它 28 个扩展不同，`pi-caveman` 会在 `before_agent_start` **往 system prompt 注入规则文本**（首轮注入整份 skill，后续轮次只发轻量提醒），所以它与 §6 的静态前缀优化、与 §2.2 的 prefix-stabilizer 是同一根问题域：
+与本清单里其它 27 个扩展不同，`pix-optimizer` 的 caveman / ponytail 会在 `before_agent_start` **往 system prompt 注入规则文本**，所以它与 §6 的静态前缀优化、与 §2.2 的 prefix-stabilizer 是同一根问题域：
 
 | 关注点 | 结论 |
 |---|---|
 | 对 wire 工具集 | **零影响**。它不注册任何工具，`tools` 部分字节数与装之前完全一致 |
-| 对 skill 常驻注入 | 它自带 3 个 skill（`caveman` / `ultracave` / `megacave`）。装法是 `pi.skills: ["./skills"]`，与本机「skill 不再常驻注入 system」（§6.2，由 `pi-lean-sections.ts` 压 `<skills>` 块）的机制不冲突；要查规则文本时 `omnify` 搜得到 |
-| 对前缀缓存 | **切换模式必然让首轮 `cacheRead: 0`**（system 文本变了）；同模式内连续对话不影响。**模式定下来就别反复切**，切多了等于反复自毁缓存 |
+| 对 skill 常驻注入 | **不适用**：新包**不带 skill**，规则本身就是 system prompt 片段（§3.15）。与本机「skill 不常驻注入 system」（§6.2，`pi-lean-sections.ts` 压 `<skills>` 块）没有交集 |
+| 对前缀缓存 | **切档必然让下一轮 `cacheRead: 0`**（system 文本变了）；同档位内连续对话不影响。**档位定下来就别反复切**，切多了等于反复自毁缓存 |
 | 与 `pi-prefix-stabilizer` | 不抢钩子（它只 hook `session_start`/`before_agent_start`/`input`/`turn_end`，压缩侧那个钩子是 `session_before_compact`），**不构成新的硬顺序约束**（§2.2 无需改） |
 | 与 `pi-cache-compact` | 同上，两者互不干扰 |
+| RTK 那层 | 只改写 **bash 命令前缀**，不碰 system 文本，故**与前缀缓存无关**；代价是首次加载可能下 `rtk` 二进制（§3.15） |
 
 **使用纪律**（与本手册「少切、少动」倾向一致）：
 
-1. 模式**只切一次**，切完就长期驻留；`/caveman status` 随时可查。
-2. 觉得输出变得难读、影响定位问题时，先确认是不是它干的（`/caveman off` 或 `/caveman` 切回），而不是怀疑别的扩展。
-3. 官方标称的省下 65%/75%/80% 输出 token 是它自己的口径，**本机未复测**；省的是输出侧，缓存命中与输入侧成本不受它影响。
+1. 档位**只切一次**，切完长期驻留；要查当前值就 `/optimizer` 开面板（**没有 `status` 文本命令**）。
+2. 觉得输出变得难读、影响定位问题时，先确认是不是它干的（面板里调档或关掉），而不是怀疑别的扩展。
+3. **省 token 的数字全是上游口径，本机未复测**；输出侧压缩不影响缓存命中与输入侧成本。
 
 ---
 
-### 7.17 配置源外迁 `config/`：`.pi/` 回到「纯运行时目录」（2026-10-10）
+### 7.18 配置源外迁 `config/`：`.pi/` 回到「纯运行时目录」（2026-10-10）
+
 
 **起因**：`~/.pi/agent/settings.json` 在 2026-10-10 20:38 被写回旧快照——`packages` 退回 10-08 之前的 30 条（多出 `pi-compaction-cache`/`pi-warm-cache`/`pi-budget-guard`/`pi-zvec`/`pi-cwd-guard`，少了 `pi-cache-compact`/`@tian.zuo/pi-find`/`@narumitw/pi-lsp`），§3.11 的 13 个非默认键整段消失。机器侧按 readme 校正后（卸 5 装 3 + 补键），顺手把**配置与仓库的关系**改成不会丢的形态。
 
@@ -1129,7 +1114,7 @@ const AGENT_DIRS = [".agents/agents", ".claude/agents", ".pi/agents"] as const;
 | 项目级 | `config/pi-project/settings.json` | `<仓库>/.pi/settings.json` | `node install-project-config.mjs` |
 | 项目级留档 | `config/pi-project/zvec.json` | 不落（`pi-zvec` 已卸，§7.11） | 手动（重装 zvec 时） |
 | 用户级脚本 | `config/agent/bash-prelude.sh` | `~/.pi/agent/bash-prelude.sh`（§3.9 的 `shellCommandPrefix` 指它） | 同上 |
-| 用户级 rtk | `config/agent/rtk-config.json` | `~/.pi/agent/rtk-config.json`（pi-rtk 读，见 §3.14） | 同上 |
+
 | 用户级快照 | `config/agent/settings.snapshot-2025-09-15.json` | 不落（脚本对 `settings.snapshot-*` 一律跳过） | — |
 
 - **恢复来源**：`.pi/settings.json`、`.pi/zvec.json` 取自 git 历史（`15c714b` 删除前）；`bash-prelude.sh` 取自 §3.9 全文；用户级快照取自 `.backup-20250915/settings.json`（`51e457d` 删除前，含 §3.11 多个键的取值）。
@@ -1138,7 +1123,9 @@ const AGENT_DIRS = [".agents/agents", ".claude/agents", ".pi/agents"] as const;
 - 机器侧同时补回：`~/.pi/agent/settings.json` 的 §3.11 十三键（备份留 `settings.json.bak.2026-10-10-pre-config-restore`）、`bash-prelude.sh`、`~/.pi/agents/default.md`（§7.16）与 proper-lockfile 补丁 ×2（§7.14）。两个 fix 脚本 `--check` 全绿。
 - 顺手修的两处 readme 失真：§5 与 §8 表引用的 `.sc-test/probe-bash-guard.mjs`（从未入库、现不存在）。
 
-### 7.18 `pi-secret-guard` 卸载 + 压缩层补齐（2026-10-12）
+### 7.19 `pi-secret-guard` 卸载 + 压缩层补齐（2026-10-12）
+
+> **压缩部分已于当晚作废**：本节装的 `@izhimu/pi-caveman`（10-10）/ `pi-ponytail` / `pi-rtk` 三包当天换成单个 `@xynogen/pix-optimizer`，见 §7.20 / §3.15。下面除 secret-guard 外的一切命令与配置点**仅作当日记录，勿照抄**。`pi-secret-guard` 那一半仍然有效。
 
 一轮做完（顺序：`pi remove` → `pi install` → 写两个 config → 同步 → `/reload`）：
 
@@ -1152,15 +1139,47 @@ printf '%s\n' "$APPDATA/caveman/config.json"   # 已存在，defaultMode=ultraca
 node install-project-config.mjs      # config/agent/rtk-config.json → ~/.pi/agent/
 ```
 
-结果：29 → **30 个扩展**（28 npm + 2 git）。§1.1 / §1.3 / §2.1 / §3.13 / §3.14 / §4 / §9 同步。
+结果：29 → **30 个扩展**（28 npm + 2 git；当晚即改成 28，见 §7.20）。§1.1 / §1.3 / §2.1 / §3.13 / §3.14 / §4 / §9 同步。
 
 **卸载代价（明说）**：提交 API key / 凭据到 git 的拦截**没了**，且 `pi-cwd-guard` 早已卸（§7.10），所以 `.env` 写保护与提交侧**都没有闸**了。规矩回落到纪律层：`.env` / 密钥文件不手改、不 `git add`，提交前自己看 `git diff --cached`。再想装回来：`pi install npm:pi-secret-guard`。
 
-**新装两个的坑**：
+**新装两个的坑**（**三条都已随卸载消失，仅作历史记录**）：
 
 - `pi-ponytail` 与 `pi-caveman` **都改写 system 前缀**（`before_agent_start` 注入，§7.17 同类风险）：两者都只追加、不改前段结构，实测共存无冲突；但**任一换模式 = 换一次前缀文本**，切完第一次 `cacheRead` 归 0。日常别来回切。
 - `pi-rtk` 会**滤掉源码里的注释与空白**，导致 `edit` 报 old text 不匹配。扩展自带应急提示 + `rtk_configure` 工具：关 `sourceCodeFiltering` → 重读 → 改 → 开回来。真要常用编辑就别开 `sourceCodeFiltering`，改用 `/rtk-toggle-truncation` 之外的其余技术（§3.14）。
 - `pi-rtk` 的 `tool_result` 过滤与 `pi-mono-context-guard` 的 `tool_call` 注入是**两层叠加不是冲突**（§3.14 已对账）；若怀疑多砍了什么，`/rtk-what` 看开关、`/rtk-off` 一键关。
+
+### 7.20 压缩层三合一：`@izhimu/pi-caveman` + `pi-ponytail` + `pi-rtk` → `@xynogen/pix-optimizer`（2026-10-12）
+
+上游把三个包的功能合成一个扩展，装它等于同时装了那三个（README 自述是 rewrite 而非 copy，全 MIT）。故当天先装后卸，3 → 1：
+
+```bash
+pi install "npm:@xynogen/pix-optimizer"
+pi remove npm:@izhimu/pi-caveman
+pi remove npm:pi-ponytail
+pi remove npm:pi-rtk
+# 死配置清理（§2.4 纪律）
+rm -rf "$APPDATA/caveman" ~/.config/ponytail
+rm -f  ~/.pi/agent/rtk-config.json
+git rm config/agent/rtk-config.json     # 不删的话 install-project-config.mjs 每次同步又拷回去
+# 档位写 pix.json（本机三档全 ultra，§3.15）
+```
+
+结果：30 → **28 个扩展**（26 npm + 2 git）。§1.1 / §1.3 / §2.1 / §3.12–3.15 / §4 / §5 / §8 / §9 同步。
+
+**为什么是「换实现」而不是「装重了」**：三处机制都变了，**旧结论一律作废**。
+
+| 层 | 旧实现（已卸） | 新实现（`pix-optimizer`） |
+|---|---|---|
+档位 `lite`/`full`/`ultra`/`micro`，单一 `pix.json` |
+| RTK | 纯 JS 拦 `tool_result` 过滤内容，**不依赖二进制** | prompt 注入 + **改写 bash 命令加 `rtk` 前缀** + 官方 Rust `rtk` 二进制 |
+| ponytail | 自带 5 个 skill，逐档过滤后注入 | 无 skill，整份规则是 system prompt 片段 |
+
+- **新代价**：RTK 开着时 pi 首次加载会**联网下 `rtk` 二进制**到 `~/.pi/agent/bin`（有 `checksums.txt` 校验，不阻塞启动）；设 `PI_OFFLINE` 则跳过下载且命令改写不生效（§3.15）。
+- **顺手消掉的老坑**：`rtk_configure` + `sourceCodeFiltering` 那套「`edit` 报 old text 不匹配 → 关过滤 → 重读 → 改 → 开回来」的应急流程整条作废；`/rtk-what`、`/rtk-stats` 等记忆型统计命令不再有。
+- **入口变了**：三个命令家族收成**一个 `/optimizer` 交互面板**，且**没有文本参数形**（§3.15）——写自动化脚本时要注意这条。
+
+---
 
 ---
 
@@ -1206,11 +1225,11 @@ node install-project-config.mjs      # config/agent/rtk-config.json → ~/.pi/ag
 | subagent 报 `2 model(s) available …` 后卡住 | `~/.pi/subagent.json` 的 `modelPolicy` 没锁 `default.model` | 写 `{"modelPolicy":{"default":{"model":"<provider>/<id>"}}}`（本机 `1/1`） |
 | `pi --no-session -p ...` 不退出（shell 报 exit 124） | 桌宠的 `/feed` 长连接或宿主进程挂着父会话；headless 永远不会自己走完 | 用 `timeout 70 pi ...` 包一层（§7.13 已记录）；屏蔽上游扩展后刷屏的重连日志也会消失（§7.15） |
 | 装东西后 pi-memory 报 `Could not locate the bindings file. Tried:` | 树被重解析，better-sqlite3 换了版本 → `allowScripts` 对不上 → 原生 binding 没编 | `npm install-scripts approve better-sqlite3 && npm rebuild better-sqlite3`（详见 §3.1） |
-| 输出突然变碎句 / 忽然变得啰嗦 | caveman 模式被切了（自然语言触发、别名、或 flag 被写） | `/caveman status` 看当前模式；切回 `/ultracave`（= `/caveman ultra`）。配置与 flag 两个落盘点见 §3.12 |
-| 切了 caveman 模式后本轮 `cacheRead: 0` | 换了 system 前缀文本，首轮必然重算 | **正常现象**，别反复切；第二轮起恢复。原理同 §2.2 的 prefix-stabilizer |
-| 输出突然变「懒」/ 突然开始砍功能（YAGNI 口吻） | ponytail 模式生效（默认就是 `ultra`，§3.13）或被切 | `/ponytail status` 看当前/默认；切回 `/ponytail full` 或 `/ponytail off`。持久化默认改 `~/.config/ponytail/config.json` |
-| `edit` 报 “old text must match exactly” 但代码看着没变 | `pi-rtk` 的 `sourceCodeFiltering` / `smartTruncation` 滤掉了注释或行 | 用 `rtk_configure` 关 `sourceCodeFiltering` → 重读 → 改 → 开回来；或 `/rtk-off`（§3.14） |
-| 想知道输入侧省了多少 | rtk 统计只在内存 | `/rtk-stats`；重开会话归零。开关全貌 `/rtk-what` |
+| 输出突然变碎句 / 忽然变得啰嗦 / 开始掉冠词 | `pix-optimizer` 的 caveman 档位变了（新 caveman 是 ASD-STE100 两层，L1 选词断句 + L2 回复形状，**刻意保留冠词**，与旧 `ultracave` 碎句腔不同） | `/optimizer` 开面板调档（**只有面板，无 `/optimizer <mode>` 文本参数形**）；默认值在 `~/.pi/agent/pix.json` 的 `optimizer` 段，见 §3.15 |
+| 切了 caveman / ponytail 档位后本轮 `cacheRead: 0` | 换了 system 前缀文本，首轮必然重算 | **正常现象**，别反复切；第二轮起恢复。原理同 §2.2 的 prefix-stabilizer、§7.17 |
+| 输出突然变「懒」/ 突然开始砍功能（YAGNI 口吻） | ponytail 档位生效（本机默认就钉在 `ultra`，§3.15） | `/optimizer` 调档；持久化改 `pix.json` 的 `optimizer.ponytail`。它只管「写什么」，验证/错误处理/安全/可访问性永不裁 |
+| bash 命令前莫名多出 `rtk ` 前缀 | RTK 执行层在改写命令（模型忘了加前缀时的兜底） | **预期行为**，省的是回显 token；`/optimizer` 里 RTK 关掉即停止；二进制缺失时它不会改写（§3.15） |
+| 第一次开 pi 时 footer 出现下载 `rtk` 二进制的一行 | RTK 开着且 PATH/`binary.json` 里都找不到 `rtk` | **预期行为**，下到 `~/.pi/agent/bin` 且用 `checksums.txt` 校验过；离线时设 `PI_OFFLINE` 跳过（届时改写也不生效） |
 
 **磁盘布局速查**
 
@@ -1226,12 +1245,13 @@ node install-project-config.mjs      # config/agent/rtk-config.json → ~/.pi/ag
 | `~/.pi/agent/git/` | git 源扩展（lazy-tools fork + dsh-pet，后者扩展被屏蔽，见 §3.6） |
 | `~/.pi/agent/npm/node_modules/` | npm 源扩展 |
 | `~/.pi/agent/npm/package.json` | 27 个 dep + `allowScripts`（见 §3.1） |
-| `%APPDATA%\caveman\config.json` | `pi-caveman` 的默认模式（`defaultMode`，见 §3.12）——**不在 `~/.pi/agent/` 下**，在 Roaming |
-| `~/.pi/.caveman-active` | `pi-caveman` 的会话 flag（内容就是模式名，优先级高于上面的 config，见 §3.12） |
+| `~/.pi/agent/pix.json` | `@xynogen/pix-optimizer` 的三档状态（`optimizer.caveman` / `.rtk` / `.ponytail`），**2026-10-12 新建**，见 §3.15 |
+| `~/.pi/agent/AGENTS.md` | **全局规则**（用户级 context 文件，跨工作目录生效）：Think: minimal sufficient reasoning, simple → answer; search: fd/rg、`find`→`fd`、`grep`→`rg`，见 §5「全局规则」 |
+| `~/.pi/agent/bin/rtk` | RTK 官方二进制（2026-10-12 首次加载自动下载并校验 checksum）；`binary.json` → 本目录 → PATH，见 §3.15 |
 | `~/.pi/agent/config/` | **已空**（smart-context 包卸载后配置已删，新装带 `startupConfig` 的包才会写） |
 本目录名写死在 `dist/config.js:403`。本仓库这份是**生成物**：canonical 在 `config/pi-project/settings.json`，跑 `node install-project-config.mjs` 拷入 |
 | `<仓库>/config/pi-project/*` | **项目级配置的 canonical 源**：`settings.json`（→ 拷进 `<仓库>/.pi/`）、`zvec.json`（留档件，不参与同步，见 §7.11） |
-| `<仓库>/config/agent/*` | **用户级配置的 canonical 源**：`bash-prelude.sh`（→ 拷进 `~/.pi/agent/`）、`settings.snapshot-2025-09-15.json`（历史快照，只留档不拷） |
+| `<仓库>/config/agent/*` | **用户级配置的 canonical 源**：`bash-prelude.sh`（→ 拷进 `~/.pi/agent/`）、`settings.snapshot-2025-09-15.json`（历史快照，只留档不拷）。`rtk-config.json` 已于 2026-10-12 `git rm`（§3.14 / §7.20） |
 | `~/.pi/agent/sessions/**/*.jsonl` | 会话历史，算命中率的原始数据 |
 
 **生效方式**：改配置或扩展后 `/reload`（不重启会话、不丢历史）。
@@ -1243,7 +1263,7 @@ node install-project-config.mjs      # config/agent/rtk-config.json → ~/.pi/ag
 
 在另一台机器上照本清单完整走一遍。**配置值与 §1–§7 全部一致，唯一差异是路径前缀**（本机 `yxh`，原记录机 `yinxuehao`；`compaction-cache.json` 的 `logPath` 已是本机路径）。
 
-2026-10-09 压缩侧换血（compaction-cache → cache-compact）后为 **28 项**（§7.13）；2026-10-10 增补 `@izhimu/pi-caveman` 后为 **29 项**（27 npm + 2 git，§3.12）；2026-10-12 装 `pi-ponytail` + `pi-rtk`、卸 `pi-secret-guard` 后为 **30 项**（28 npm + 2 git，§3.13 / §3.14 / §7.18）。
+2026-10-09 压缩侧换血（compaction-cache → cache-compact）后为 **28 项**（§7.13）；2026-10-10 增补 `@izhimu/pi-caveman` 后为 **29 项**（27 npm + 2 git，§3.12）；2026-10-12 装 `pi-ponytail` + `pi-rtk`、卸 `pi-secret-guard` 后为 **30 项**（28 npm + 2 git，§3.13 / §3.14 / §7.19）；同日三包换 `@xynogen/pix-optimizer` 后为 **28 项**（26 npm + 2 git，§3.15 / §7.20）。
 
 ### 9.1 拉代码：未提交改动先备份再 fast-forward
 
