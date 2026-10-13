@@ -11,9 +11,9 @@
 
 ---
 
-## 1. 清单（在用 27 个扩展 = 25 npm + 2 git）
+## 1. 清单（在用 28 个扩展 = 26 npm + 2 git）
 
-**实际在用 27 个**。
+**实际在用 28 个**。
 > 2026-10-06 增补 3 个：联网（`pi-web-access`）、会话级撤销（`@bacnh85/pi-checkpoint`）、完成通知（`pi-notify`）。PR 插件（`@henryqw/pi-pr`）装后即卸，见 §7.7。
 > 2026-10-08 精简：卸 `pi-budget-guard`（与 `pi-meter` 功能三层全重叠，见 §7.12）与 `pi-warm-cache`（本机不生效的死安装，见 §7.12）；补装 `@arhen/pi-core-subagent`、`pi-ocr`（此前清单漂移：列了但实际未装）；新增 `pi-deepseek-cache`（DeepSeek 后端专用，与 §5.5 原判相悳 —— **2026-10-09 已验实并卸载，见 §7.13**）。
 > 2026-10-09 压缩侧换血（见 §7.13）：装 `pi-cache-compact`（provider 无关的压缩调用缓存，本机实测命中 68.6%）；卸 `pi-deepseek-cache`（绑定 DeepSeek）与 `pi-compaction-cache`（被 cache-compact 取代，且同抢 `session_before_compact`）。29 → 28。
@@ -22,7 +22,8 @@
 > 2026-10-12 压缩层三合一（30 → **28**）：装 `npm:@xynogen/pix-optimizer`（caveman + rtk + ponytail 合成一个扩展，一个 `/optimizer` 面板，见 §3.15），卸当天刚装的 `@izhimu/pi-caveman` / `pi-ponytail` / `pi-rtk`（3 → 1，26 npm + 2 git）。同日新增全局规则文件 `~/.pi/agent/AGENTS.md`（思考用最小充分推理 + 简单题直接答、`find`→`fd`、`grep`→`rg`），见 §5「全局规则」。
 > 2026-10-12 rtk 二进制修复：`winget install rtk-ai.rtk` 报 `unable to verify the first certificate`（本机 TLS 链被自定义根 CA/代理劫持，winget 的 schannel 不信）。**绕开 winget**，直接 curl release zip 装到查找路径 `~/.pi/agent/bin/rtk.exe`（`--ssl-no-revoke` 破证书问题），checksum 与 release 的 `checksums.txt` 逐位对上，`rtk --version` → 0.51.0 可跑。命令见 §3.15「二进制手动兜底」，排障见 §8。
 完整卸装理由与原始记录仍在对应 §3 / §7 小节。
-> 2026-10-13 卸 `@narumitw/pi-plan-mode`（28 → **27**：25 npm + 2 git）：`/plan` 在本机用不了，连带删除本地扩展 `pi-plan-tools.ts`（它只为把 lazy-tools 剥掉的 `plan_mode_*` 工具捞回来而存在）。见 §7.21。
+> 2026-10-13 装 `pi-smart-reader`（AST 骨架/符号抽取，27 → **28**：26 npm + 2 git）：**上游「零配置自动优化」是死的**，实测只有 `smart_read` 工具真能用，且 `web-tree-sitter` 必须钉死 0.24.7 才不半残。见 §3.16（必做配置）与 §7.23。
+> 2026-10-13 卸 `@narumitw/pi-plan-mode`（28 → **27**：25 npm + 2 git）
 
 **不锁版本**：安装命令一律不带 `@版本号`（取 npm 最新），本清单不维护版本矩阵。要查本机实际装的版本：
 
@@ -66,6 +67,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `npm:@narumitw/pi-lsp` | LSP 工具（语言无关，共享 runner，可配置） | 2026-10-07 装（此前只在增补注里提过，本行 2026-10-08 补录）；懒加载 |
 | `npm:pi-cache-compact` | 压缩调用复用前缀缓存：把摘要请求拼成活会话的**严格续写**（同 system + tools + messages + 追加一问） | **2026-10-09 装，provider 无关**（源码 0 处 "deepseek"）。实测压缩调用 `cacheRead: 81920`（本机代理命中 68.6%），Pi 默认压缩同一前缀必为 0。**零配置可用**，取证配置见 §3.3；必须装在 `pi-prefix-stabilizer` 之后，见 §2.2 |
 | `npm:@bacnh85/pi-checkpoint` | 会话级撤销：`/undo` `/redo` `/checkpoint` | 2026-10-06 装。**必须在 git 仓库内**，否则三个命令静默 no-op；写 `refs/pi-checkpoints/*`，不碰分支/tag/stash；坑：只还原已跟踪文件，本轮新增的未跟踪文件留在原地（见 §3.8）。只在无交互 `pi -p` 下验证过不报错，`/undo` 本身未实测 |
+| `npm:pi-smart-reader` | AST 骨架视图 / 单符号抽取：`smart_read` 工具（`mode: skeleton` 只留签名、`mode: symbol` 抽指定函数体） | 2026-10-13 装，懒加载。**必须先钉 `web-tree-sitter@0.24.7`**，否则 parser 初始化失败、工具全废（见 §3.16）。README 吹的「passive mode 自动优化大文件」在本机是**死代码**，别指望它省 token（见 §7.23）。只随包发了一份 TS/JS 的 wasm 语法（README 宣传的 py/rs/go/java 实际不支持） |
 | `npm:@xynogen/pix-optimizer` | **压缩三合一**：caveman（输出，ASD-STE100 四档）+ ponytail（做法，YAGNI 三档）+ RTK（输入，bash 命令改写） | 2026-10-12 装。**取代**当天先装后卸的 `@izhimu/pi-caveman` / `pi-ponytail` / `pi-rtk`（三者功能被本包重写合并，3 → 1）。不注册任何工具；唯一入口是 `/optimizer`（**只有交互面板，无文本参数形**），状态存 `~/.pi/agent/pix.json` 的 `optimizer` 段。本机全开 **`caveman: ultra` / `rtk: on` / `ponytail: ultra`**，配置见 §3.15。RTK 首次加载时自动下 `rtk` 二进制到 `~/.pi/agent/bin`（带 checksum 校验） |
 
 ### 1.2
@@ -125,7 +127,7 @@ pi install "npm:pi-notify"
 
 # 2026-10-07 增补（OCR/跨会话记忆等；PR 插件已卸，见 §7.7；pi-ask-permission 已卸，见 §7.8；no-find 已卸，见 §7.9；pi-cwd-guard 已卸，见 §7.10；pi-zvec 已卸，见 §7.11；budget-guard/warm-cache 已卸，见 §7.12；deepseek-cache/compaction-cache 已卸，见 §7.13 —— 均勿再装）
 # ⚠ pi-lsp / test-runner / ocr / memory / core-subagent 与上一段（§3.1 起）里的 secret-guard / mono-context-guard / meter
-#   曾一度「表里列了但安装循环漏了 → 清单漂移」（§7.12 的教训：pi list 与 §1 逐行对）。26 个 npm 一个都不能漏。
+27 个 npm 一个都不能漏。
 for p in @narumitw/pi-lsp pi-test-runner pi-ocr @chendpoc/pi-memory @arhen/pi-core-subagent; do
   pi install "npm:$p" || echo "[失败] $p"
 done
@@ -136,7 +138,10 @@ for p in pi-mono-context-guard pi-meter; do
   pi install "npm:$p" || echo "[失败] $p"
 done
 
-# 压缩三合一（caveman 压输出 / ponytail 压做法 / rtk 压输入；一个包一个 `/optimizer` 面板，状态在 ~/.pi/agent/pix.json，见 §3.15，装完即用，重启会话后生效）
+# 2026-10-13 装：AST 骨架/符号抽取。装完立刻做 §3.16 的 web-tree-sitter 钉版，否则 parser 起不来（工具是死的）
+pi install "npm:pi-smart-reader"
+
+# 压缩三合一
 pi install "npm:@xynogen/pix-optimizer"   # 取代已卸的 @izhimu/pi-caveman + pi-ponytail + pi-rtk（§7.20）
 # 本地扩展（含 pi-pet-autostart.ts，宠物默认启用就靠它）
 node install-local-extensions.mjs
@@ -156,7 +161,7 @@ node install-project-config.mjs
 >
 > 若 `pi update --extensions` 也超时，同一改写继续生效（git 源的 update 就是 git pull）；装完即可 `/reload`。
 
-装完自查：`pi list` 应见 **27 个扩展**（25 npm + 2 git）
+装完自查：`pi list` 应见 **28 个扩展**（26 npm + 2 git）
 
 ### 2.2 硬顺序约束
 
@@ -542,6 +547,43 @@ cd() {
 - **对前缀缓存的影响**：caveman / ponytail 都往 system prompt 注入规则文本，**切档 = 换一次前缀文本 = 下一轮 `cacheRead` 归 0**（原理同 §2.2 prefix-stabilizer、§7.17）。**定下来就别反复切。**
 - **卸载**：`pi remove npm:@xynogen/pix-optimizer`，再删 `pix.json` 的 `optimizer` 段（§2.4 纪律）。`~/.pi/agent/bin/rtk` 是自动下载物，留删皆可。
 
+### 3.16 `pi-smart-reader`：必须把 `web-tree-sitter` 钉死 0.24.7（**必做，不钉就半残**）
+
+`pi-smart-reader` 声明的依赖是 `"web-tree-sitter": "latest"`。0.25 起上游改成**只有具名导出**（`export class Parser`，无 `default`），而它 `parser.ts` 里写的是 `import Parser from "web-tree-sitter"` + `Parser.init({})` —— jiti 转成 `_webTreeSitter.default.init` 直接 `undefined`。**扩展还能加载，但 parser 起不来，所有能力全废**，启动日志必现：
+
+```
+[pi-smart-reader] Initialization failed: TypeError: _webTreeSitter.default.init is not a function
+[pi-smart-reader] Failed to initialize parser. Passive mode disabled.
+```
+
+**0.24.7 是最后一个有默认导出的版本**，且实测能吃下它自带的 `wasm/tree-sitter-typescript.wasm`（0.25+ 的 API 能吃、0.24.7 也能吃，grammar ABI 没问题）。修法写进 `~/.pi/agent/npm/package.json` 的 `overrides`（这样 `pi update --extensions` 也带着）：
+
+```json
+"overrides": {
+  "pi-smart-reader":   { "web-tree-sitter": "0.24.7" },
+  "pi-impact-analyzer": { "web-tree-sitter": "0.24.7" }
+}
+```
+
+生效要三步，**少一步都是 "invalid" 空转**（npm 对已存在的 override 目标不会自己重新解析）：
+
+```bash
+cd ~/.pi/agent/npm
+# ① 剪掉 lockfile 里这两个条目，否则 npm 报 "up to date"
+node -e "const fs=require('fs'),f='./package-lock.json',l=JSON.parse(fs.readFileSync(f,'utf8'));
+for(const k of Object.keys(l.packages)) if(/web-tree-sitter\$/.test(k)) delete l.packages[k];
+fs.writeFileSync(f,JSON.stringify(l,null,2))"
+# ② 删掉盘上的旧副本
+rm -rf node_modules/web-tree-sitter node_modules/pi-smart-reader/node_modules/web-tree-sitter node_modules/pi-impact-analyzer/node_modules/web-tree-sitter
+# ③ 重装（这棵树必须 --legacy-peer-deps，理由同 §7.11）
+npm install --legacy-peer-deps
+npm ls web-tree-sitter   # 应为 0.24.7 deduped，无 invalid
+```
+
+验收：`pi --no-session -p "reply with: ok"` 输出里**没有** `[pi-smart-reader] Initialization failed`；再让agent 跑一次 `smart_read`（`mode: skeleton`）能返回签名。
+
+> **钉了也不等于它有用**：passive mode 在本机是死代码，详见 §7.23。装它的唯一收益是 `smart_read` 这个工具。
+
 ---
 
 ## 4. 工具归属（谁注册了什么）
@@ -564,6 +606,7 @@ cd() {
 | `@bacnh85/pi-checkpoint` | 无工具（`/undo` `/redo` `/checkpoint` 命令） |
 | `pi-notify` | 无工具（`agent_end` 钩子 → Windows toast / OSC） |
 
+| `pi-smart-reader` | `smart_read`（骨架/符号抽取，**本机懒加载**，wire 上看不到，`omnify` 拾回；见 §3.16 / §7.23） |
 | `pi-test-runner` | 测试运行工具 |
 | `pi-ocr` | OCR 工具 |
 | `@chendpoc/pi-memory` | 记忆工具 + 生命周期钩子 |
@@ -1222,6 +1265,34 @@ renderSourceColor(theme, config.colors.cwd, "cwd", "bold cyan", formattedCwd)
 - pi 自带的 `light`/`dark` 跟着 pi 本体整目录替换（同目录有 `pi.exe.old` 为证），值会变但名字不变；`settings.json` 里存的是名字，所以 `"theme": "light"` 一直有效。
 - ❌ **别把 footer 配色钉成字面 hex**（本节踩过）：那会绕过主题，`light/dark` 自动切换直接死掉，而且对浅色终端**一点用没有**——那些字段本来就没坏。
 - 想让 `cwd` 颜色也由主题控制（而非配置），就在 `~/.pi/agent/themes/` 放一份自己的主题并加 `colors.cwd`；用户主题不随 pi 升级动，`/reload` 热加载。本机暂时不需要。
+
+### 7.23 `pi-smart-reader`：README 吹的 passive mode 在本机是**死代码**（2026-10-13）
+
+装上、钉版（§3.16）、parser 正常加载之后，唯一真能用的是 `smart_read` 工具。另外三个卖点全部落空：
+
+**1）自动优化大文件（passive mode）：永远不触发。** 它挂 `tool_result` 后连过三道闸就`return`，而这三道闸按 pi 1.1.0 的真实事件形状全不过：
+
+```ts
+// pi-smart-reader/extensions/index.ts（原文）
+const toolName = event?.toolName || event?.name;          // ✅ 这条对
+const content  = event?.content || event?.result;
+if (!content || typeof content !== "string") return;      // ❌ content 是 block 数组
+const filePath = event?.path || event?.args?.path;        // ❌ 字段叫 event.input.path
+```
+
+对照本机 `pi-mono-context-guard`（同一个钩子、实际能用）的写法就一目了然：`event.toolName`、`event.input as {path}`、`event.content.some(b => b.type !== "text")`。**路径永远取不到 → 直接 return**，连 notify 都不会出现。
+
+> 实测：headless 读一个 367 行的 `pi-fd.ts`，输出里没有它本该打的 `Large file optimized: ... (367 → N lines, R% reduction)`。所以**别指望它自动省 token**，它既不改 `read` 的返回，也不碰 `pi-mono-context-guard` 的截断职责（无冲突，但也没协同）。
+
+**2）`ctx.setContext(...)` / `impact_detected` / 上下文 70% 自动优化**：前者不是 pi 的公开 API（被 `if (ctx.setContext)` 护着，无报错、无效果）；`impact_detected` 需要另装 `pi-impact-analyzer` 扩展才有人发（本机没装）；`context` 钩子里的 `findLargeFilesInContext()` **直接 `return []`**（源码注释写着 "This is a heuristic - in practice, we'd need to check Pi's actual context"）。三条全空转。
+
+**3）多语言支持：只有 TS/JS。** `wasm/` 目录里**只有** `tree-sitter-typescript.wasm` 一个语法，README 宣传的 Python / Rust / Go / Java 没有对应 wasm（`parser.ts` 里也只 load 这一个）。非 TS 文件要么解析报错被 catch 吞掉，要么得到无意义的树。
+
+**能用的部分**：`smart_read` 两个模式实测正常（`skeleton` 保留签名、隐函数体；`symbol` 抽指定符号），wasm 与 `web-tree-sitter@0.24.7` 兼容（§3.16）。
+
+**`/smart-reader` 命令**：只有 `on|off|status|threshold <n>|clear` 五个子命令，且全部改**内存里的 `config` 常量**、**不落盘** —— `/smart-reader threshold 500` 重启即丢。想关掉 passive mode 只能重启前设，说白了它反正也不触发。
+
+**结论**：当「按需拿签名/函数体」的工具留着（懒加载，wire 成本≈0）；**不要把它算进§6 的 token 预算**。若哪天它改了事件字段对齐，这里要重测。
 
 ---
 
