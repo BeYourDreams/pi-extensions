@@ -39,7 +39,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 |---|---|---|
 | `npm:pi-tps` | 底部 token/speed 状态栏 | 装后跑 `fix-tps-theme.ps1` 让配色跟随系统主题 |
 | `npm:@injaneity/pi-computer-use` | 桌面截图 / 点击 / 输入 | **唯一需批准 install 脚本的包**，见 §3.1 |
-| `npm:pi-one-ui` | TUI 统一美化（Header/Context/WorkingLine/Editor/Footer） | 取代旧 `alps-pi`；要求 Node ≥22.19、Pi ≥0.84 |
+| `npm:pi-one-ui` | TUI 统一美化（Header/Context/WorkingLine/Editor/Footer） | 取代旧 `alps-pi`；要求 Node ≥22.19、Pi ≥0.84。**装完必配** `~/.pi/agent/pi-one-ui.json` 的 `colors.cwd`，否则浅色终端里文件夹名发白，见 §7.22 |
 | `npm:pi-cache-guardian` | 缓存命中巡检 + 前缀漂移告警 | 与 §6 的 prefix-stabilizer 是同一根因的两端，一并用 |
 | `npm:@tian.zuo/pi-find` | `grep` / `find` 工具 | **覆盖内建同名工具**（替换，不是并列）。本机只用它的 `grep`；`find` 已降为懒加载兜底（见 §4.1） |
 | `npm:@trycedar/pi-mdiff` | `md_inspect` / `md_diff` / `md_edit` | Markdown 结构化编辑，`.md` 改动优先用它 |
@@ -1185,7 +1185,43 @@ rm extensions/pi-plan-tools.ts ~/.pi/agent/extensions/pi-plan-tools.ts
 
 **代价（明说）**：没有只读规划模式了。想装回来：`pi install npm:@narumitw/pi-plan-mode` + 把 `extensions/pi-plan-tools.ts` 加回本仓库（git 历史里有，§7.21 前一版）。规划纪律回到 AGENTS.md 的 Think 段落（思考用最小充分推理），不靠工具。
 
----
+### 7.22 浅色终端里 footer 的文件夹名发白：`cwd` 是唯一用裸 ANSI 色的字段（2026-10-13）
+
+**现象**：浅色终端（浅背景）里 footer 的**文件夹名**发白 / 颜色不对，token、耗时、git 分支等其它段都正常。切 `light` / `cc-light` / `system` 都一样。
+
+**根因**（`pi-one-ui@0.9.1`，footer 与 minimalist-editor 共用同一条路）：
+
+```ts
+// extensions/shared/style.ts:439
+renderSourceColor(theme, spec, themeToken, themeDefault, text)
+// 1) 配置了 colors.cwd        → 按配置走
+// 2) 主题定义了 colors.cwd     → theme.fg("cwd")
+// 3) 都没有                    → renderThemeStyle(theme, themeDefault)
+// extensions/layouts/footer/footer.ts:326
+renderSourceColor(theme, config.colors.cwd, "cwd", "bold cyan", formattedCwd)
+```
+
+第 3 步的 `"bold cyan"` 是**裸 ANSI 色**：`renderThemeStyle` 见到终端色名就不查主题，直接吐 `\x1b[1;36m`。而 `cwd` 是**全包唯一**默认落到裸 ANSI 色的字段——其余同类字段的默认都是主题 token（`editorModel` → `syntaxKeyword`，`editorBorder` → `borderMuted`），所以只有文件夹名会翻车。SGR 36 取的是**终端调色板的 cyan 槽**，浅色背景下那个槽往往是很浅的青，叠上 `bold` 就是一片惨白。
+
+**排除过的猜测**（都错，别再走一遍）：
+
+- ❌ “pi-one-ui 写死了白色”：全包唯一的 `#fff` 在 `themes/cc-light.json` 的 `panel` **背景**变量里，footer 文本路径无白色字面量。
+- ❌ “主题 token 查不到就退回终端默认 fg（于是白字）”：退回的是 `bold cyan`，不是终端默认色；真正的终端默认 fg 回退只发生在 `safeThemeFg` 抛异常时。
+
+**修法**（一行配置，2026-10-13 已写入 `~/.pi/agent/pi-one-ui.json`）：
+
+```json
+{ "colors": { "cwd": "accent" } }
+```
+
+然后 `/reload`。`accent` 是 theme schema 的 46 个 `required` 色之一，`light`/`dark`/`cc-light`/`cc-dark` 全都定义，所以这一行**跟着主题自动切换**。
+
+**为什么升级不会被覆盖 / 为什么别走别的路**：
+
+- 配置文件在 agent 目录（不在 `node_modules` 里），pi 升级不动它；pi-one-ui 自己的 `ConfigStore` 只写它自己管的字段（`components` / `renderer`），`colors` 保留，官方也明说“不重写文件”。
+- pi 自带的 `light`/`dark` 跟着 pi 本体整目录替换（同目录有 `pi.exe.old` 为证），值会变但名字不变；`settings.json` 里存的是名字，所以 `"theme": "light"` 一直有效。
+- ❌ **别把 footer 配色钉成字面 hex**（本节踩过）：那会绕过主题，`light/dark` 自动切换直接死掉，而且对浅色终端**一点用没有**——那些字段本来就没坏。
+- 想让 `cwd` 颜色也由主题控制（而非配置），就在 `~/.pi/agent/themes/` 放一份自己的主题并加 `colors.cwd`；用户主题不随 pi 升级动，`/reload` 热加载。本机暂时不需要。
 
 ---
 
@@ -1236,6 +1272,7 @@ rm extensions/pi-plan-tools.ts ~/.pi/agent/extensions/pi-plan-tools.ts
 | 输出突然变「懒」/ 突然开始砍功能（YAGNI 口吻） | ponytail 档位生效（本机默认就钉在 `ultra`，§3.15） | `/optimizer` 调档；持久化改 `pix.json` 的 `optimizer.ponytail`。它只管「写什么」，验证/错误处理/安全/可访问性永不裁 |
 | bash 命令前莫名多出 `rtk ` 前缀 | RTK 执行层在改写命令（模型忘了加前缀时的兜底） | **预期行为**，省的是回显 token；`/optimizer` 里 RTK 关掉即停止；二进制缺失时它不会改写（§3.15） |
 | 第一次开 pi 时 footer 出现下载 `rtk` 二进制的一行 | RTK 开着且 PATH/`binary.json` 里都找不到 `rtk` | **预期行为**，下到 `~/.pi/agent/bin` 且用 `checksums.txt` 校验过；离线时设 `PI_OFFLINE` 跳过（届时改写也不生效） |
+| **浅色终端里 footer 的文件夹名（cwd）发白 / 颜色不对**，而其它段（token、耗时、git 分支）都正常 | **不是 pi-one-ui 写死了白色**，而是 `cwd` 是全包唯一默认用**裸 ANSI 色**的字段：`renderSourceColor(theme, config.colors.cwd, "cwd", "bold cyan", cwd)` → 主题里没有 `cwd` 这个自定义 token → 退到 `bold cyan`（SGR `1;36`，终端调色板 cyan 槽），浅色背景下就是一片惨白。详见 §7.22 | `~/.pi/agent/pi-one-ui.json` 写 `{"colors":{"cwd":"accent"}}` 然后 `/reload`。**别改主题**、别钉 hex（会把 light/dark 自动切换打死） |
 | `winget install rtk-ai.rtk` 报 `unable to verify the first certificate` | 本机 TLS 链被自定义根 CA/代理劫持（MITM），winget/schannel 不信链上的叶子证书 | **别用 winget**，按 §3.15 的手动兜底 curl release 到 `~/.pi/agent/bin/`；curl 加 `--ssl-no-revoke`、node 加 `--use-system-ca`，GitHub 不通时先走 `ghproxy.net` 镜像（AGENTS.md「下载」铁律） |
 
 **磁盘布局速查**
@@ -1253,6 +1290,7 @@ rm extensions/pi-plan-tools.ts ~/.pi/agent/extensions/pi-plan-tools.ts
 | `~/.pi/agent/npm/node_modules/` | npm 源扩展 |
 | `~/.pi/agent/npm/package.json` | 25 个 dep + `allowScripts`（见 §3.1） |
 | `~/.pi/agent/pix.json` | `@xynogen/pix-optimizer` 的三档状态（`optimizer.caveman` / `.rtk` / `.ponytail`），**2026-10-12 新建**，见 §3.15 |
+| `~/.pi/agent/pi-one-ui.json` | `pi-one-ui` 的**唯一**配置文件。2026-10-12 起只写一行 `{"colors":{"cwd":"accent"}}`，见 §7.22 |
 | `~/.pi/agent/AGENTS.md` | **全局规则**（用户级 context 文件，跨工作目录生效）：Think: minimal sufficient reasoning, simple → answer; search: fd/rg、`find`→`fd`、`grep`→`rg`，见 §5「全局规则」 |
 | `~/.pi/agent/bin/rtk` | RTK 官方二进制（2026-10-12 首次加载自动下载并校验 checksum）；`binary.json` → 本目录 → PATH，见 §3.15 |
 | `~/.pi/agent/config/` | **已空**（smart-context 包卸载后配置已删，新装带 `startupConfig` 的包才会写） |
