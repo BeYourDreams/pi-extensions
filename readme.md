@@ -11,9 +11,9 @@
 
 ---
 
-## 1. 清单（在用 28 个扩展 = 26 npm + 2 git）
+## 1. 清单（在用 27 个扩展 = 25 npm + 2 git）
 
-**实际在用 28 个**。
+**实际在用 27 个**。
 > 2026-10-06 增补 3 个：联网（`pi-web-access`）、会话级撤销（`@bacnh85/pi-checkpoint`）、完成通知（`pi-notify`）。PR 插件（`@henryqw/pi-pr`）装后即卸，见 §7.7。
 > 2026-10-08 精简：卸 `pi-budget-guard`（与 `pi-meter` 功能三层全重叠，见 §7.12）与 `pi-warm-cache`（本机不生效的死安装，见 §7.12）；补装 `@arhen/pi-core-subagent`、`pi-ocr`（此前清单漂移：列了但实际未装）；新增 `pi-deepseek-cache`（DeepSeek 后端专用，与 §5.5 原判相悳 —— **2026-10-09 已验实并卸载，见 §7.13**）。
 > 2026-10-09 压缩侧换血（见 §7.13）：装 `pi-cache-compact`（provider 无关的压缩调用缓存，本机实测命中 68.6%）；卸 `pi-deepseek-cache`（绑定 DeepSeek）与 `pi-compaction-cache`（被 cache-compact 取代，且同抢 `session_before_compact`）。29 → 28。
@@ -21,7 +21,8 @@
 > 2026-10-12 三层压缩补齐（29 → 30）：装 `pi-ponytail`（懒扩展打法层，默认 `ultra`，见 §3.13）与 `pi-rtk`（输入侧 token 削减，见 §3.14）；卸 `pi-secret-guard`（凭据拦截，已无提交侧闸，见 §7.19）。
 > 2026-10-12 压缩层三合一（30 → **28**）：装 `npm:@xynogen/pix-optimizer`（caveman + rtk + ponytail 合成一个扩展，一个 `/optimizer` 面板，见 §3.15），卸当天刚装的 `@izhimu/pi-caveman` / `pi-ponytail` / `pi-rtk`（3 → 1，26 npm + 2 git）。同日新增全局规则文件 `~/.pi/agent/AGENTS.md`（思考用最小充分推理 + 简单题直接答、`find`→`fd`、`grep`→`rg`），见 §5「全局规则」。
 > 2026-10-12 rtk 二进制修复：`winget install rtk-ai.rtk` 报 `unable to verify the first certificate`（本机 TLS 链被自定义根 CA/代理劫持，winget 的 schannel 不信）。**绕开 winget**，直接 curl release zip 装到查找路径 `~/.pi/agent/bin/rtk.exe`（`--ssl-no-revoke` 破证书问题），checksum 与 release 的 `checksums.txt` 逐位对上，`rtk --version` → 0.51.0 可跑。命令见 §3.15「二进制手动兜底」，排障见 §8。
-> 2026-10-12 清单瘦身：§1.1 / §1.2 / §1.3 / §4 的 **15 条已卸载行全部移除**（§1.1 删 9 条：`pi-edit-guard` §7.1 / `smart-context` §3.2 / `compaction-cache` §7.13 / `warm-cache` §7.12 / `budget-guard` §7.12 / `zvec` §7.11 / `secret-guard` §7.19 / `deepseek-cache` §7.13 / `cwd-guard` §7.10；§1.2 删 `no-find.ts` §7.9；§1.3 删 `ponytail-*` 5 skill §7.20；§4 删 5 条）。清单只留在用条目（仍 28 个），完整卸装理由与原始记录仍在对应 §3 / §7 小节。
+完整卸装理由与原始记录仍在对应 §3 / §7 小节。
+> 2026-10-13 卸 `@narumitw/pi-plan-mode`（28 → **27**：25 npm + 2 git）：`/plan` 在本机用不了，连带删除本地扩展 `pi-plan-tools.ts`（它只为把 lazy-tools 剥掉的 `plan_mode_*` 工具捞回来而存在）。见 §7.21。
 
 **不锁版本**：安装命令一律不带 `@版本号`（取 npm 最新），本清单不维护版本矩阵。要查本机实际装的版本：
 
@@ -61,7 +62,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `npm:@chendpoc/pi-memory` | 跨会话记忆（MEMORY.md ground truth + JSONL sidecar 检索） | 2026-10-07 装。备选 `pi-session-memory` 因 `node:sqlite` 在 Pi 内嵌运行时缺失（`ResolveMessage: No such built-in module: node:sqlite`）加载即败，已卸，见 §7.6 |
 | `npm:pi-mono-context-guard` | 上下文体积硬闸：自动截断 read/rg 超长输出 | 2026-10-07 装。cache-guardian 只告警，这是截断侧；懒加载 |
 | `npm:pi-meter` | 花费追踪 + 预算告警 + auto-downshift + 硬截断 | 2026-10-07 装。**唯一预算侧**（budget-guard 2026-10-08 已卸，追踪/告警/拦截/降级全并于此）；本机走本地代理，auto-downshift 与内置价格表可能对不上，费用数字仅供参考；懒加载 |
-| `npm:@narumitw/pi-plan-mode` | `/plan` 只读规划模式（Codex 风格） | 2026-10-07 装；懒加载 |
+
 | `npm:@narumitw/pi-lsp` | LSP 工具（语言无关，共享 runner，可配置） | 2026-10-07 装（此前只在增补注里提过，本行 2026-10-08 补录）；懒加载 |
 | `npm:pi-cache-compact` | 压缩调用复用前缀缓存：把摘要请求拼成活会话的**严格续写**（同 system + tools + messages + 追加一问） | **2026-10-09 装，provider 无关**（源码 0 处 "deepseek"）。实测压缩调用 `cacheRead: 81920`（本机代理命中 68.6%），Pi 默认压缩同一前缀必为 0。**零配置可用**，取证配置见 §3.3；必须装在 `pi-prefix-stabilizer` 之后，见 §2.2 |
 | `npm:@bacnh85/pi-checkpoint` | 会话级撤销：`/undo` `/redo` `/checkpoint` | 2026-10-06 装。**必须在 git 仓库内**，否则三个命令静默 no-op；写 `refs/pi-checkpoints/*`，不碰分支/tag/stash；坑：只还原已跟踪文件，本轮新增的未跟踪文件留在原地（见 §3.8）。只在无交互 `pi -p` 下验证过不报错，`/undo` 本身未实测 |
@@ -79,7 +80,9 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `pi-bash-guard.ts` | **不注册工具**，只挂 `tool_call`：**所有** bash 命令没传 `timeout` 就按档注入（搜索 30s / 构建 1800s / 其余 300s，硬的 1 小时上限）、永不返回的命令（编辑器/分页器/前台 dev server/常驻容器）与后台化的搜索直接 block、给 `fd` 工具补 `timeoutMs`（见 §5 铁律二） |
 | `pi-pet-autostart.ts` | 让 `pi-dsh-pet` **默认常驻且整机只留一只**：TUI 会话一开就派发 `/pet`，已有宠物窗就复用不新开，跨会话/多开 pi 也只一只。不注册工具，只挂 `session_start` + `/pet-auto` 开关。配置见 §3.6 |
 
-> 曾经的 `pi-shell.ts`（把 `bash`+`powershell` 合成 `shell`）**已删除**：它不是 pi 内置也不是 npm 包，纯本仓库自写；它带的 `-156B` 收益抵不上维护成本，改用内建 `bash`（见 §6.1）。注意它在 `session_start` 里会无条件隐藏 `bash`/`powershell`，所以 `shell` 与 `bash` 只能二选一。
+> 曾经的 `pi-plan-tools.ts`（把 lazy-tools 剥掉的 `plan_mode_*` 助手工具捞回来）**已删除**：`@narumitw/pi-plan-mode` 2026-10-13 卸载，`/plan` 在本机用不了，这个补锅扩展就没存在意义了（见 §7.21）。
+>
+> 曾经的 `pi-shell.ts`
 
 ### 1.3 Skills（可选，非扩展）
 
@@ -121,14 +124,15 @@ pi install "npm:@bacnh85/pi-checkpoint"
 pi install "npm:pi-notify"
 
 # 2026-10-07 增补（OCR/跨会话记忆等；PR 插件已卸，见 §7.7；pi-ask-permission 已卸，见 §7.8；no-find 已卸，见 §7.9；pi-cwd-guard 已卸，见 §7.10；pi-zvec 已卸，见 §7.11；budget-guard/warm-cache 已卸，见 §7.12；deepseek-cache/compaction-cache 已卸，见 §7.13 —— 均勿再装）
-# ⚠ pi-lsp / test-runner / ocr / memory / core-subagent 与上一段（§3.1 起）里的 secret-guard / mono-context-guard / meter / plan-mode
+# ⚠ pi-lsp / test-runner / ocr / memory / core-subagent 与上一段（§3.1 起）里的 secret-guard / mono-context-guard / meter
 #   曾一度「表里列了但安装循环漏了 → 清单漂移」（§7.12 的教训：pi list 与 §1 逐行对）。26 个 npm 一个都不能漏。
 for p in @narumitw/pi-lsp pi-test-runner pi-ocr @chendpoc/pi-memory @arhen/pi-core-subagent; do
   pi install "npm:$p" || echo "[失败] $p"
 done
 
-# 钩子层（不注册常驻工具：截超长 read+rg 输出 / 预算与花费 / 只读规划模式；凭据拦截 pi-secret-guard 已于 2026-10-12 卸，见 §7.19）
-for p in pi-mono-context-guard pi-meter @narumitw/pi-plan-mode; do
+# 钩子层（不注册常驻工具：截超长 read+rg 输出 / 预算与花费；凭据拦截 pi-secret-guard 已于 2026-10-12 卸，见 §7.19；
+#        只读规划模式 @narumitw/pi-plan-mode 已于 2026-10-13 卸，见 §7.21 —— 勿再装）
+for p in pi-mono-context-guard pi-meter; do
   pi install "npm:$p" || echo "[失败] $p"
 done
 
@@ -152,7 +156,7 @@ node install-project-config.mjs
 >
 > 若 `pi update --extensions` 也超时，同一改写继续生效（git 源的 update 就是 git pull）；装完即可 `/reload`。
 
-装完自查：`pi list` 应见 **28 个扩展**（26 npm + 2 git）
+装完自查：`pi list` 应见 **27 个扩展**（25 npm + 2 git）
 
 ### 2.2 硬顺序约束
 
@@ -566,7 +570,7 @@ cd() {
 | `pi-mono-context-guard` | 无工具（拦截钩子 + 命令） |
 | `pi-meter` | 1 个工具 + 预算命令 |
 | `pi-cache-compact` | 无工具（纯 `session_before_compact` 钩子；拒绝接管时打一行终端通知） |
-| `@narumitw/pi-plan-mode` | 工具 + `/plan` 模式切换 |
+
 | `pi-agent-browser-native` | `agent_browser` 及 7 个配套 |
 | `pi-lazy-tools`（fork） | `omnify`（0.4.0 起四合一；`load_tools`/`call_tool` 已撤。只代理执行、**不切 active 集**） |
 | `pi-prefix-stabilizer` / `pi-cache-compact` / `pi-cache-guardian` | 无工具（纯事件钩子） |
@@ -1165,6 +1169,22 @@ git rm config/agent/rtk-config.json     # 不删的话 install-project-config.mj
 - **顺手消掉的老坑**：`rtk_configure` + `sourceCodeFiltering` 那套「`edit` 报 old text 不匹配 → 关过滤 → 重读 → 改 → 开回来」的应急流程整条作废；`/rtk-what`、`/rtk-stats` 等记忆型统计命令不再有。
 - **入口变了**：三个命令家族收成**一个 `/optimizer` 交互面板**，且**没有文本参数形**（§3.15）——写自动化脚本时要注意这条。
 
+### 7.21 `@narumitw/pi-plan-mode` 卸载（2026-10-13）
+
+`/plan` 只读规划模式在本机用不了，连带收拾掉它的补锅件。
+
+```bash
+# 1) settings.json 的 packages 去掉 "npm:@narumitw/pi-plan-mode"
+# 2) npm 树里清掉（在 ~/.pi/agent/npm/；裸 npm uninstall 报 ERESOLVE，见 §7.11）
+npm uninstall @narumitw/pi-plan-mode --legacy-peer-deps
+# 3) 本地补锅扩展：仓库与用户目录两份都删，再 /reload
+rm extensions/pi-plan-tools.ts ~/.pi/agent/extensions/pi-plan-tools.ts
+```
+
+**为什么连带删 `pi-plan-tools.ts`**：那个本地扩展的**全部**作用就是 `session_start` 里把 lazy-tools 剥掉的 `plan_mode_question` / `plan_mode_complete` 捞回 active 集——包没了，`pi.getAllTools()` 里根本没有这两个工具，扩展变成空转（只会刷一行无意义的 notify）。
+
+**代价（明说）**：没有只读规划模式了。想装回来：`pi install npm:@narumitw/pi-plan-mode` + 把 `extensions/pi-plan-tools.ts` 加回本仓库（git 历史里有，§7.21 前一版）。规划纪律回到 AGENTS.md 的 Think 段落（思考用最小充分推理），不靠工具。
+
 ---
 
 ---
@@ -1231,7 +1251,7 @@ git rm config/agent/rtk-config.json     # 不删的话 install-project-config.mj
 | `~/.pi/agent/state/` | 跨会话记账，**2026-10-09 清理后只剩 `pi-pet-autostart.json`**（记「本 pid 已弹过窗 + 落在哪只宠物上」） |
 | `~/.pi/agent/git/` | git 源扩展（lazy-tools fork + dsh-pet，后者扩展被屏蔽，见 §3.6） |
 | `~/.pi/agent/npm/node_modules/` | npm 源扩展 |
-| `~/.pi/agent/npm/package.json` | 27 个 dep + `allowScripts`（见 §3.1） |
+| `~/.pi/agent/npm/package.json` | 25 个 dep + `allowScripts`（见 §3.1） |
 | `~/.pi/agent/pix.json` | `@xynogen/pix-optimizer` 的三档状态（`optimizer.caveman` / `.rtk` / `.ponytail`），**2026-10-12 新建**，见 §3.15 |
 | `~/.pi/agent/AGENTS.md` | **全局规则**（用户级 context 文件，跨工作目录生效）：Think: minimal sufficient reasoning, simple → answer; search: fd/rg、`find`→`fd`、`grep`→`rg`，见 §5「全局规则」 |
 | `~/.pi/agent/bin/rtk` | RTK 官方二进制（2026-10-12 首次加载自动下载并校验 checksum）；`binary.json` → 本目录 → PATH，见 §3.15 |
@@ -1250,7 +1270,7 @@ git rm config/agent/rtk-config.json     # 不删的话 install-project-config.mj
 
 在另一台机器上照本清单完整走一遍。**配置值与 §1–§7 全部一致，唯一差异是路径前缀**（本机 `yxh`，原记录机 `yinxuehao`；`compaction-cache.json` 的 `logPath` 已是本机路径）。
 
-2026-10-09 压缩侧换血（compaction-cache → cache-compact）后为 **28 项**（§7.13）；2026-10-10 增补 `@izhimu/pi-caveman` 后为 **29 项**（27 npm + 2 git，§3.12）；2026-10-12 装 `pi-ponytail` + `pi-rtk`、卸 `pi-secret-guard` 后为 **30 项**（28 npm + 2 git，§3.13 / §3.14 / §7.19）；同日三包换 `@xynogen/pix-optimizer` 后为 **28 项**（26 npm + 2 git，§3.15 / §7.20）。
+同日三包换 `@xynogen/pix-optimizer` 后为 **28 项**（26 npm + 2 git，§3.15 / §7.20）；2026-10-13 卸 `@narumitw/pi-plan-mode` 后为 **27 项**（25 npm + 2 git，§7.21）。
 
 ### 9.1 拉代码：未提交改动先备份再 fast-forward
 
