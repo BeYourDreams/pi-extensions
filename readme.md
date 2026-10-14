@@ -24,6 +24,7 @@
 完整卸装理由与原始记录仍在对应 §3 / §7 小节。
 > 2026-10-13 装 `pi-smart-reader`（AST 骨架/符号抽取，27 → **28**：26 npm + 2 git）：**上游「零配置自动优化」是死的**，实测只有 `smart_read` 工具真能用，且 `web-tree-sitter` 必须钉死 0.24.7 才不半残。见 §3.16（必做配置）与 §7.23。
 > 2026-10-13 卸 `@narumitw/pi-plan-mode`（28 → **27**：25 npm + 2 git）
+> 2026-10-14 卸 `pi-smart-reader`（27 → **26**：24 npm + 2 git）：唯一能用的 `smart_read` 只覆盖 TS/JS，本机读 md/配置主要靠 `read` + `md_inspect`，用不上；连带删掉 `~/.pi/agent/npm/package.json` 的 `overrides`（`web-tree-sitter` 钉版已无对象）。原始记录留在 §3.16 / §7.23
 
 **不锁版本**：安装命令一律不带 `@版本号`（取 npm 最新），本清单不维护版本矩阵。要查本机实际装的版本：
 
@@ -67,7 +68,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `npm:@narumitw/pi-lsp` | LSP 工具（语言无关，共享 runner，可配置） | 2026-10-07 装（此前只在增补注里提过，本行 2026-10-08 补录）；懒加载 |
 | `npm:pi-cache-compact` | 压缩调用复用前缀缓存：把摘要请求拼成活会话的**严格续写**（同 system + tools + messages + 追加一问） | **2026-10-09 装，provider 无关**（源码 0 处 "deepseek"）。实测压缩调用 `cacheRead: 81920`（本机代理命中 68.6%），Pi 默认压缩同一前缀必为 0。**零配置可用**，取证配置见 §3.3；必须装在 `pi-prefix-stabilizer` 之后，见 §2.2 |
 | `npm:@bacnh85/pi-checkpoint` | 会话级撤销：`/undo` `/redo` `/checkpoint` | 2026-10-06 装。**必须在 git 仓库内**，否则三个命令静默 no-op；写 `refs/pi-checkpoints/*`，不碰分支/tag/stash；坑：只还原已跟踪文件，本轮新增的未跟踪文件留在原地（见 §3.8）。只在无交互 `pi -p` 下验证过不报错，`/undo` 本身未实测 |
-| `npm:pi-smart-reader` | AST 骨架视图 / 单符号抽取：`smart_read` 工具（`mode: skeleton` 只留签名、`mode: symbol` 抽指定函数体） | 2026-10-13 装，懒加载。**必须先钉 `web-tree-sitter@0.24.7`**，否则 parser 初始化失败、工具全废（见 §3.16）。README 吹的「passive mode 自动优化大文件」在本机是**死代码**，别指望它省 token（见 §7.23）。只随包发了一份 TS/JS 的 wasm 语法（README 宣传的 py/rs/go/java 实际不支持） |
+| ~~`npm:pi-smart-reader`~~ | AST 骨架视图 / 单符号抽取：`smart_read`（`skeleton` 只留签名、`symbol` 抽函数体） | **已卸载 2026-10-14**（同日装同日判断为无用，见 §3.16 / §7.23）。原记录：passive mode 是死代码；wasm 只带 TS/JS 一份语法；还要钉 `web-tree-sitter@0.24.7` 才不半残 |
 | `npm:@xynogen/pix-optimizer` | **压缩三合一**：caveman（输出，ASD-STE100 四档）+ ponytail（做法，YAGNI 三档）+ RTK（输入，bash 命令改写） | 2026-10-12 装。**取代**当天先装后卸的 `@izhimu/pi-caveman` / `pi-ponytail` / `pi-rtk`（三者功能被本包重写合并，3 → 1）。不注册任何工具；唯一入口是 `/optimizer`（**只有交互面板，无文本参数形**），状态存 `~/.pi/agent/pix.json` 的 `optimizer` 段。本机全开 **`caveman: ultra` / `rtk: on` / `ponytail: ultra`**，配置见 §3.15。RTK 首次加载时自动下 `rtk` 二进制到 `~/.pi/agent/bin`（带 checksum 校验） |
 
 ### 1.2
@@ -138,8 +139,7 @@ for p in pi-mono-context-guard pi-meter; do
   pi install "npm:$p" || echo "[失败] $p"
 done
 
-# 2026-10-13 装：AST 骨架/符号抽取。装完立刻做 §3.16 的 web-tree-sitter 钉版，否则 parser 起不来（工具是死的）
-pi install "npm:pi-smart-reader"
+# 2026-10-14 已卸 pi-smart-reader（§3.16 / §7.23），如需重装：pi install "npm:pi-smart-reader" 并补回 web-tree-sitter@0.24.7 的 overrides
 
 # 压缩三合一
 pi install "npm:@xynogen/pix-optimizer"   # 取代已卸的 @izhimu/pi-caveman + pi-ponytail + pi-rtk（§7.20）
@@ -547,9 +547,11 @@ cd() {
 - **对前缀缓存的影响**：caveman / ponytail 都往 system prompt 注入规则文本，**切档 = 换一次前缀文本 = 下一轮 `cacheRead` 归 0**（原理同 §2.2 prefix-stabilizer、§7.17）。**定下来就别反复切。**
 - **卸载**：`pi remove npm:@xynogen/pix-optimizer`，再删 `pix.json` 的 `optimizer` 段（§2.4 纪律）。`~/.pi/agent/bin/rtk` 是自动下载物，留删皆可。
 
-### 3.16 `pi-smart-reader`：必须把 `web-tree-sitter` 钉死 0.24.7（**必做，不钉就半残**）
+### 3.16 ~~`pi-smart-reader`~~（**已卸载 2026-10-14**；下面的钉版配置一并作废）
 
-`pi-smart-reader` 声明的依赖是 `"web-tree-sitter": "latest"`。0.25 起上游改成**只有具名导出**（`export class Parser`，无 `default`），而它 `parser.ts` 里写的是 `import Parser from "web-tree-sitter"` + `Parser.init({})` —— jiti 转成 `_webTreeSitter.default.init` 直接 `undefined`。**扩展还能加载，但 parser 起不来，所有能力全废**，启动日志必现：
+**卸载理由**：唯一能用的 `smart_read` 只支持 TS/JS（只带一份 `tree-sitter-typescript.wasm`），而本机长文任务以 md/配置为主——大 md 走 `md_inspect` + 段落 `read`，源码用 `rg` 定位后按需读，`smart_read` 覆盖不到；passive mode 又是死代码（§7.23）。**留着只是每次安装都要维护 `web-tree-sitter` 钉版**（2026-10-13 → 2026-10-14 共 1 天，净亏）。若日后 TS 大文件确实读不动再装回来，配 `web-tree-sitter@0.24.7` 钉版。
+
+~~`pi-smart-reader` 声明的依赖是 `"web-tree-sitter": "latest"`。0.25 起上游改成**只有具名导出**
 
 ```
 [pi-smart-reader] Initialization failed: TypeError: _webTreeSitter.default.init is not a function
@@ -606,7 +608,7 @@ npm ls web-tree-sitter   # 应为 0.24.7 deduped，无 invalid
 | `@bacnh85/pi-checkpoint` | 无工具（`/undo` `/redo` `/checkpoint` 命令） |
 | `pi-notify` | 无工具（`agent_end` 钩子 → Windows toast / OSC） |
 
-| `pi-smart-reader` | `smart_read`（骨架/符号抽取，**本机懒加载**，wire 上看不到，`omnify` 拾回；见 §3.16 / §7.23） |
+| ~~`pi-smart-reader`~~（2026-10-14 卸） | ~~`smart_read`~~（骨架/符号抽取，见 §3.16 / §7.23） |
 | `pi-test-runner` | 测试运行工具 |
 | `pi-ocr` | OCR 工具 |
 | `@chendpoc/pi-memory` | 记忆工具 + 生命周期钩子 |
@@ -1266,7 +1268,7 @@ renderSourceColor(theme, config.colors.cwd, "cwd", "bold cyan", formattedCwd)
 - ❌ **别把 footer 配色钉成字面 hex**（本节踩过）：那会绕过主题，`light/dark` 自动切换直接死掉，而且对浅色终端**一点用没有**——那些字段本来就没坏。
 - 想让 `cwd` 颜色也由主题控制（而非配置），就在 `~/.pi/agent/themes/` 放一份自己的主题并加 `colors.cwd`；用户主题不随 pi 升级动，`/reload` 热加载。本机暂时不需要。
 
-### 7.23 `pi-smart-reader`：README 吹的 passive mode 在本机是**死代码**（2026-10-13）
+### 7.23 ~~`pi-smart-reader`~~（2026-10-14 已卸载；以下为卸载前的实测记录，留档）
 
 装上、钉版（§3.16）、parser 正常加载之后，唯一真能用的是 `smart_read` 工具。另外三个卖点全部落空：
 
@@ -1292,7 +1294,7 @@ const filePath = event?.path || event?.args?.path;        // ❌ 字段叫 event
 
 **`/smart-reader` 命令**：只有 `on|off|status|threshold <n>|clear` 五个子命令，且全部改**内存里的 `config` 常量**、**不落盘** —— `/smart-reader threshold 500` 重启即丢。想关掉 passive mode 只能重启前设，说白了它反正也不触发。
 
-**结论**：当「按需拿签名/函数体」的工具留着（懒加载，wire 成本≈0）；**不要把它算进§6 的 token 预算**。若哪天它改了事件字段对齐，这里要重测。
+**结论（2026-10-13 当时）**：当「按需拿签名/函数体」的工具留着（懒加载，wire 成本≈0）；**不要把它算进§6 的 token 预算**。若哪天它改了事件字段对齐，这里要重测。**（2026-10-14 更新：因只覆盖 TS/JS、passive mode 又是死代码，已整体卸载，见 §3.16。）**
 
 ---
 
