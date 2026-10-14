@@ -546,7 +546,8 @@ cd() {
 - **二进制来源**：查找顺序 `binary.json` → `~/.pi/agent/bin` → `PATH`（`@xynogen/pix-runtime` 的 Binaries）。RTK 开着且找不到时，**pi 首次加载会从 `rtk-ai/rtk` 下最新 release 到 `~/.pi/agent/bin`**，用 release 自带的 `checksums.txt` 校验，footer 打一行版本与来源，**不阻塞启动也不阻塞工具调用**。跳过条件：设了 `PI_OFFLINE` / `/optimizer` 里 RTK 关 / `binary.json` 指的路径不存在。`binary.json` 钉了路径时，改写用的就是那个带引号的路径。
 - **二进制手动兜底（2026-10-12 实测，winget/代理下载失败时走这条）**：`winget install rtk-ai.rtk` 报 TLS 握手失败（见 AGENTS.md「下载」铁律），直接绕开：`curl -sSL --ssl-no-revoke -o ~/.pi/agent/bin/rtk.zip https://github.com/rtk-ai/rtk/releases/latest/download/rtk-x86_64-pc-windows-msvc.zip && unzip ~/.pi/agent/bin/rtk.zip rtk.exe -d ~/.pi/agent/bin/`，完事删 zip。本机 0.51.0 已用此法装好。GitHub 直连被墙/超时时，改用 ghproxy 镜像（`https://ghproxy.net/` 或 `https://mirror.ghproxy.com/` 前缀拼 release URL）再取。
 - **对前缀缓存的影响**：caveman / ponytail 都往 system prompt 注入规则文本，**切档 = 换一次前缀文本 = 下一轮 `cacheRead` 归 0**（原理同 §2.2 prefix-stabilizer、§7.17）。**定下来就别反复切。**
-- **卸载**：`pi remove npm:@xynogen/pix-optimizer`，再删 `pix.json` 的 `optimizer` 段（§2.4 纪律）。`~/.pi/agent/bin/rtk` 是自动下载物，留删皆可。
+- **rtk 自己的配置在 `%APPDATA%/rtk/config.toml`**（默认不存在，`rtk config --create` 生成）：`[hooks] suppress_hook_warning = true` 关掉每条 bash 前缀的 `[rtk] /!\ No hook installed` 噪音。**别手写半截小节**——rtk 反序列化缺字段即报 `missing field`，见 §7.24。
+- **卸载**：`pi remove npm:@xynogen/pix-optimizer`，再删 `pix.json` 的 `optimizer` 段（§2.4 纪律）。
 
 ### 3.16 ~~`pi-smart-reader`~~（**已卸载 2026-10-14**；下面的钉版配置一并作废）
 
@@ -1295,7 +1296,37 @@ const filePath = event?.path || event?.args?.path;        // ❌ 字段叫 event
 
 **`/smart-reader` 命令**：只有 `on|off|status|threshold <n>|clear` 五个子命令，且全部改**内存里的 `config` 常量**、**不落盘** —— `/smart-reader threshold 500` 重启即丢。想关掉 passive mode 只能重启前设，说白了它反正也不触发。
 
-**结论（2026-10-13 当时）**：当「按需拿签名/函数体」的工具留着（懒加载，wire 成本≈0）；**不要把它算进§6 的 token 预算**。若哪天它改了事件字段对齐，这里要重测。**（2026-10-14 更新：因只覆盖 TS/JS、passive mode 又是死代码，已整体卸载，见 §3.16。）**
+**（2026-10-14 更新：因只覆盖 TS/JS、passive mode 又是死代码，已整体卸载，见 §3.16。）**
+
+### 7.24 每条 bash 命令都带 `[rtk] /!\ No hook installed` 噪音（2026-10-14 已修）
+
+**症状**：`bash` 工具每次执行，`ls` / `rg` / `git` 等命令的输出**前面**都缀一行
+
+```
+[rtk] /!\ No hook installed — run `rtk init -g` for automatic token savings
+```
+
+不是报错，是 rtk 0.51.0 自己往 **stderr** 打的提醒，混进工具输出被当回显读进来。
+
+**根因**：`pix-optimizer` 的 RTK 档开着（§3.15 `pix.json` 的 `optimizer.rtk: "on"`），它在 `tool_call` 里给已知首词加 `rtk` 前缀；而 rtk 检查的「hook 装没装」指的是 **Claude Code 风格的 `PreToolUse` hook**（`~/.claude/settings.json` + `hooks/rtk-rewrite.sh`，另有 cursor/codex/gemini 各一份）。**pi 不走那条链路**，pix 的改写发生在工具调用之前，rtk 看不见 → 每次都判定「没装 hook」。所以照它提示跑 `rtk init -g` 只会给 pi 多装一份重复改写器。
+
+**处置**（rtk 自己的开关，二进制里只有这个）：
+
+```toml
+# %APPDATA%\rtk\config.toml
+[hooks]
+suppress_hook_warning = true
+```
+
+等价的环境变量是 `RTK_SUPPRESS_HOOK_WARNING=1`（值不是 `off` 就算开），**但别用**——pi 的 Bash 工具走 `bash -c`、不读 `~/.bashrc`（§3.9），环境变量挂不上；配置项是唯一能跟着进程走的旋钮。
+
+**配这个文件的坑**：
+
+- 文件**默认不存在**（`rtk config` 显示 `(default config, file not created)`）。手写一个 `[display]` 小节会报 `rtk: missing field 'colors'`——rtk 的反序列化**没有默认值兜底，缺字段即失败**。要手改先 `rtk config --create` 生成全量，再改那一行。
+- 小节名是 **`[hooks]`**，不是 `[display]`/`[filters]`。从二进制字符串表里能看出 `suppress_hook_warning` 与 `exclude_commands`、`transparent_prefixes` 同属 hooks 段；`[display]` 只有 `colors`/`emoji`/`max_width`。
+- 顺带确认：`rtk init -g --agent pi` 装的是 `~/.pi/agent/extensions/rtk.ts`（**每次 bash 调用多 fork 一个 `rtk rewrite` 子进程**），与 pix 的正则改写重复，**本机已删**。真要留就别让 pix 再改写一遍。
+
+**没做的**：没去装真正的 Claude hook（pi 用不上那条链路）；没关 RTK 档（省 token 的部分照常生效，关掉反而亏）。
 
 ---
 
@@ -1345,6 +1376,7 @@ const filePath = event?.path || event?.args?.path;        // ❌ 字段叫 event
 | 切了 caveman / ponytail 档位后本轮 `cacheRead: 0` | 换了 system 前缀文本，首轮必然重算 | **正常现象**，别反复切；第二轮起恢复。原理同 §2.2 的 prefix-stabilizer、§7.17 |
 | 输出突然变「懒」/ 突然开始砍功能（YAGNI 口吻） | ponytail 档位生效（本机默认就钉在 `ultra`，§3.15） | `/optimizer` 调档；持久化改 `pix.json` 的 `optimizer.ponytail`。它只管「写什么」，验证/错误处理/安全/可访问性永不裁 |
 | bash 命令前莫名多出 `rtk ` 前缀 | RTK 执行层在改写命令（模型忘了加前缀时的兜底） | **预期行为**，省的是回显 token；`/optimizer` 里 RTK 关掉即停止；二进制缺失时它不会改写（§3.15） |
+| 每条 bash 命令输出前带 `[rtk] /!\ No hook installed` | rtk 找的是 Claude 风格 `PreToolUse` hook，pi 走 pix 的 `tool_call` 改写，它看不见 | `%APPDATA%\rtk\config.toml` 的 `[hooks] suppress_hook_warning = true`（先 `rtk config --create` 再改，详见 §7.24） |
 | 第一次开 pi 时 footer 出现下载 `rtk` 二进制的一行 | RTK 开着且 PATH/`binary.json` 里都找不到 `rtk` | **预期行为**，下到 `~/.pi/agent/bin` 且用 `checksums.txt` 校验过；离线时设 `PI_OFFLINE` 跳过（届时改写也不生效） |
 | **浅色终端里 footer 的文件夹名（cwd）发白 / 颜色不对**，而其它段（token、耗时、git 分支）都正常 | **不是 pi-one-ui 写死了白色**，而是 `cwd` 是全包唯一默认用**裸 ANSI 色**的字段：`renderSourceColor(theme, config.colors.cwd, "cwd", "bold cyan", cwd)` → 主题里没有 `cwd` 这个自定义 token → 退到 `bold cyan`（SGR `1;36`，终端调色板 cyan 槽），浅色背景下就是一片惨白。详见 §7.22 | `~/.pi/agent/pi-one-ui.json` 写 `{"colors":{"cwd":"accent"}}` 然后 `/reload`。**别改主题**、别钉 hex（会把 light/dark 自动切换打死） |
 | `winget install rtk-ai.rtk` 报 `unable to verify the first certificate` | 本机 TLS 链被自定义根 CA/代理劫持（MITM），winget/schannel 不信链上的叶子证书 | **别用 winget**，按 §3.15 的手动兜底 curl release 到 `~/.pi/agent/bin/`；curl 加 `--ssl-no-revoke`、node 加 `--use-system-ca`，GitHub 不通时先走 `ghproxy.net` 镜像（AGENTS.md「下载」铁律） |
@@ -1367,6 +1399,7 @@ const filePath = event?.path || event?.args?.path;        // ❌ 字段叫 event
 | `~/.pi/agent/pi-one-ui.json` | `pi-one-ui` 的**唯一**配置文件。2026-10-12 起只写一行 `{"colors":{"cwd":"accent"}}`，见 §7.22 |
 | `~/.pi/agent/AGENTS.md` | **全局规则**（用户级 context 文件，跨工作目录生效，2026-10-14 起全中文）：思考最小充分推理、读文件不整读（`offset`/`limit`/`md_inspect`）、搜索 fd/rg、下载走国内镜像，见 §5「全局规则」 |
 | `~/.pi/agent/bin/rtk` | RTK 官方二进制（2026-10-12 首次加载自动下载并校验 checksum）；`binary.json` → 本目录 → PATH，见 §3.15 |
+| `%APPDATA%\rtk\config.toml` | **rtk 二进制自己的配置**（与 pi 的配置无关）：`[hooks] suppress_hook_warning = true` 掐掉每条 bash 的 hook 提醒，见 §7.24。`rtk config` 可看默认全文 |
 | `~/.pi/agent/config/` | **已空**（smart-context 包卸载后配置已删，新装带 `startupConfig` 的包才会写） |
 本目录名写死在 `dist/config.js:403`。本仓库这份是**生成物**：canonical 在 `config/pi-project/settings.json`，跑 `node install-project-config.mjs` 拷入 |
 | `<仓库>/config/pi-project/*` | **项目级配置的 canonical 源**：`settings.json`（→ 拷进 `<仓库>/.pi/`）、`zvec.json`（留档件，不参与同步，见 §7.11） |
