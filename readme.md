@@ -19,12 +19,13 @@
 > 2026-10-09 压缩侧换血（见 §7.13）：装 `pi-cache-compact`（provider 无关的压缩调用缓存，本机实测命中 68.6%）；卸 `pi-deepseek-cache`（绑定 DeepSeek）与 `pi-compaction-cache`（被 cache-compact 取代，且同抢 `session_before_compact`）。29 → 28。
 > 2026-10-10 增补 `@izhimu/pi-caveman`（caveman 输出压缩层，默认 `ultracave`，见 §3.12）：28 → 29。
 > 2026-10-12 三层压缩补齐（29 → 30）：装 `pi-ponytail`（懒扩展打法层，默认 `ultra`，见 §3.13）与 `pi-rtk`（输入侧 token 削减，见 §3.14）；卸 `pi-secret-guard`（凭据拦截，已无提交侧闸，见 §7.19）。
-> 2026-10-12 压缩层三合一（30 → **28**）：装 `npm:@xynogen/pix-optimizer`（caveman + rtk + ponytail 合成一个扩展，一个 `/optimizer` 面板，见 §3.15），卸当天刚装的 `@izhimu/pi-caveman` / `pi-ponytail` / `pi-rtk`（3 → 1，26 npm + 2 git）。同日新增全局规则文件 `~/.pi/agent/AGENTS.md`（思考用最小充分推理 + 简单题直接答、`find`→`fd`、`grep`→`rg`），见 §5「全局规则」。
+> 2026-10-12 压缩层三合一（30 → **28**）：装 `npm:@xynogen/pix-optimizer`（caveman + rtk + ponytail 合成一个扩展，一个 `/optimizer` 面板，见 §3.15），卸当天刚装的 `@izhimu/pi-caveman` / `pi-ponytail` / `pi-rtk`（3 → 1，26 npm + 2 git）。同日新增全局规则文件 `~/.pi/agent/AGENTS.md`（见 §5「全局规则」）。
 > 2026-10-12 rtk 二进制修复：`winget install rtk-ai.rtk` 报 `unable to verify the first certificate`（本机 TLS 链被自定义根 CA/代理劫持，winget 的 schannel 不信）。**绕开 winget**，直接 curl release zip 装到查找路径 `~/.pi/agent/bin/rtk.exe`（`--ssl-no-revoke` 破证书问题），checksum 与 release 的 `checksums.txt` 逐位对上，`rtk --version` → 0.51.0 可跑。命令见 §3.15「二进制手动兜底」，排障见 §8。
 完整卸装理由与原始记录仍在对应 §3 / §7 小节。
 > 2026-10-13 装 `pi-smart-reader`（AST 骨架/符号抽取，27 → **28**：26 npm + 2 git）：**上游「零配置自动优化」是死的**，实测只有 `smart_read` 工具真能用，且 `web-tree-sitter` 必须钉死 0.24.7 才不半残。见 §3.16（必做配置）与 §7.23。
 > 2026-10-13 卸 `@narumitw/pi-plan-mode`（28 → **27**：25 npm + 2 git）
 > 2026-10-14 卸 `pi-smart-reader`（27 → **26**：24 npm + 2 git）：唯一能用的 `smart_read` 只覆盖 TS/JS，本机读 md/配置主要靠 `read` + `md_inspect`，用不上；连带删掉 `~/.pi/agent/npm/package.json` 的 `overrides`（`web-tree-sitter` 钉版已无对象）。原始记录留在 §3.16 / §7.23
+> 2026-10-14 全局规则 `~/.pi/agent/AGENTS.md` **改中文 + 精简**，并加「读文件」块
 
 **不锁版本**：安装命令一律不带 `@版本号`（取 npm 最新），本清单不维护版本矩阵。要查本机实际装的版本：
 
@@ -777,14 +778,14 @@ pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传
 6. **纯 UI 类扩展可以放心装**：`pi-tps` / `pi-one-ui` / `pi-dsh-pet` / `pi-pet-autostart` 这类只挂事件钩子、只注册命令的扩展，**不注册任何工具**，不进 `defaultTools`，wire 字节不变（§3.6 有 bench 实测：装宠物前后都是 5664B）。反过来，任何**注册工具**的扩展都要重新算 §6.3 那笔账。
 **全局规则：行为约定写 `~/.pi/agent/AGENTS.md`（2026-10-12 新建）**
 
-pi 的用户级 context 文件（`docs/configuration.md`：`<agent-dir>/AGENTS.override.md` / `AGENTS.md` / `CLAUDE.md` **跨所有工作目录生效**；同目录的 `AGENTS.override.md` 可临时顶掉 `AGENTS.md`）。本机分两块（思考 + 搜索工具），短且稳：
+pi 的用户级 context 文件（`docs/configuration.md`：`<agent-dir>/AGENTS.override.md` / `AGENTS.md` / `CLAUDE.md` **跨所有工作目录生效**；同目录的 `AGENTS.override.md` 可临时顶掉 `AGENTS.md`）。本机**全中文**、分四块（思考 / 读文件 / 搜索 / 下载），短且稳：
 
 | 规则 | 用意 |
 |---|---|
-| Think: Minimal sufficient reasoning — goal, constraints, key intermediates, decision, verify. No restatement, repetition, pleasantries, divergence. Simple → answer directly; complex → budget flexible, correctness first. | 思考照走但不铺草稿。与 §3.15 的 caveman 是两层：那管「说给用户听的话」，这条管内部 think |
-| Use `fd` not `find`（文件名/路径搜索一律走 `fd`，不裸跑 `find`） | 呼应 §4.1 与 §4.2；`fd` 默认排除编译目录 |
-| Use `rg` not `grep`/`egrep`/`fgrep`（内容搜索走 `rg`，不裸跑 `grep`） | 同上；`grep` 工具（pi-find）与 `fd` 一样是懒加载（§3.4） |
-| `find`/`grep` 工具仅作兜底，必须缩 `path`；`fd` 工具显式传 `timeoutMs` | 兜底路径见 §5 铁律二与 §4.1 |
+| **思考**：最小充分推理（目标→约束→关键中间量→决定→验证），不复述/重复/寒暄/发散；简单题直接答，复杂题预算可放宽 | 思考照走但不铺草稿。与 §3.15 的 caveman 是两层：那管「说给用户听的话」，这条管内部 think |
+| **读文件**：默认不整读（<400 行或确实全要才整读）；`rg -n` 定位 → `read` 带 `offset`/`limit` 取段；`.md` 走 `md_inspect` 拿目录；不重读 | 长文件整读是本机最大的一笔 token 浪费（本仓库 readme 就 152KB）。例外：即将编辑的源码、200 行内配置、陌生结构的探路文件 |
+| **搜索**：文件名/路径走 `fd`，内容走 `rg`，`find`/`grep` 仅兜底且缩 `path`；`fd` 工具显式传 `timeoutMs` | 呼应 §4.1 与 §4.2；`fd` 默认排除编译目录，`grep` 工具与 `fd` 一样懒加载（§3.4） |
+| **下载**：GitHub 走 ghproxy 系、npm 走 npmmirror；被墙/证书错**只换源不关验证** | 对齐 §8 排障里的 winget 证书链坑（`unable to verify the first certificate`） |
 
 - 它进的是**每轮 system 前缀**，所以改它等于改前缀（原理同 §2.2 / §7.17）：别拿它当 scratchpad，也别塞会变的文本。
 - 与扩展注入的规则是叠加关系、互不覆盖：本机是 AGENTS.md 这些条 + pix-optimizer 的 caveman/ponytail 档位规则（§3.15）。
@@ -1364,7 +1365,7 @@ const filePath = event?.path || event?.args?.path;        // ❌ 字段叫 event
 | `~/.pi/agent/npm/package.json` | 25 个 dep + `allowScripts`（见 §3.1） |
 | `~/.pi/agent/pix.json` | `@xynogen/pix-optimizer` 的三档状态（`optimizer.caveman` / `.rtk` / `.ponytail`），**2026-10-12 新建**，见 §3.15 |
 | `~/.pi/agent/pi-one-ui.json` | `pi-one-ui` 的**唯一**配置文件。2026-10-12 起只写一行 `{"colors":{"cwd":"accent"}}`，见 §7.22 |
-| `~/.pi/agent/AGENTS.md` | **全局规则**（用户级 context 文件，跨工作目录生效）：Think: minimal sufficient reasoning, simple → answer; search: fd/rg、`find`→`fd`、`grep`→`rg`，见 §5「全局规则」 |
+| `~/.pi/agent/AGENTS.md` | **全局规则**（用户级 context 文件，跨工作目录生效，2026-10-14 起全中文）：思考最小充分推理、读文件不整读（`offset`/`limit`/`md_inspect`）、搜索 fd/rg、下载走国内镜像，见 §5「全局规则」 |
 | `~/.pi/agent/bin/rtk` | RTK 官方二进制（2026-10-12 首次加载自动下载并校验 checksum）；`binary.json` → 本目录 → PATH，见 §3.15 |
 | `~/.pi/agent/config/` | **已空**（smart-context 包卸载后配置已删，新装带 `startupConfig` 的包才会写） |
 本目录名写死在 `dist/config.js:403`。本仓库这份是**生成物**：canonical 在 `config/pi-project/settings.json`，跑 `node install-project-config.mjs` 拷入 |
