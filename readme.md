@@ -26,6 +26,7 @@
 > 2026-10-13 卸 `@narumitw/pi-plan-mode`（28 → **27**：25 npm + 2 git）
 > 2026-10-14 卸 `pi-smart-reader`（27 → **26**：24 npm + 2 git）：唯一能用的 `smart_read` 只覆盖 TS/JS，本机读 md/配置主要靠 `read` + `md_inspect`，用不上；连带删掉 `~/.pi/agent/npm/package.json` 的 `overrides`（`web-tree-sitter` 钉版已无对象）。原始记录留在 §3.16 / §7.23
 > 2026-10-14 全局规则 `~/.pi/agent/AGENTS.md` **改中文 + 精简**，并加「读文件」块
+> 2026-10-15 例行 `pi update --extensions`（版本仍不锁）：24 npm 里只动了两条 —— `@ssk_dev/rpiv-todo-lean` 2.12.1 → **2.13.9**、`@xynogen/pix-optimizer` 1.3.2 → **1.3.3**（工具归属未变：前者仍只注册 `todo`，后者仍零工具 + `/optimizer` 面板，`pix.json` 三档 ultra 保留）。两个 git 源 `git fetch` 只多了 tag、无新 commit。§8 体检全绿；`fix-browser-native-compat.mjs` 改判缺失的 `lib/tool-surface.js` 为 `[skip]`（0.9.6 已把它打进 `index.js`，见 §8 表）
 
 **不锁版本**：安装命令一律不带 `@版本号`（取 npm 最新），本清单不维护版本矩阵。要查本机实际装的版本：
 
@@ -1341,7 +1342,7 @@ suppress_hook_warning = true
 | `node fix-lazy-tools-notes.mjs --check` | DOCS_NOTE 路径补丁是否需要重打 | 基线已修好 exit 0 |
 | `node fix-proper-lockfile-proxy.mjs --check` | proper-lockfile 补丁在位 | 一致 exit 0 |
 | `node fix-subagent-check.mjs --check` | 子代理可用（agent 定义目录 / modelPolicy / 插件在位） | 全绿 exit 0；缺 agent 定义 exit 1 |
-| `node fix-browser-native-compat.mjs` | 双路回退兼容（新形态报 `[skip]`） | `[skip]` |
+| `node fix-browser-native-compat.mjs` | 双路回退兼容（pi 0.85.x + 扩展 0.7.1 专用） | 新形态 `[skip]`：0.9.6 起没有 `lib/tool-surface.js` 了（打进 `index.js`），脚本已改成「包在但文件没了」= skip |
 | `node install-project-config.mjs --check` | `config/` 里的配置/小脚本与 pi 实际读取位置是否一致 | 一致 exit 0 |
 | `.sc-test/check-ext-errors.mjs` | 扫会话里的 `extension_error` | 盘上还在，但 `.sc-test/` 是 gitignore、**不入库** → 当一次性探针用，别当长期工具（升级/清理会丢） |
 | ~~`.sc-test/probe-bash-guard.mjs`~~ | bash-guard 回归用例（54 例） | **已不存在**（未入库，随清理丢了）——要回归按 §5 那份清单重写 |

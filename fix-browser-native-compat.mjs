@@ -31,6 +31,11 @@ const file = join(
 );
 
 if (!existsSync(file)) {
+	// 包目录在、只是没有 lib/tool-surface.js = 新形态（0.9.6+ 已打进 index.js），不是没装。
+	if (existsSync(join(file, "..", "..", "index.js"))) {
+		console.log("[skip] 新形态无 tool-surface.js（已打进 index.js），本补丁仅针对 pi 0.85.x + 扩展 0.7.1");
+		process.exit(0);
+	}
 	console.error(`[fail] 目标文件不存在（pi-agent-browser-native 未安装？）: ${file}`);
 	process.exit(1);
 }
