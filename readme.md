@@ -26,7 +26,7 @@
 > 2026-10-13 卸 `@narumitw/pi-plan-mode`（28 → **27**：25 npm + 2 git）
 > 2026-10-14 卸 `pi-smart-reader`（27 → **26**：24 npm + 2 git）：唯一能用的 `smart_read` 只覆盖 TS/JS，本机读 md/配置主要靠 `read` + `md_inspect`，用不上；连带删掉 `~/.pi/agent/npm/package.json` 的 `overrides`（`web-tree-sitter` 钉版已无对象）。原始记录留在 §3.16 / §7.23
 > 2026-10-14 全局规则 `~/.pi/agent/AGENTS.md` **改中文 + 精简**，并加「读文件」块
-> 2026-10-16 全局规则 `~/.pi/agent/AGENTS.md` **换回英文版**（四块不变：Think / Read files / Search / Download）
+> 2026-10-16 全局规则 `~/.pi/agent/AGENTS.md` **换回英文版**（四块不变：Think / Read files / Search / Download），全文 canonical 入库 `config/agent/AGENTS.md`
 > 2026-10-15 例行 `pi update --extensions`（版本仍不锁）：24 npm 里只动了两条 —— `@ssk_dev/rpiv-todo-lean` 2.12.1 → **2.13.9**、`@xynogen/pix-optimizer` 1.3.2 → **1.3.3**（工具归属未变：前者仍只注册 `todo`，后者仍零工具 + `/optimizer` 面板，`pix.json` 三档 ultra 保留）。两个 git 源 `git fetch` 只多了 tag、无新 commit。§8 体检全绿；`fix-browser-native-compat.mjs` 改判缺失的 `lib/tool-surface.js` 为 `[skip]`（0.9.6 已把它打进 `index.js`，见 §8 表）
 
 **不锁版本**：安装命令一律不带 `@版本号`（取 npm 最新），本清单不维护版本矩阵。要查本机实际装的版本：
@@ -1154,6 +1154,7 @@ const AGENT_DIRS = [".agents/agents", ".claude/agents", ".pi/agents"] as const;
 | 项目级 | `config/pi-project/settings.json` | `<仓库>/.pi/settings.json` | `node install-project-config.mjs` |
 | 项目级留档 | `config/pi-project/zvec.json` | 不落（`pi-zvec` 已卸，§7.11） | 手动（重装 zvec 时） |
 | 用户级脚本 | `config/agent/bash-prelude.sh` | `~/.pi/agent/bash-prelude.sh`（§3.9 的 `shellCommandPrefix` 指它） | 同上 |
+| 用户级规则 | `config/agent/AGENTS.md` | `~/.pi/agent/AGENTS.md`（§5 全局规则全文） | 同上 |
 
 | 用户级快照 | `config/agent/settings.snapshot-2025-09-15.json` | 不落（脚本对 `settings.snapshot-*` 一律跳过） | — |
 
@@ -1422,13 +1423,13 @@ return childGone && pastGrace && pastLost && …;
 | `~/.pi/agent/npm/package.json` | 25 个 dep + `allowScripts`（见 §3.1） |
 | `~/.pi/agent/pix.json` | `@xynogen/pix-optimizer` 的三档状态（`optimizer.caveman` / `.rtk` / `.ponytail`），**2026-10-12 新建**，见 §3.15 |
 | `~/.pi/agent/pi-one-ui.json` | `pi-one-ui` 的**唯一**配置文件。2026-10-12 起只写一行 `{"colors":{"cwd":"accent"}}`，见 §7.22 |
-| `~/.pi/agent/AGENTS.md` | **全局规则**（用户级 context 文件，跨工作目录生效，2026-10-16 起换回英文）：Think minimal reasoning、Read files 不整读（`offset`/`limit`/`md_inspect`）、Search fd/rg、Download 走国内镜像，见 §5「全局规则」 |
+| `~/.pi/agent/AGENTS.md` | **全局规则**（用户级 context 文件，跨工作目录生效，2026-10-16 起换回英文）：Think minimal reasoning、Read files 不整读（`offset`/`limit`/`md_inspect`）、Search fd/rg、Download 走国内镜像，见 §5「全局规则」。**canonical 在仓库 `config/agent/AGENTS.md`** |
 | `~/.pi/agent/bin/rtk` | RTK 官方二进制（2026-10-12 首次加载自动下载并校验 checksum）；`binary.json` → 本目录 → PATH，见 §3.15 |
 | `%APPDATA%\rtk\config.toml` | **rtk 二进制自己的配置**（与 pi 的配置无关）：`[hooks] suppress_hook_warning = true` 掐掉每条 bash 的 hook 提醒，见 §7.24。`rtk config` 可看默认全文 |
 | `~/.pi/agent/config/` | **已空**（smart-context 包卸载后配置已删，新装带 `startupConfig` 的包才会写） |
 本目录名写死在 `dist/config.js:403`。本仓库这份是**生成物**：canonical 在 `config/pi-project/settings.json`，跑 `node install-project-config.mjs` 拷入 |
 | `<仓库>/config/pi-project/*` | **项目级配置的 canonical 源**：`settings.json`（→ 拷进 `<仓库>/.pi/`）、`zvec.json`（留档件，不参与同步，见 §7.11） |
-| `<仓库>/config/agent/*` | **用户级配置的 canonical 源**：`bash-prelude.sh`（→ 拷进 `~/.pi/agent/`）、`settings.snapshot-2025-09-15.json`（历史快照，只留档不拷）。`rtk-config.json` 已于 2026-10-12 `git rm`（§3.14 / §7.20） |
+| `<仓库>/config/agent/*` | **用户级配置的 canonical 源**：`bash-prelude.sh`（→ 拷进 `~/.pi/agent/`）、`AGENTS.md`（§5 全局规则全文 → 拷进 `~/.pi/agent/`）、`settings.snapshot-2025-09-15.json`（历史快照，只留档不拷）。`rtk-config.json` 已于 2026-10-12 `git rm`（§3.14 / §7.20） |
 | `~/.pi/agent/sessions/**/*.jsonl` | 会话历史，算命中率的原始数据 |
 
 **生效方式**：改配置或扩展后 `/reload`（不重启会话、不丢历史）。
