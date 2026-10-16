@@ -330,6 +330,7 @@ npm rebuild better-sqlite3  # 批完必须重编，批准本身不建原生 bind
 - `window: false` → 拉宿主用 **`serve`**（只起服务不开窗，等价旧的 `start --no-window`）；`true` → `start`（前台带窗，服务端靠 `keepAlive()` 不退出）。
 - `port: 0` → 拉宿主**不传** `--port`，由服务端自己挑（默认 47653，被占退随机）。**别把旧版的 `port` 搬过来**：那版指的是扩展自己那个 HTTP 桥的端口，现在归服务端，写死平白多一种「端口被占 → 退出码 4」。
 - `startTimeoutMs`（默认 12s）/ `maxStartAttempts`（默认 3）/ `reapStrays`（整机野进程清理，默认开）/ `node`（跑服务端的运行时：config > `PI_PET_NODE` > PATH 上的 node > bun；**绝不是 pi 自己**）/ `home`（覆盖 `<home>`，默认 `%APPDATA%/pi-dsh-pet`）。
+- **窗僵死会自己换一扇**：每 20s 读一次 `/health`（零进程），同一扇窗 `windowPid > 0` 而 `clients` 一直是 `0` 满 60s 就 `POST /control restart-window`，本会话最多换 3 次（`PI_PET_WINDOW_REVIVE_POLL_MS` / `_AFTER_MS` / `_MAX`）。为何要客户端兜一层：上游 `needsRelaunch()` 只认「pid 死了才算窗没了」，僵窗（进程活着、渲染进程崩了）落两不管（§7.25）。
 - 文件缺失 / 读坏 = 按**启用**处理（读坏会 `notify` 一次），与其他钩子扩展同一套约定。
 - 会话内随手切：`/pet-auto on|off|size <档位>|max <只数>|restart|status`，改动写回同一个 json（并同步 `ctrl.json`）。
 - 旧键 `delayMs` / `bridge` / `host` / `sweepMs` / `hostRuntime` 随旧架构作废（新扩展读都不读）；`/pet-auto cleanup|host|bridge` 同样作废 —— 单例与数量现在由服务端自己的锁 + `maxPets` 转发闸兜住（§3.6.1）。
@@ -1331,6 +1332,27 @@ suppress_hook_warning = true
 
 ---
 
+### 7.25 桌面宠物僵窗：上游 `needsRelaunch()` 只认「pid 死了」，僵窗没人管（2026-10-16 已修，上游 `b4b779a` 已 push）
+
+**现场**：pi 开着、`log.txt` 还在刷状态，屏幕上却没宠物。查下来宿主（`node bin/pi-pet.cjs start`）在跑、窗进程（`electron.exe … pet-electron.cjs 47653 --pi-pet-window`）也活着，但 `log.txt` 连续 13 分钟每行都是 `窗客户端 0`，`state.json` 里 `windowState` 永远是 `starting`。手动 `POST /control {"action":"restart-window"}` 后 0.7s 就 `窗接上了` —— 窗进程还在，只是渲染进程崩了（`tasklist` 里同一时刻只有 main + gpu-process + utility，**没有 `--type=renderer`**）。
+
+**根因**（上游 `app/window.cjs`）：文件头写着「窗在不在以有没有 WS 客户端为准，不是 pid」，代码却是
+
+```js
+const childGone = !child || child.exitCode !== null || !pidAlive(pid);
+return childGone && pastGrace && pastLost && …;
+```
+
+`pidAlive` 这道闸把「pid 活着但渲染进程崩了」的僵窗整个排除了 ⇒ 宿主 tick 每 2s 判一次「不用重拉」，一直判到天荒地老。**修**：判据抽成纯函数 `windowDecision()`，只看客户端（连上过又丢了按 `lostMs`、从没连上过按 grace 的 `graceMs` 判，`gapMs` 节流仍在）—— 真连不上时每 max(grace, gap) 换一扇，不是拉起洪水。
+
+**配套**（`app/host.cjs`）：重拉路径 `win.launch()` → `win.restart()`。僵窗的 pid 还活着，直接再拉一只就是**新旧两只抢同一个 electron profile**（新的那扇连页面都加载不出来 = 现场那个「窗客户端一直 0」），必须先 `taskkill` 掉旧的。回归：`test/fused.mjs` +7 条断言，含「判据里不许再出现 `pidAlive`」；`npm test` 400 + 27 + 8 + 9 全过。
+
+**客户端也兜了一层**（本仓库 `extensions/pi-pet-autostart.ts`，见 §3.6 那条）：宿主被硬杀 / 跑了旧版 exe / 上游哪天又改回去，`/health` 的 `clients` 还是 0，客户端 60s 后就自己叫它换窗。
+
+**顺带发现（未改）**：`npm run sync` 的「把宿主那份检出收干净」那步其实收不干净 —— 同步写完文件后 `git merge --ff-only` 会以「有本地改动」拒绝（现场：`origin/main` 已快进到远端，那份检出的 HEAD 还停在旧提交）。要收干净得手动 `git checkout -- <被同步的文件>` 再 `merge --ff-only`（内容已在远端时这俩合起来等价，且不丢东西）。
+
+---
+
 ## 8. 体检与排障
 
 本机的体检脚本**没有自动化的**，但有几个手跑的（都在仓库根或 `.sc-test/`，`.sc-test/` 属 gitignore、不入库）：
@@ -1357,6 +1379,7 @@ suppress_hook_warning = true
 | `fd` 报 “fd executable not found” | pi 自带副本与 PATH 都没有 fd | 跑 `/fd-check` 看解析结果；或 `npm i -g fd-find` |
 | 会话/文件撤销 | `pi-edit-guard` 已卸载，其 `undo` 工具随之消失 | 文件级靠 git 或改前先 `read`；**会话级 `/undo` 现由 `@bacnh85/pi-checkpoint` 提供**（见 §3.8；不在 git 仓库里则静默 no-op） |
 | agent 没有 shell | `defaultTools` 里没有 `bash` | 写 `bash` 进两处 `defaultTools`（§3.4）；若 `extensions/pi-shell.ts` 被装回来，它会在 `session_start` 无条件隐藏 `bash` |
+| 宠物没起来 / 凭空消失，`log.txt` 里每行都是 `窗客户端 0` | 窗进程活着但渲染进程崩了 = 僵窗；上游旧版 `needsRelaunch()` 只认「pid 死了」 | 上游已修（§7.25，`b4b779a`）；临时手动 `/pet-auto restart`；扩展那层 60s 后自己换 |
 | 压缩后首轮命中低 | 正常现象 | 只有「命中 0」才是故障；压缩调用自身由 `pi-cache-compact` 兜（本机实测命中 68.6%，§7.13） |
 | 终端打 `[cache-compact] summary rejected …` | 摘要空 / 被 `length` 截断 / 夹带工具调用 | 设计内行为：已回落 Pi 默认压缩，摘要不会变坏。`stopReason:"length"` 多半是 `summaryMaxTokens` 卡住（或测试时误压小了 `maxTokens`） |
 | 压缩请求 `cacheRead: 0` | 前缀太老，上游缓存已过期（mimo 免费端点只活几分钟） | 正常现象；`deferAfterCacheMiss` 会让位 15 分钟。想看命中就在**刚聊完的会话里立刻** `/compact`（§3.3） |

@@ -132,6 +132,12 @@ const FEED_WATCHDOG_MS = numEnv("PI_PET_FEED_WATCHDOG_MS", 6_000);
 const REAP_INTERVAL_MS = numEnv("PI_PET_REAP_INTERVAL_MS", 600_000);
 /** 思考中最多每 2s 推一帧（窗里动画自己循环，靠这个续期气泡）。 */
 const THINKING_TICK_MS = 2_000;
+/** 窗僵死巡检：多久看一眼 `/health`（只读文件 + HTTP，不起进程）。 */
+const WINDOW_REVIVE_POLL_MS = numEnv("PI_PET_WINDOW_REVIVE_POLL_MS", 20_000);
+/** 同一扇窗「pid 活着、客户端却是 0」持续这么久才判僵（首拉 Electron 要十几秒）。 */
+const WINDOW_REVIVE_AFTER_MS = numEnv("PI_PET_WINDOW_REVIVE_AFTER_MS", 60_000);
+/** 本会话最多换几次窗：连换几次都连不上 = 不是僵死，别再按着宿主一直换。 */
+const WINDOW_REVIVE_MAX = numEnv("PI_PET_WINDOW_REVIVE_MAX", 3);
 
 function numEnv(name: string, fallback: number): number {
 	const raw = Number(process.env[name]);
@@ -144,6 +150,25 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 function unrefTimer<T>(timer: T): T {
 	(timer as unknown as { unref?: () => void }).unref?.();
 	return timer;
+}
+
+/**
+ * 一拍僵死判定：`windowPid > 0` 且 `clients === 0` 连续超过 `afterMs` 才算僵。
+ * 换过窗（pid 变了）就重新计时 —— 新窗首次拉 Electron 要十几秒，别把它当僵死。
+ * （放在模块级而不是扩展闭包里：`.sc-test/check-pet-window-revive.mjs` 直接验这台状态机。）
+ */
+export function stuckTick(memo: { pid: number; since: number }, pid: number, clients: number, now: number, afterMs: number): boolean {
+	if (pid <= 0 || clients > 0) {
+		memo.pid = 0;
+		memo.since = 0;
+		return false;
+	}
+	if (memo.pid !== pid) {
+		memo.pid = pid;
+		memo.since = now;
+		return false;
+	}
+	return now - memo.since >= afterMs;
 }
 
 /* ============================== 配置 ============================== */
@@ -1031,6 +1056,7 @@ export default function piPetAutostart(pi: ExtensionAPI): void {
 	let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	let reconnectDelayMs = 2_000;
 	let thinkingTimer: ReturnType<typeof setInterval> | null = null;
+	let windowTimer: ReturnType<typeof setInterval> | null = null;
 	/** 本会话在宿主眼里的名字：`pi-<pid>`；多会话各自一条状态（宿主按 source 归一）。 */
 	const source = `pi-${process.pid}`;
 
@@ -1352,6 +1378,44 @@ export default function piPetAutostart(pi: ExtensionAPI): void {
 		if (killed > 0) notify(ctx, `${TAG}：清掉 ${killed} 个野进程（pi.exe 把 pi-pet CLI 当 node 跑留下的空会话，各占几十 MB）`, "warning");
 	}
 
+	/* ------------------------------ 窗僵死自愈 ------------------------------ */
+
+	/**
+	 * 「pi 开着，宠物凭空没了」的现场：窗**进程**还活着，渲染进程却崩了 —— 宿主那边只剩
+	 * `窗客户端 0`，而它自己的 `needsRelaunch()` 要 pid 真死掉才算「窗没了」，于是这只僵窗
+	 * 谁也不管（实测：僵 13 分钟，宿主一句日志都没有，重启窗才恢复）。
+	 * 客户端这边只读 `/health`（铁律 2：零进程），确认僵死走 `/pet-auto restart` 那条路，
+	 * 让宿主自己关旧窗再拉新的。
+	 */
+	function startWindowWatchdog(ctx: Notifier): void {
+		if (windowTimer) {
+			clearInterval(windowTimer);
+			windowTimer = null;
+		}
+		if (!cfg.window) return; // 不要窗的人不该被塞一只
+		const memo = { pid: 0, since: 0 };
+		let revives = 0;
+		const tick = async (): Promise<void> => {
+			const host = await findHost(homeDir(), 800);
+			if (!host) return; // 宿主没了归 ensureHost / feed 重连管，这里别抢活
+			if (!stuckTick(memo, Number(host.windowPid) || 0, Number(host.clients) || 0, Date.now(), WINDOW_REVIVE_AFTER_MS)) return;
+			memo.pid = 0; // 先落地，免得失败后每拍都来一次
+			memo.since = 0;
+			if (revives >= WINDOW_REVIVE_MAX) {
+				if (revives++ === WINDOW_REVIVE_MAX) notify(ctx, `${TAG}：窗换了 ${WINDOW_REVIVE_MAX} 次仍连不上 → 不再自动换（看 /pet-status 与 ${homeDir()}/log.txt）`, "warning");
+				return;
+			}
+			revives++;
+			const result = await control("restart-window");
+			notify(
+				ctx,
+				result.ok ? `${TAG}：窗僵了（pid 还在、客户端 0）→ 换了一扇新的` : `${TAG}：窗僵了，换窗失败：${result.error ?? "未知"}`,
+				"warning",
+			);
+		};
+		windowTimer = unrefTimer(setInterval(() => void tick().catch(() => {}), WINDOW_REVIVE_POLL_MS));
+	}
+
 	/* ------------------------------ session_start ------------------------------ */
 
 	pi.on("session_start", (_event, ctx) => {
@@ -1367,6 +1431,7 @@ export default function piPetAutostart(pi: ExtensionAPI): void {
 				/* 删不掉就靠上游心跳过期 */
 			}
 			await reapStraysOnce(ctx);
+			startWindowWatchdog(ctx);
 			const host = await ensureHost(ctx, cfg.autostart);
 			if (cfg.feed) {
 				if (host) await connectFeed();
@@ -1417,6 +1482,8 @@ export default function piPetAutostart(pi: ExtensionAPI): void {
 			// 也不发 done：宿主那边整条 ws:<source> 断了，自己会重算状态
 			if (reconnectTimer) clearTimeout(reconnectTimer);
 			reconnectTimer = null;
+			if (windowTimer) clearInterval(windowTimer);
+			windowTimer = null;
 			stopThinking();
 			try {
 				sock?.close();
