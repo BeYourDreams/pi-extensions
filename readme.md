@@ -26,6 +26,7 @@
 > 2026-10-13 卸 `@narumitw/pi-plan-mode`（28 → **27**：25 npm + 2 git）
 > 2026-10-14 卸 `pi-smart-reader`（27 → **26**：24 npm + 2 git）：唯一能用的 `smart_read` 只覆盖 TS/JS，本机读 md/配置主要靠 `read` + `md_inspect`，用不上；连带删掉 `~/.pi/agent/npm/package.json` 的 `overrides`（`web-tree-sitter` 钉版已无对象）。原始记录留在 §3.16 / §7.23
 > 2026-10-14 全局规则 `~/.pi/agent/AGENTS.md` **改中文 + 精简**，并加「读文件」块
+> 2026-10-16 全局规则 `~/.pi/agent/AGENTS.md` **换回英文版**（四块不变：Think / Read files / Search / Download）
 > 2026-10-15 例行 `pi update --extensions`（版本仍不锁）：24 npm 里只动了两条 —— `@ssk_dev/rpiv-todo-lean` 2.12.1 → **2.13.9**、`@xynogen/pix-optimizer` 1.3.2 → **1.3.3**（工具归属未变：前者仍只注册 `todo`，后者仍零工具 + `/optimizer` 面板，`pix.json` 三档 ultra 保留）。两个 git 源 `git fetch` 只多了 tag、无新 commit。§8 体检全绿；`fix-browser-native-compat.mjs` 改判缺失的 `lib/tool-surface.js` 为 `[skip]`（0.9.6 已把它打进 `index.js`，见 §8 表）
 
 **不锁版本**：安装命令一律不带 `@版本号`（取 npm 最新），本清单不维护版本矩阵。要查本机实际装的版本：
@@ -781,14 +782,14 @@ pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传
 6. **纯 UI 类扩展可以放心装**：`pi-tps` / `pi-one-ui` / `pi-dsh-pet` / `pi-pet-autostart` 这类只挂事件钩子、只注册命令的扩展，**不注册任何工具**，不进 `defaultTools`，wire 字节不变（§3.6 有 bench 实测：装宠物前后都是 5664B）。反过来，任何**注册工具**的扩展都要重新算 §6.3 那笔账。
 **全局规则：行为约定写 `~/.pi/agent/AGENTS.md`（2026-10-12 新建）**
 
-pi 的用户级 context 文件（`docs/configuration.md`：`<agent-dir>/AGENTS.override.md` / `AGENTS.md` / `CLAUDE.md` **跨所有工作目录生效**；同目录的 `AGENTS.override.md` 可临时顶掉 `AGENTS.md`）。本机**全中文**、分四块（思考 / 读文件 / 搜索 / 下载），短且稳：
+pi 的用户级 context 文件（`docs/configuration.md`：`<agent-dir>/AGENTS.override.md` / `AGENTS.md` / `CLAUDE.md` **跨所有工作目录生效**；同目录的 `AGENTS.override.md` 可临时顶掉 `AGENTS.md`）。本机**全英文**、分四块（Think / Read files / Search / Download），短且稳：
 
 | 规则 | 用意 |
 |---|---|
-| **思考**：最小充分推理（目标→约束→关键中间量→决定→验证），不复述/重复/寒暄/发散；简单题直接答，复杂题预算可放宽 | 思考照走但不铺草稿。与 §3.15 的 caveman 是两层：那管「说给用户听的话」，这条管内部 think |
-| **读文件**：默认不整读（<400 行或确实全要才整读）；`rg -n` 定位 → `read` 带 `offset`/`limit` 取段；`.md` 走 `md_inspect` 拿目录；不重读 | 长文件整读是本机最大的一笔 token 浪费（本仓库 readme 就 152KB）。例外：即将编辑的源码、200 行内配置、陌生结构的探路文件 |
-| **搜索**：文件名/路径走 `fd`，内容走 `rg`，`find`/`grep` 仅兜底且缩 `path`；`fd` 工具显式传 `timeoutMs` | 呼应 §4.1 与 §4.2；`fd` 默认排除编译目录，`grep` 工具与 `fd` 一样懒加载（§3.4） |
-| **下载**：GitHub 走 ghproxy 系、npm 走 npmmirror；被墙/证书错**只换源不关验证** | 对齐 §8 排障里的 winget 证书链坑（`unable to verify the first certificate`） |
+| Think: minimal sufficient reasoning (goal → constraints → key intermediates → decision → verify), no restatement/repetition/pleasantries/divergence; simple → answer directly | 思考照走但不铺草稿。与 §3.15 的 caveman 是两层：那管「说给用户听的话」，这条管内部 think |
+| Read files: no full reads by default (only if <400 lines or truly needed); `rg -n` locate → `read` with `offset`/`limit`; `.md` via `md_inspect`; don't re-read | 长文件整读是本机最大的一笔 token 浪费（本仓库 readme 就 152KB）。例外：即将编辑的源码、200 行内配置、陌生结构的探路文件 |
+| Search: `fd` for paths, `rg` for content, `find`/`grep` fallback only with narrowed `path`; `fd` tool always passes `timeoutMs` | 呼应 §4.1 与 §4.2；`fd` 默认排除编译目录，`grep` 工具与 `fd` 一样懒加载（§3.4） |
+| Download: GitHub via ghproxy mirrors, npm via npmmirror; on GFW/cert failure **switch source, never disable verification** | 对齐 §8 排障里的 winget 证书链坑（`unable to verify the first certificate`） |
 
 - 它进的是**每轮 system 前缀**，所以改它等于改前缀（原理同 §2.2 / §7.17）：别拿它当 scratchpad，也别塞会变的文本。
 - 与扩展注入的规则是叠加关系、互不覆盖：本机是 AGENTS.md 这些条 + pix-optimizer 的 caveman/ponytail 档位规则（§3.15）。
@@ -1421,7 +1422,7 @@ return childGone && pastGrace && pastLost && …;
 | `~/.pi/agent/npm/package.json` | 25 个 dep + `allowScripts`（见 §3.1） |
 | `~/.pi/agent/pix.json` | `@xynogen/pix-optimizer` 的三档状态（`optimizer.caveman` / `.rtk` / `.ponytail`），**2026-10-12 新建**，见 §3.15 |
 | `~/.pi/agent/pi-one-ui.json` | `pi-one-ui` 的**唯一**配置文件。2026-10-12 起只写一行 `{"colors":{"cwd":"accent"}}`，见 §7.22 |
-| `~/.pi/agent/AGENTS.md` | **全局规则**（用户级 context 文件，跨工作目录生效，2026-10-14 起全中文）：思考最小充分推理、读文件不整读（`offset`/`limit`/`md_inspect`）、搜索 fd/rg、下载走国内镜像，见 §5「全局规则」 |
+| `~/.pi/agent/AGENTS.md` | **全局规则**（用户级 context 文件，跨工作目录生效，2026-10-16 起换回英文）：Think minimal reasoning、Read files 不整读（`offset`/`limit`/`md_inspect`）、Search fd/rg、Download 走国内镜像，见 §5「全局规则」 |
 | `~/.pi/agent/bin/rtk` | RTK 官方二进制（2026-10-12 首次加载自动下载并校验 checksum）；`binary.json` → 本目录 → PATH，见 §3.15 |
 | `%APPDATA%\rtk\config.toml` | **rtk 二进制自己的配置**（与 pi 的配置无关）：`[hooks] suppress_hook_warning = true` 掐掉每条 bash 的 hook 提醒，见 §7.24。`rtk config` 可看默认全文 |
 | `~/.pi/agent/config/` | **已空**（smart-context 包卸载后配置已删，新装带 `startupConfig` 的包才会写） |
