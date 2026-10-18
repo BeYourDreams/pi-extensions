@@ -97,9 +97,10 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 |---|---|---|
 | `cangjie-skill`（仓颉） | `git clone github.com/kangarooking/cangjie-skill` | 把书 / 长视频 / 播客 / 课程蒸馏成可执行 skills |
 | `goutoujunshi`（狗头军师） | `git clone github.com/shengjidaguai-china/goutoujunshi` | 恋爱军师与情绪支持 |
+| `drama-skills`（11 条，目录名 `short-drama*`） | `git clone github.com/zenstory-ai/drama-skills` → 把 `skills/` 下 11 条拷进 `~/.pi/agent/skills/`；正本 clone 在 `D:\AI\drama-skills`，更新 = `git pull` 后重拷。需 Python 3.9+（本机 3.12 ✓）；剪辑成片另需 ffmpeg（本机未装，只影响 `$short-drama-edit`） | AI 短剧/漫剧全产线：原著分析 → 开发方案 → 分集剧本 → 视觉设定 → 图片提示词 → **分镜（含冻结关键帧/连续性核对）** → **视频提示词**（内置 Seedance 2.0/2.5、MiniMax H3、Wan 3.0 方言）→ 确认后生产（gpt-image-2 / Seedance / MiniMax 视频·语音·配乐 adapter）→ 剪辑 → 审查。MIT |
 | `pimeter` | **不用装**：`npm:pi-meter` 自带（`~/.pi/agent/npm/node_modules/pi-meter/skills/pimeter/`） | 花费账单怎么看：本机走本地代理，内置价格表对不上，**数字仅供参考**（见 §1.1 pi-meter 行） |
 
-> skill 不再常驻注入系统提示词（见 §6.2），需要时用 `omnify` 检索。实测本机技能清单 = 上述 3 条自装 + `pi-meter` 自带 `pimeter`；2026-10-12 后 **pi-caveman / pi-ponytail 自带的 8 条 skill 随包卸载消失**（`pi list`/agent 技能面板可见）。
+> skill 不再常驻注入系统提示词（见 §6.2），需要时用 `omnify` 检索。实测本机技能清单 = 上述 3 组自装（`cangjie-skill` / `goutoujunshi` / `drama-skills` 11 条，2026-10-18 起）+ `pi-meter` 自带 `pimeter`，共 14 条；新装 skill 要开新会话才加载（本会话内装的，omnify 当轮检索不到，2026-10-18 实验）；2026-10-12 后 **pi-caveman / pi-ponytail 自带的 8 条 skill 随包卸载消失**（`pi list`/agent 技能面板可见）。
 
 ---
 
