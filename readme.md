@@ -31,6 +31,8 @@
 **两处待对齐已按远端基准收口（见下一条）**。
 > 2026-10-18 按远端基准对齐执行：① 卸 `pi-smart-reader`——远端 10-14 的动作今天才落本机，本机 **28 → 27（25 npm + 2 git）**；`overrides` 整块删（`web-tree-sitter@0.24.7` 钉版无对象，`pi-impact-analyzer` 条目同样无对象），lock、`pi list`、`node_modules` 零残留，`pi --no-session -p` 冒烟干净。远端当时那两行计数自相矛盾（卸前 26 npm，卸 1 应余 25，却写 24），本机以 `package.json` 实数为准。② `AGENTS.md` 恢复 10-16 **英文 canonical**（1263B，`config/agent/AGENTS.md` 入库 → `install-project-config.mjs` 拷盘），本机今早重建的 590B 中文版作废。
 
+> 2026-10-18 晚（同机、清单计数不动）：开机 `[Theme conflicts]` 查清——pi ≥1.0 主题 schema 严格化把 `pi-one-ui` 两个内置主题整体打死，新增 `fix-pi-one-ui-theme.mjs` 删掉主题里越界的 `cwd`/`editorModel`/`editorBorder`（根因、验证、为什么删了不花屏见 §7.26；§7.22 末尾「自建主题加 `colors.cwd`」那条建议据此作废）。
+
 **不锁版本**：安装命令一律不带 `@版本号`（取 npm 最新），本清单不维护版本矩阵。要查本机实际装的版本：
 
 ```bash
@@ -46,7 +48,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 |---|---|---|
 | `npm:pi-tps` | 底部 token/speed 状态栏 | 装后跑 `fix-tps-theme.ps1` 让配色跟随系统主题 |
 | `npm:@injaneity/pi-computer-use` | 桌面截图 / 点击 / 输入 | **唯一需批准 install 脚本的包**，见 §3.1 |
-| `npm:pi-one-ui` | TUI 统一美化（Header/Context/WorkingLine/Editor/Footer） | 取代旧 `alps-pi`；要求 Node ≥22.19、Pi ≥0.84。**装完必配** `~/.pi/agent/pi-one-ui.json` 的 `colors.cwd`，否则浅色终端里文件夹名发白，见 §7.22 |
+| `npm:pi-one-ui` | TUI 统一美化（Header/Context/WorkingLine/Editor/Footer） | 取代旧 `alps-pi`；要求 Node ≥22.19、Pi ≥0.84。**装完必配** `~/.pi/agent/pi-one-ui.json` 的 `colors.cwd`，否则浅色终端里文件夹名发白，见 §7.22。**pi ≥1.0 还要跑一次 `node fix-pi-one-ui-theme.mjs`**：它内置主题里的 `cwd`/`editorModel`/`editorBorder` 撞上严格主题 schema，整份主题被判非法（`[Theme conflicts]`），见 §7.26 |
 | `npm:pi-cache-guardian` | 缓存命中巡检 + 前缀漂移告警 | 与 §6 的 prefix-stabilizer 是同一根因的两端，一并用 |
 | `npm:@tian.zuo/pi-find` | `grep` / `find` 工具 | **覆盖内建同名工具**（替换，不是并列）。本机只用它的 `grep`；`find` 已降为懒加载兜底（见 §4.1） |
 | `npm:@trycedar/pi-mdiff` | `md_inspect` / `md_diff` / `md_edit` | Markdown 结构化编辑，`.md` 改动优先用它 |
@@ -192,6 +194,7 @@ pi list                                # 升完核一遍实际版本
 > **两个 git 源走同一条命令**：`pi update --extensions` 对它们是 `git pull`（`pi-lazy-tools` 会 `reset --hard` + `clean -fdx`，**`fix-lazy-tools-notes.mjs` 的 `DOCS_NOTE` 路径补丁会被冲掉，重跑即恢复**——脚本靠 `where pi.exe` 定位 pi 根目录，pi 不在 PATH 时它直接跳过并报「未能定位」）。
 
 > **升 `pi` 本体（`pi update --all`）或重装依赖会覆盖 `~/.pi/agent/node_modules` 里的补丁**：`fix-proper-lockfile-proxy.mjs`（§7.14，防 jiti Proxy 崩 pi）会被冲掉，升完重跑一次即可（`node fix-proper-lockfile-proxy.mjs --check` 只体检）。
+> **`pi update npm:<包>` / 重装那个包会连它目录里的补丁一起冲掉**：`fix-pi-one-ui-theme.mjs` 打在 `npm/node_modules/pi-one-ui/themes/*.json` 上的补丁同理（§7.26），升完按 §8 表重跑。
 
 > `pi-dsh-pet` 换成 git 源后**不再有「反复重下 48MB 动画」的问题**——clone 就带 `assets/thumb`（91 个 WebM，整仓 202M），`pi update` 只拉增量；只有第一次 `/pet` 要下 Electron ≈100MB。
 
@@ -1276,7 +1279,7 @@ renderSourceColor(theme, config.colors.cwd, "cwd", "bold cyan", formattedCwd)
 - 配置文件在 agent 目录（不在 `node_modules` 里），pi 升级不动它；pi-one-ui 自己的 `ConfigStore` 只写它自己管的字段（`components` / `renderer`），`colors` 保留，官方也明说“不重写文件”。
 - pi 自带的 `light`/`dark` 跟着 pi 本体整目录替换（同目录有 `pi.exe.old` 为证），值会变但名字不变；`settings.json` 里存的是名字，所以 `"theme": "light"` 一直有效。
 - ❌ **别把 footer 配色钉成字面 hex**（本节踩过）：那会绕过主题，`light/dark` 自动切换直接死掉，而且对浅色终端**一点用没有**——那些字段本来就没坏。
-- 想让 `cwd` 颜色也由主题控制（而非配置），就在 `~/.pi/agent/themes/` 放一份自己的主题并加 `colors.cwd`；用户主题不随 pi 升级动，`/reload` 热加载。本机暂时不需要。
+- 想让 `cwd` 颜色也由主题控制（而非配置），以前是「在 `~/.pi/agent/themes/` 放一份自己的主题并加 `colors.cwd`」——**这条在 pi ≥1.0 已作废**：用户主题走同一条严格校验，`colors` 里加自造键会把整份自定义主题打死（§7.26）。要调 pi-one-ui 专属色就只写它的配置 `colors`（配置优先级最高）；本机继续用 `{"colors":{"cwd":"accent"}}`。
 
 ### 7.23 ~~`pi-smart-reader`~~（2026-10-14 已卸载；以下为卸载前的实测记录，留档）
 
@@ -1357,6 +1360,43 @@ return childGone && pastGrace && pastLost && …;
 
 **顺带发现（未改）**：`npm run sync` 的「把宿主那份检出收干净」那步其实收不干净 —— 同步写完文件后 `git merge --ff-only` 会以「有本地改动」拒绝（现场：`origin/main` 已快进到远端，那份检出的 HEAD 还停在旧提交）。要收干净得手动 `git checkout -- <被同步的文件>` 再 `merge --ff-only`（内容已在远端时这俩合起来等价，且不丢东西）。
 
+### 7.26 `[Theme conflicts] Invalid theme cc-dark.json`：pi 收紧主题 schema，把 pi-one-ui 内置主题整体打死（2026-10-18 已修，`fix-pi-one-ui-theme.mjs`）
+
+**现象**：开机 / `/reload` 在已加载资源区弹两段（标题就是 `[Theme conflicts]`，`interactive-mode.js` 拿主题 diagnostics 渲的）：
+
+```
+Invalid theme "…\\npm\\node_modules\\pi-one-ui\\themes\\cc-dark.json":
+Other errors:
+  - /colors/cwd: schema is false
+  - /colors/editorModel: schema is false
+  - /colors/editorBorder: schema is false
+  - /colors: must not have additional properties
+```
+
+`cc-light.json` 紧跟一份一模一样的。**代价不是「少三个颜色」**：整份主题被判非法 → 不注册（`theme.js`：「Invalid themes are ignored here; the resource loader reports them」），`/theme` 列表里 cc-dark / cc-light 直接消失。本机 `settings.json` 是 `light/dark`，平时看不出来，但 `/theme` 一开就露。
+
+**根因**：pi 的主题对象是**严格**的——`<pi>/docs/themes.md`：「Theme objects are strict: only documented top-level fields and color tokens are accepted. Define reusable custom colors under `vars`; custom keys under `colors` or `export` and additional top-level metadata are rejected.」schema 就在 `<pi>/theme/theme-schema.json`（本机 `D:\agent\pi\theme\theme-schema.json`，pi 1.3.0）：`colors.additionalProperties = false`、共 56 个键、到 `bashMode` 为止。而 `pi-one-ui@0.9.1`（npm 最新，2026-10-05）把自家扩展色键 `cwd` / `editorModel` / `editorBorder` **直写进了两个内置主题的 `colors`**——它 README「颜色体系与主题定制」一节明说这是设计（「主题文件 `colors` 可以写这些键，`cc-dark` 和 `cc-light` 已支持」）。两边各自没错，撞在一起就是死。
+
+**是 pi 侧收紧，不是包装错了版本**：拿 `~/.pi/agent/node_modules` 里那份 **0.87.1** 的 `validateThemeJson()` 跑未补的原始文件 → `[valid]`；同两份文件用 **1.3.0** 的 schema 跑 ajv → 命中上面那 4 条错。所以旧 pi 上它们一直合法，升到 1.x 才炸。
+
+**修法**（一行）：`node fix-pi-one-ui-theme.mjs`（幂等，`--check` 只体检、还有越界键就 exit 1）。删掉那 3 个键，其它内容逐字节不动（round-trip 保持 tab 缩进 + 尾换行，diff 只有那 3 行删除 + `bashMode` 尾逗号收口）。脚本拿 pi 自己的 schema 算白名单（`PI_INSTALL_DIR` > `where.exe pi` > 约定目录），上游哪天改对了它就自动 `[skip]`。
+
+**为什么删了不会花屏**：pi-one-ui 自己就是三级回退 `renderSourceColor(theme, spec, themeToken, themeDefault, text)`（`extensions/shared/style.ts`）= 配置 > 主题 token > 原生默认，`themeHasToken()` 探不到 token **不抛错**；全包也没有一处直读 `theme.colors`。删后：
+
+| 字段 | 删键后走哪条 |
+|---|---|
+| `cwd` | `~/.pi/agent/pi-one-ui.json` 的 `colors.cwd`（本机 `accent`，§7.22）——本来就走这条，主题里那个键轮不到用；真没配置时才退 `bold cyan`（裸 ANSI，就是 §7.22 翻车的那个） |
+| `editorModel` | 原生默认：minimalist 行走 `syntaxKeyword`（`MINIMALIST_MODEL_FALLBACK`），editor metadata 格式化那条走 `accent`（`EDITOR_ACCENT_FALLBACK`）——两条都仍是主题 token，跟着 light/dark 切 |
+| `editorBorder` | 原生默认 `borderMuted`（`EDITOR_BORDER_FALLBACK`） |
+
+**验证**：ajv + `D:\agent\pi\theme\theme-schema.json`（required / 色值格式一起校）：未补两份各 4 条错 → 补后两份 `VALID`；`node fix-pi-one-ui-theme.mjs --check` exit 0。
+
+**别走的两条路**：
+- ❌ 抹掉整个 `pi-one-ui` 主题声明（`package.json` 的 `pi.themes`）：能止错，但连官方那两个皮肤都没了。
+- ❌ 把这三个键搬到 `~/.pi/agent/themes/` 自建主题：用户主题走同一条严格校验，结果是新建的那份被打死（§7.22 末尾旧建议据此作废）。要调 pi-one-ui 专属色就只写它的配置 `colors`。
+
+两个包各自都没错，现阶段只能先在本机绕过去。
+
 ---
 
 ## 8. 体检与排障
@@ -1371,6 +1411,7 @@ return childGone && pastGrace && pastLost && …;
 | `node fix-proper-lockfile-proxy.mjs --check` | proper-lockfile 补丁在位 | 一致 exit 0 |
 | `node fix-subagent-check.mjs --check` | 子代理可用（agent 定义目录 / modelPolicy / 插件在位） | 全绿 exit 0；缺 agent 定义 exit 1 |
 | `node fix-browser-native-compat.mjs` | 双路回退兼容（新形态报 `[skip]`）。0.9.6 起上游把 `lib/tool-surface.js` 打进 `dist/extensions/agent-browser/index.js`，老路径不在 ≠ 没装；脚本改按 `package.json` 的 `pi.extensions` 入口判形态（2026-10-18） | `[skip]`（打包形态，宿主自带 `buildSessionProjection`） |
+| `node fix-pi-one-ui-theme.mjs --check` | pi-one-ui 内置主题里是否还有 pi 主题 schema 不认的 `colors` 键（§7.26） | 补过 exit 0；`pi update npm:pi-one-ui` 后会报 `[待修补]` exit 1，重跑不带 `--check` 即修 |
 | `node install-project-config.mjs --check` | `config/` 里的配置/小脚本与 pi 实际读取位置是否一致 | 一致 exit 0 |
 | `.sc-test/check-ext-errors.mjs` | 扫会话里的 `extension_error` | 盘上还在，但 `.sc-test/` 是 gitignore、**不入库** → 当一次性探针用，别当长期工具（升级/清理会丢） |
 | ~~`.sc-test/probe-bash-guard.mjs`~~ | bash-guard 回归用例（54 例） | **已不存在**（未入库，随清理丢了）——要回归按 §5 那份清单重写 |
@@ -1392,6 +1433,7 @@ return childGone && pastGrace && pastLost && …;
 | ~~`pi-warm-cache` 没反应~~ | 本地代理属未注册路由 | **已卸载**（2026-10-08 死安装，见 §7.12），此行留档 |
 | 装/卸任何包时 npm 打 `EBADENGINE ... pi-agent-browser-native@0.9.3 ... node >=24.21.0` | 本机 node 24.16.0 低于该包声明的 engine | **可忽略**，纯警告；工具实测正常。要消掉就把 node 升到 24.21+，或接受每次都打一遍 |
 | pi-agent-browser-native 报 `buildSessionProjection is not a function` | 扩展版本太老（<0.9.x，宿主 1.0.0 才自带该 API） | 本机 pi 1.1.0 + 扩展 0.9.3 不会发生。真发生先 `pi update pi-agent-browser-native`；仍不行跑 `node fix-browser-native-compat.mjs`（新形态下它报 `[skip]` 而非 `[fail]`） |
+| 开机 / `/reload` 弹 `[Theme conflicts] Invalid theme "…pi-one-ui\themes\cc-dark.json"`（`/colors/cwd: schema is false` 那四条），`/theme` 里找不到 cc-dark/cc-light | pi ≥1.0 主题 schema 转严格（`colors.additionalProperties=false`），而 pi-one-ui 0.9.1 把自家 `cwd`/`editorModel`/`editorBorder` 写进内置主题 → 整份主题被判非法。详见 §7.26 | `node fix-pi-one-ui-theme.mjs`（幂等，删那 3 个键）后 `/reload`；`pi update npm:pi-one-ui` 会冲掉，复发就重跑 |
 | `omnify` 搜不到 `web_search` / 每轮前缀突然被掀 | `web-search.json` 缺 `toolActivation: "eager"`，退回了 `web_enable` 加载器 | 写上该键 `/reload`（§3.7）；掀缓存的现场见 §7.4 表 |
 | 跑完没通知 | 终端不支持（Terminal.app / Alacritty） | `pi-notify` 只覆盖 OSC 777/9/99 与 Windows Terminal；换终端，或改用 §1.2 桌宠看状态 |
 | `/pet` 提示命令不存在 | 只 `npm i -g` 装过，pi 不扫全局 `node_modules` | `pi install git:github.com/qq458249269/pi-dsh-pet` → `/reload`（见 §3.6） |
@@ -1426,7 +1468,7 @@ return childGone && pastGrace && pastLost && …;
 | `~/.pi/agent/npm/node_modules/` | npm 源扩展 |
 | `~/.pi/agent/npm/package.json` | 25 个 dep + `allowScripts`（`overrides` 已随 `pi-smart-reader` 卸载整块删除，2026-10-18，见 §3.16 / §1 changelog） |
 | `~/.pi/agent/pix.json` | `@xynogen/pix-optimizer` 的三档状态（`optimizer.caveman` / `.rtk` / `.ponytail`），**2026-10-12 新建**，见 §3.15 |
-| `~/.pi/agent/pi-one-ui.json` | `pi-one-ui` 的**唯一**配置文件。2026-10-12 起只写一行 `{"colors":{"cwd":"accent"}}`，见 §7.22。**2026-10-18 体检：这台机一直没写上（盘上 `{"components":{}}`），已补，旧文件留 `pi-one-ui.json.bak.2026-10-18-pre-cwd`** |
+旧文件留 `pi-one-ui.json.bak.2026-10-18-pre-cwd`**。主题侧那三个越界色键不在这里改，走 `node fix-pi-one-ui-theme.mjs`（§7.26） |
 | `~/.pi/agent/AGENTS.md` | **全局规则**（用户级 context 文件，跨工作目录生效）：Think minimal reasoning、Read files 不整读（`offset`/`limit`/`md_inspect`）、Search fd/rg、Download 走国内镜像，见 §5「全局规则」。**canonical 在仓库 `config/agent/AGENTS.md`**（英文，10-16 版），`node install-project-config.mjs` 拷入（2026-10-18 对齐：本机此前缺失、今早重建的中文版已作废） |
 | `~/.pi/agent/bin/rtk` | RTK 官方二进制（2026-10-12 首次加载自动下载并校验 checksum）；`binary.json` → 本目录 → PATH，见 §3.15 |
 | `%APPDATA%\rtk\config.toml` | **rtk 二进制自己的配置**（与 pi 的配置无关）：`[hooks] suppress_hook_warning = true` 掐掉每条 bash 的 hook 提醒，见 §7.24。`rtk config` 可看默认全文 |
