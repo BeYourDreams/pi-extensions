@@ -1,14 +1,15 @@
 ---
 name: short-drama-pro
-description: 自包含的 AI 短剧创作链（剧本→分镜→视频提示词），复刻 short-drama 套件三个创作阶段并合入本项目补丁：动作因果链与朝向绑定（SCR-23/SHT-30/VID-28）、单镜 ≤12 秒且 10 秒最佳的镜长规则（SHT-31，含机械检查）。用户要生成短剧/漫剧剧本、拆分镜、写文生/图生视频动作提示词，或点名要求「动作符合物理常理」「镜长上限」时使用；不生成媒体、不管资产图/终审/剪辑（交回原套件对应阶段）。上游 drama-skills 的升级覆盖不影响本技能。
+description: 自包含的 AI 短剧创作链（剧本→分镜→视频提示词），复刻 short-drama 套件三个创作阶段并合入本项目补丁：动作因果链与朝向绑定（SCR-23/SHT-30/VID-28）、单镜 ≤12 秒且 10 秒最佳的镜长规则（SHT-31，含机械检查）。用户要生成短剧/漫剧剧本、拆分镜、写文生/图生视频动作提示词，或点名要求「动作符合物理常理」「镜长上限」时使用；不生成媒体，不管资产图/终审/剪辑（交回对应技能）。已取代并卸载 upstream 的 write/storyboard/video-prompts 三件；drama-skills 后续升级覆盖不影响本技能。
 license: MIT
 ---
 
 # 短剧创作 Pro（复刻 + 补丁）
 
 复刻自 `$short-drama-write` / `$short-drama-storyboard` / `$short-drama-video-prompts` 三个创作阶段，
-把本项目的动作物理与镜长补丁内建为默认纪律。产物路径与标题语法和上游套件兼容，
-资产、生产、剪辑、终审仍用原套件的 `$short-drama-assets|produce|edit|review`。
+把本项目的动作物理与镜长补丁内建为默认纪律，并搬入原三阶段的全部深度参考，
+使本技能不依赖上游任何文件。产物路径与标题语法与上游一致，
+资产、生产、剪辑、终审仍用 `$short-drama-assets|produce|edit|review`。
 
 ## Quick Start
 
@@ -41,7 +42,7 @@ license: MIT
 5. **分镜机械检查**：`python3 scripts/pro_check.py "剧集/<EP>/分镜.md"`——镜长超 12 秒直接报错
    （等价 SHT31），位移动作缺朝向会被标记。
 6. **写视频提示词** → `剧集/<EP>/视频提示词.md`：按[视频阶段](references/stage-video-prompts.md)；
-   目标模型方言（Seedance/H3/Wan）的素材槽位与语法细节深水区回查原套件参考或官方文档。
+   Seedance/H3/Wan 的素材槽位与语法细节见 [references/video/](references/video/) 对应方言文件。
 7. **交稿三查**（只读成稿）：观众查（承诺是否收到）、机制查（本集机关是否在边界内运转）、
    执行查（把动作段交给"看不见画面的人"演一遍，必须自己发明朝向手脚的就是没写完）。
 8. 用户要整集就整集批次续跑；定点修订保留无关段落与既有 ID；会改变剧情走向的取舍交给用户。
@@ -54,6 +55,8 @@ license: MIT
 - 镜头字段、拆镜规则、轴线与冻结关键帧：[分镜阶段](references/stage-storyboard.md)
 - 起止状态正文、朝向绑定写法、秒段与声音：[视频阶段](references/stage-video-prompts.md)
 - 与上游套件的文档兼容、字段交接、能力分界：[交接与兼容](references/handoff.md)
+- 深度参考（已搬入）：[references/script/](references/script/)、
+  [references/storyboard/](references/storyboard/)、[references/video/](references/video/)
 
 ## 完成
 
@@ -63,6 +66,20 @@ license: MIT
 
 ## 安装维护
 
-- 本技能自包含：文件只引用自身目录。上游 `npx skills add zenstory-ai/drama-skills -g` 重跑
-  只覆盖 `short-drama-*`，不影响本目录；需要重放时从项目仓库 `skills/short-drama-pro` 拷回。
-- 自检：`python3 scripts/pro_check.py --selftest`（含 SHT31 镜长、裸位移、超载链、缺朝向用例）。
+- **自包含**：本技能不引用任何上游路径——深度参考在 `references/{script,storyboard,video}/`，
+  检查器与估时工具在 `scripts/`，样例在 `examples/`。上游 `npx skills add zenstory-ai/drama-skills -g`
+  重跑只会重写它自带的 11 个 `short-drama-*` 目录，碰不到本目录；需要重放时从项目仓库
+  `skills/short-drama-pro` 拷回（`node sync-drama-skills.mjs install`）。
+- **自检**（需 Python 3.9+；Windows 无 `python3` 时用 `python`）：
+
+  ```text
+  python3 scripts/pro_check.py --selftest          # 镜长上限/裸位移/超载链/缺朝向
+  python3 scripts/selftest_write.py                 # 剧本索引与估时
+  python3 scripts/selftest_storyboard.py            # 分镜登记与 SHT-31 镜长上限
+  python3 scripts/selftest_video.py                 # 配乐规格校验
+  ```
+
+- **工具入口**：`screenplay_index.py` / `duration_estimate.py`（时长与 `vo_share`）、
+  `storyboard_check.py`（含 `--shot-duration-cap`，默认 12.0）、`voice_sheet_check.py`、
+  `motion_timing_check.py`、`container_check.py`、`music_spec_check.py`。
+- 跨文档结构终审仍用 router 的 `$short-drama` → `scripts/creator_markdown_check.py`。

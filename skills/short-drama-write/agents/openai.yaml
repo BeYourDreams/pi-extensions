@@ -1,4 +1,0 @@
-interface:
-  display_name: "短剧剧本生成"
-  short_description: "创作因果清楚、人物声音鲜明、动作可表演且能被 AI 视频模型正确执行的中文短剧剧本"
-  default_prompt: "使用 $short-drama-write 创作或定点修订我的单集中文 Markdown 短剧剧本，动作按因果链物理纪律写（朝向绑定、容量预算、高频动作），写入剧集目录的剧本.md。"

@@ -100,10 +100,10 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 |---|---|---|
 | `cangjie-skill`（仓颉） | `git clone github.com/kangarooking/cangjie-skill` | 把书 / 长视频 / 播客 / 课程蒸馏成可执行 skills |
 | `goutoujunshi`（狗头军师） | `git clone github.com/shengjidaguai-china/goutoujunshi` | 恋爱军师与情绪支持 |
-| `drama-skills`（11 条，目录名 `short-drama*`） | `git clone github.com/zenstory-ai/drama-skills` → 把 `skills/` 下 11 条拷进 `~/.pi/agent/skills/`；正本 clone 在 `D:\AI\drama-skills`，更新 = `git pull` 后重拷。需 Python 3.9+（本机 3.12 ✓）；剪辑成片另需 ffmpeg（本机未装，只影响 `$short-drama-edit`） | AI 短剧/漫剧全产线：原著分析 → 开发方案 → 分集剧本 → 视觉设定 → 图片提示词 → **分镜（含冻结关键帧/连续性核对）** → **视频提示词**（内置 Seedance 2.0/2.5、MiniMax H3、Wan 3.0 方言）→ 确认后生产（gpt-image-2 / Seedance / MiniMax 视频·语音·配乐 adapter）→ 剪辑 → 审查。MIT |
+| `drama-skills`（上游 8 条 + 本地 `short-drama-pro`，目录名 `short-drama*`） | 上游：`git clone github.com/zenstory-ai/drama-skills` → 11 条拷进 `~/.pi/agent/skills/`（正本 clone 在 `D:\AI\drama-skills`）；再用本仓库镜像重放定制版 `node sync-drama-skills.mjs install`，并删掉被 pro 取代的 `short-drama-write` / `-storyboard` / `-video-prompts` 三件（内容已并入 pro）。更新流程见 §7.27。需 Python 3.9+（本机 3.12 ✓）；剪辑成片另需 ffmpeg（本机未装，只影响 `$short-drama-edit`） | AI 短剧/漫剧全产线：原著分析 → 开发方案 → 分集剧本 → 视觉设定 → 图片提示词 → **分镜（含冻结关键帧/连续性核对）** → **视频提示词**（内置 Seedance 2.0/2.5、MiniMax H3、Wan 3.0 方言）→ 确认后生产（gpt-image-2 / Seedance / MiniMax 视频·语音·配乐 adapter）→ 剪辑 → 审查。MIT |
 | `pimeter` | **不用装**：`npm:pi-meter` 自带（`~/.pi/agent/npm/node_modules/pi-meter/skills/pimeter/`） | 花费账单怎么看：本机走本地代理，内置价格表对不上，**数字仅供参考**（见 §1.1 pi-meter 行） |
 
-> skill 不再常驻注入系统提示词（见 §6.2），需要时用 `omnify` 检索。实测本机技能清单 = 上述 3 组自装（`cangjie-skill` / `goutoujunshi` / `drama-skills` 11 条，2026-10-18 起）+ `pi-meter` 自带 `pimeter`，共 14 条；新装 skill 要开新会话才加载（本会话内装的，omnify 当轮检索不到，2026-10-18 实验）；2026-10-12 后 **pi-caveman / pi-ponytail 自带的 8 条 skill 随包卸载消失**（`pi list`/agent 技能面板可见）。
+> skill 不再常驻注入系统提示词（见 §6.2），需要时用 `omnify` 检索。实测本机技能清单 = 上述 3 组自装（`cangjie-skill` / `goutoujunshi` / drama 线 9 条 = 上游 `short-drama-*` 8 条 + 本地 `short-drama-pro`，2026-10-18 起）+ `pi-meter` 自带 `pimeter`，共 12 条；新装 skill 要开新会话才加载（本会话内装的，omnify 当轮检索不到，2026-10-18 实验）；2026-10-12 后 **pi-caveman / pi-ponytail 自带的 8 条 skill 随包卸载消失**（`pi list`/agent 技能面板可见）。
 
 ---
 
@@ -1399,6 +1399,21 @@ Other errors:
 
 ---
 
+### 7.27 `drama-skills` 创作三阶段会被上游升级覆盖：改用自包含 `short-drama-pro`，卸载旧三件（2026-10-18）
+
+**现象**：`drama-skills` 的官方升级方式就是重跑同一条安装命令（`npx skills add zenstory-ai/drama-skills -y -g`，其 README 写明「更新时重新执行同一条命令即可」），它按技能**整目录覆盖** `~/.pi/agent/skills/`。我们给 `short-drama-write` / `short-drama-storyboard` / `short-drama-video-prompts` 打的补丁——生成就绪五问、动作因果链与朝向绑定（SCR-23 / SHT-30 / VID-28）、单镜 ≤12 秒上限（SHT-31，含 `storyboard_check.py` 的机械检查）——会被静默盖回上游版本，且不会有任何报错提示。
+
+**根因**：同名同目录，上游重装即覆盖；而补丁分散在 `SKILL.md`、`references/`、检查脚本三处，靠人工 diff 记忆维护不可靠。
+
+**修法**：把三阶段「复刻 + 补丁」成一个**新名字**的自包含技能 `short-drama-pro`（上游不认识这个名字，重跑安装命令碰不到它），并卸载旧三件：
+
+- 深度参考搬进 `references/{script,storyboard,video}/`，检查器与估时工具搬进 `scripts/`（`storyboard_check.py` 保留 `--shot-duration-cap` 默认 12.0），样例在 `examples/`——本技能不引用任何上游路径；
+- router `short-drama` 的路由表、`knowhow-index`、`creator-workflow` 改指 `$short-drama-pro`，其余七个阶段技能里的引用一并改指（共 55 处，全为技能名提及，无路径形态）；
+- 本仓库 `skills/` 是九个已装 drama 技能的镜像与编辑源：`node sync-drama-skills.mjs check` 查漂移、`install` 重放、`save` 抢救；
+- 顺带修掉上游索引器的一处消息缺陷：裸写 `[转场]`（标签后无正文）原报「不支持生产标签 [转场]」，实际它受支持、只是缺正文；现在报 `production_tag_missing_body` 并给出写法（`selftest_write` 增至 15 项）。
+
+**验证**：`node sync-drama-skills.mjs check` 无漂移；`short-drama-pro` 四组自检全绿（pro_check 2 组 + 15 + 17 + 10），router `selftest` 17 项全绿；样例剧本过 `screenplay_index.py` 得 `review_status: clean`、过 `pro_check.py` 0 error。旧三件备份在 `~/.pi/agent/skills-backup/short-drama-{write,storyboard,video-prompts}.uninstalled-20261018-204641`，内容同时保留在 git 提交 `b611013` / `2089f9b`。
+
 ## 8. 体检与排障
 
 本机的体检脚本**没有自动化的**，但有几个手跑的（都在仓库根或 `.sc-test/`，`.sc-test/` 属 gitignore、不入库）：
@@ -1406,6 +1421,7 @@ Other errors:
 | 脚本 | 干什么 | 结果 |
 |---|---|---|
 | `node check-readme-tables.mjs` | 体检 readme 表格列数 | 一致 exit 0、不一致 exit 1 |
+| `node sync-drama-skills.mjs check` | 本仓库 drama 技能镜像与全局安装是否漂移 | 无漂移 exit 0；有漂移列出差异文件 exit 1 |
 | `node install-local-extensions.mjs --check` | 本地扩展副本与仓库是否逐字节一致 | 不一致会提示重拷 |
 | `node fix-lazy-tools-notes.mjs --check` | DOCS_NOTE 路径补丁是否需要重打 | 基线已修好 exit 0 |
 | `node fix-proper-lockfile-proxy.mjs --check` | proper-lockfile 补丁在位 | 一致 exit 0 |

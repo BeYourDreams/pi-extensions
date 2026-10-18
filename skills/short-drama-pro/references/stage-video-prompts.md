@@ -65,6 +65,6 @@
 
 ## 深水区回查
 
-Seedance/H3/Wan 方言的具体槽位语法、多镜容器、续接路由等细节，回查原套件
-`short-drama-video-prompts/references/` 对应方言文档或官方指南；本文件只保证通用纪律与
-VID-28 动作物理。
+Seedance/H3/Wan 方言的具体槽位语法、多镜容器、续接路由等细节见
+[../video/](../video/) 对应方言文件（Seedance 2.0/2.5、MiniMax H3、Wan 3.0）与运动配方；
+本文件只保证通用纪律与 VID-28 动作物理，必要时核对命中模型的官方文档。

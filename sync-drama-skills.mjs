@@ -4,14 +4,20 @@
  *
  * 背景：drama-skills 用 `npx skills add zenstory-ai/drama-skills -y -g` 安装，
  * 升级=重跑同一条命令，会整目录覆盖全局技能目录（~/.pi/agent/skills）。
- * 本项目 skills/ 是三个定制技能的编辑源（canonical），改动包括：
- *   short-drama-write         —— 重写 SKILL.md（生成就绪五问）、新增 SCR-23、
- *                                references/action-physics-screenplay.md、agents/openai.yaml
- *   short-drama-storyboard    —— 新增 SHT-30/SHT-31、references/action-physics.md、
- *                                storyboard_check.py 镜长上限检查 + selftest 17 项
- *   short-drama-video-prompts —— 新增 VID-28、references/action-physics.md、SKILL.md 两处
- *   short-drama-pro           —— 全新自包含复刻+补丁技能（上游不认识该名字，升级不覆盖；
- *                                check/install 同样重放）
+ * 本项目 skills/ 是全局已装 drama 技能的镜像与编辑源（canonical）：
+ *
+ *   short-drama-pro        —— 自包含创作链（剧本/分镜/视频提示词），复刻并取代原
+ *                             write/storyboard/video-prompts 三件；上游不认识该名字，
+ *                             升级不会碰它。内含 SCR-23/SHT-30/SHT-31/VID-28 补丁、
+ *                             全部深度参考、三阶段检查器、pro_check.py。
+ *   short-drama（router）  —— 路由表已指向 $short-drama-pro；含 creator_markdown_check.py
+ *                             等跨文档终审脚本。
+ *   short-drama-assets / -develop / -edit / -image-prompts / -novel-analyze /
+ *   -produce / -review    —— 其余七个阶段技能，引用已同步指向 pro。
+ *
+ * 已卸载（2026-10-18，项目侧与全局侧均移除，内容已并入 pro）：
+ *   short-drama-write / short-drama-storyboard / short-drama-video-prompts
+ *   旧文件在 git 历史（提交 b611013 / 2089f9b）与 ~/.pi/agent/skills-backup/ 可查。
  *
  * 用法：
  *   node sync-drama-skills.mjs check     # 对比项目与全局安装目录，报告漂移（默认）
@@ -32,7 +38,17 @@ import os from "node:os";
 const PROJECT_SKILLS = path.join(import.meta.dirname, "skills");
 const GLOBAL_SKILLS = path.join(os.homedir(), ".pi", "agent", "skills");
 // 与全局安装存在双源、需要本脚本守护的技能：
-const CUSTOM = ["short-drama-write", "short-drama-storyboard", "short-drama-video-prompts", "short-drama-pro"];
+const CUSTOM = [
+  "short-drama",
+  "short-drama-assets",
+  "short-drama-develop",
+  "short-drama-edit",
+  "short-drama-image-prompts",
+  "short-drama-novel-analyze",
+  "short-drama-pro",
+  "short-drama-produce",
+  "short-drama-review",
+];
 
 async function walk(dir, base = dir) {
   const out = new Map();
