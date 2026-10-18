@@ -1,35 +1,23 @@
 #!/usr/bin/env node
 /**
- * sync-drama-skills.mjs — 保护本仓库定制过的 short-drama 技能不被上游更新静默覆盖。
+ * sync-drama-skills.mjs — drama 技能的**唯一更新通道**：本仓库 skills/ ⇄ ~/.pi/agent/skills/
  *
- * 背景：drama-skills 用 `npx skills add zenstory-ai/drama-skills -y -g` 安装，
- * 升级=重跑同一条命令，会整目录覆盖全局技能目录（~/.pi/agent/skills）。
- * 本项目 skills/ 是全局已装 drama 技能的镜像与编辑源（canonical）：
+ * 策略（2026-10-18 起）：**不再运行上游安装器**。上游 `npx skills add zenstory-ai/drama-skills -y -g`
+ * 会按技能整目录覆盖全局目录，把本地补丁静默盖回，还会重新装回我们已卸载的三件
+ * （short-drama-write / -storyboard / -video-prompts，内容已并入 short-drama-pro）。
  *
- *   short-drama-pro        —— 自包含创作链（剧本/分镜/视频提示词），复刻并取代原
- *                             write/storyboard/video-prompts 三件；上游不认识该名字，
- *                             升级不会碰它。内含 SCR-23/SHT-30/SHT-31/VID-28 补丁、
- *                             全部深度参考、三阶段检查器、pro_check.py。
- *   short-drama（router）  —— 路由表已指向 $short-drama-pro；含 creator_markdown_check.py
- *                             等跨文档终审脚本。
- *   short-drama-assets / -develop / -edit / -image-prompts / -novel-analyze /
- *   -produce / -review    —— 其余七个阶段技能，引用已同步指向 pro。
- *
- * 已卸载（2026-10-18，项目侧与全局侧均移除，内容已并入 pro）：
- *   short-drama-write / short-drama-storyboard / short-drama-video-prompts
- *   旧文件在 git 历史（提交 b611013 / 2089f9b）与 ~/.pi/agent/skills-backup/ 可查。
+ * 因此全局安装只从本仓库镜像来：改这里 → `install` → 提交。上游仓库降级为参考快照，
+ * 版本与人工吸收流程记录在 `skills/UPSTREAM.md`。
  *
  * 用法：
- *   node sync-drama-skills.mjs check     # 对比项目与全局安装目录，报告漂移（默认）
- *   node sync-drama-skills.mjs install   # 项目 → 全局（上游升级重跑安装命令后，执行这个重放定制）
- *   node sync-drama-skills.mjs save      # 全局 → 项目（只用于抢救：确认全局侧有未回收的改动时）
+ *   node sync-drama-skills.mjs check     # 体检：本仓库镜像与全局安装是否漂移（默认）
+ *   node sync-drama-skills.mjs install   # 安装/更新到全局：逐文件镜像，并删除全局多出的文件
+ *   node sync-drama-skills.mjs save      # 抢救：全局 → 本仓库（只在确认真改在全局侧时用；不删文件）
  *
- * 上游升级标准流程：
- *   1) npx skills add zenstory-ai/drama-skills -y -g
- *   2) node sync-drama-skills.mjs check     ← 应能看到被上游盖回的差异
- *   3) 把上游新改动合入本项目 skills/（git diff 审），CHANGELOG 里的收紧项按需吸收
- *   4) node sync-drama-skills.mjs install   ← 重放定制版
- *   5) 进各技能 scripts/ 跑 python selftest.py 复核
+ * 四个自检（install 后复核，Windows 无 python3 时用 python）：
+ *   cd ~/.pi/agent/skills/short-drama-pro/scripts
+ *   python pro_check.py --selftest && python selftest_write.py && python selftest_storyboard.py && python selftest_video.py
+ *   cd ../../short-drama/scripts && python selftest.py
  */
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -37,7 +25,7 @@ import os from "node:os";
 
 const PROJECT_SKILLS = path.join(import.meta.dirname, "skills");
 const GLOBAL_SKILLS = path.join(os.homedir(), ".pi", "agent", "skills");
-// 与全局安装存在双源、需要本脚本守护的技能：
+// 与全局安装存在双源、由本脚本守护的技能（drama 线全部九件）：
 const CUSTOM = [
   "short-drama",
   "short-drama-assets",
@@ -48,6 +36,13 @@ const CUSTOM = [
   "short-drama-pro",
   "short-drama-produce",
   "short-drama-review",
+];
+// 已卸载（内容并入 short-drama-pro）：安装器若把它们装回来，install 会删掉；
+// 这里额外守一道，防止它们被误装成第十、十一件。
+const RETIRED = [
+  "short-drama-write",
+  "short-drama-storyboard",
+  "short-drama-video-prompts",
 ];
 
 async function walk(dir, base = dir) {
@@ -91,34 +86,89 @@ async function copyTree(fromDir, toDir) {
   return files.size;
 }
 
+/** Exact-mirror step: drop files the source no longer has, then empty dirs. */
+async function pruneTree(fromDir, toDir) {
+  const keep = new Set((await walk(fromDir)).keys());
+  const existing = await walk(toDir);
+  const removed = [];
+  for (const rel of existing.keys()) {
+    if (keep.has(rel)) continue;
+    await fs.rm(path.join(toDir, rel));
+    removed.push(rel);
+  }
+  const pruneEmpty = async (dir) => {
+    for (const e of await fs.readdir(dir, { withFileTypes: true })) {
+      if (!e.isDirectory() || e.name === "__pycache__") continue;
+      const child = path.join(dir, e.name);
+      await pruneEmpty(child);
+      if ((await fs.readdir(child)).length === 0) await fs.rmdir(child);
+    }
+  };
+  if (await fs.stat(toDir).catch(() => null)) await pruneEmpty(toDir);
+  return removed;
+}
+
 async function main() {
   const mode = process.argv[2] || "check";
+  if (!["check", "install", "save"].includes(mode)) {
+    console.error(`未知模式 ${mode}；用法：check | install | save`);
+    process.exitCode = 2;
+    return;
+  }
+
   let drift = 0;
   for (const skill of CUSTOM) {
     const p = path.join(PROJECT_SKILLS, skill);
     const g = path.join(GLOBAL_SKILLS, skill);
     if (!(await fs.stat(p).catch(() => null))) {
-      console.log(`!! 项目缺 skills/${skill}`);
+      console.log(`!! 本仓库缺 skills/${skill}（镜像不完整，先 save 或补齐）`);
       drift++;
       continue;
     }
-    if (mode === "install" || mode === "save") {
-      const [from, to] = mode === "install" ? [p, g] : [g, p];
-      const n = await copyTree(from, to);
-      console.log(`${mode} ${skill}: ${n} 个文件`);
+    if (mode === "install") {
+      const n = await copyTree(p, g);
+      const removed = await pruneTree(p, g);
+      console.log(
+        `install ${skill}: ${n} 个文件${removed.length ? `，删除全局多余 ${removed.length}（${removed.slice(0, 3).join(", ")}${removed.length > 3 ? " …" : ""}）` : ""}`,
+      );
       continue;
     }
-    const findings = await compare(p, g, "项目", "全局");
+    if (mode === "save") {
+      const n = await copyTree(g, p);
+      console.log(`save ${skill}: ${n} 个文件（未删除本仓库多余文件）`);
+      continue;
+    }
+    const findings = await compare(p, g, "本仓库", "全局");
     if (findings.length) {
       drift++;
       console.log(`✗ ${skill} 漂移（${findings.length} 项）：`);
       console.log(findings.join("\n"));
     } else {
-      console.log(`✓ ${skill} 与全局一致`);
+      console.log(`✓ ${skill} 与本仓库一致`);
     }
   }
+
+  if (mode === "install") {
+    const strays = [];
+    for (const skill of RETIRED) {
+      const dir = path.join(GLOBAL_SKILLS, skill);
+      if (await fs.stat(dir).catch(() => null)) {
+        const n = (await walk(dir)).size;
+        await fs.rm(dir, { recursive: true, force: true });
+        strays.push(`${skill}（${n} 文件）`);
+      }
+    }
+    if (strays.length) console.log(`删除已退役技能（内容已并入 short-drama-pro）：${strays.join("、")}`);
+    console.log("\n已应用到全局。复核自检见脚本头注释；再跑 `check` 应为无漂移。");
+    return;
+  }
+
   if (mode === "check") {
-    console.log(drift ? `\n${drift} 个技能存在漂移：上游重跑安装命令会盖掉定制版，请先按脚本头部注释的流程处理。` : "\n无漂移。");
+    console.log(
+      drift
+        ? `\n${drift} 个技能存在漂移。若漂移来自全局侧的手改，用 save 回收；若本仓库才是准的，用 install 覆盖。`
+        : "\n无漂移：全局安装与本仓库镜像一致。",
+    );
     process.exitCode = drift ? 1 : 0;
   }
 }
