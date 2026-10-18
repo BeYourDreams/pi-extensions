@@ -1,19 +1,13 @@
-# Global Rules
+# 全局规则（用户级，跨所有工作目录生效）
 
 ## Think
-Minimal sufficient reasoning: goal → constraints → key intermediates → decision → verify. No restatement, repetition, pleasantries, divergence. Simple → answer directly; complex → budget flexible, correctness first.
 
-## Read files
-**Don't read whole files by default**, full read only if <400 lines or truly needed.
-- Locate first, then slice: `rg -n` to anchor → `read` with `offset`/`limit` for that span
-- `.md` → `md_inspect` for TOC, then fetch by block; `.mdx` → `edit` (`md_inspect` doesn't support JSX)
-- Don't re-read files already read this session
-- Exceptions: source about to edit, configs ≤200 lines, scouting unfamiliar structure
+Minimal sufficient reasoning — goal, constraints, key intermediates, decision, verify.
+No restatement, no repetition, no pleasantries, no divergence.
+Simple → answer directly. Complex → budget the reasoning, correctness first.
 
 ## Search
-Filename/path search via `fd`, content search via `rg`; `find`/`grep` fallback only with narrowed `path`.
-- `fd` excludes build dirs by default; on big trees use `fd --type` or scope path first
-- `fd` tool: always pass `timeoutMs` explicitly; all commands carry a `timeout`
 
-## Download
-**Prefer CN mirrors** (GitHub → `ghproxy.net` / `mirror.ghproxy.com` / `ghfast.top` / `fastgit.org`; npm → `npmmirror.com`). On GFW/timeout/untrusted-chain: switch source, never disable verification; last resort only `--ssl-no-revoke` (curl) or `--use-system-ca` (Node).
+- Use `fd`, not `find`（文件名 / 路径搜索一律走 `fd`，不裸跑 `find`）
+- Use `rg`, not `grep` / `egrep` / `fgrep`（内容搜索走 `rg`，不裸跑 `grep`）
+- `find` / `grep` 工具仅作兜底，用前必须缩小 `path`；`fd` 工具显式传 `timeoutMs`

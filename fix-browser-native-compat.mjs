@@ -31,12 +31,31 @@ const file = join(
 );
 
 if (!existsSync(file)) {
-	// 包目录在、只是没有 lib/tool-surface.js = 新形态（0.9.6+ 已打进 index.js），不是没装。
-	if (existsSync(join(file, "..", "..", "index.js"))) {
-		console.log("[skip] 新形态无 tool-surface.js（已打进 index.js），本补丁仅针对 pi 0.85.x + 扩展 0.7.1");
+	// 0.9.6 起上游把 `lib/tool-surface.js` 打包进了 `dist/extensions/agent-browser/index.js`：
+	// 老路径不存在 ≠ 包未安装。拿 package.json 的 `pi.extensions` 入口再判一次形态，
+	// 免得 §8 体检在本机永远报 [fail]（清单期望的是新形态报 [skip]）。
+	const pkgDir = join(homedir(), ".pi", "agent", "npm", "node_modules", "pi-agent-browser-native");
+	let entries = [];
+	try {
+		const pj = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
+		entries = (pj.pi?.extensions ?? []).map((r) => join(pkgDir, r));
+	} catch {}
+	const installed = entries.filter((e) => existsSync(e));
+	if (installed.length === 0) {
+		console.error(`[fail] 目标文件不存在（pi-agent-browser-native 未安装？）: ${file}`);
+		process.exit(1);
+	}
+	const touching = installed.filter((e) => readFileSync(e, "utf8").includes("buildSessionProjection"));
+	if (touching.length === 0) {
+		console.log(`[skip] 目标代码特征已变（入口里没有 buildSessionProjection），无需补丁：${installed.join(" | ")}`);
 		process.exit(0);
 	}
-	console.error(`[fail] 目标文件不存在（pi-agent-browser-native 未安装？）: ${file}`);
+	const legacy = touching.filter((e) => readFileSync(e, "utf8").includes("getCurrentSystemMessage"));
+	if (legacy.length === 0) {
+		console.log(`[skip] 打包形态（tool-surface 已进 index.js）且不走 getCurrentSystemMessage 旧路径——pi 宿主已有 buildSessionProjection，无需本补丁：${touching.join(" | ")}`);
+		process.exit(0);
+	}
+	console.error(`[fail] 旧写法出现在打包入口（${legacy.join(" | ")}），本脚本只认分离的 tool-surface.js，请手工核对`);
 	process.exit(1);
 }
 
