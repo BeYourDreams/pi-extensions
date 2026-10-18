@@ -24,11 +24,12 @@
 完整卸装理由与原始记录仍在对应 §3 / §7 小节。
 > 2026-10-13 装 `pi-smart-reader`（AST 骨架/符号抽取，27 → **28**：26 npm + 2 git）：**上游「零配置自动优化」是死的**，实测只有 `smart_read` 工具真能用，且 `web-tree-sitter` 必须钉死 0.24.7 才不半残。见 §3.16（必做配置）与 §7.23。
 > 2026-10-13 卸 `@narumitw/pi-plan-mode`（28 → **27**：25 npm + 2 git）
-> 2026-10-14 卸 `pi-smart-reader`（27 → **26**：24 npm + 2 git）：唯一能用的 `smart_read` 只覆盖 TS/JS，本机读 md/配置主要靠 `read` + `md_inspect`，用不上；连带删掉 `~/.pi/agent/npm/package.json` 的 `overrides`（`web-tree-sitter` 钉版已无对象）。原始记录留在 §3.16 / §7.23。⚠ **该卸载只发生在远端 clone，本机未执行**：10-18 复验 npm 26 仍含 `pi-smart-reader`、`overrides` 钉版在盘、`smart_read` 工具正常加载（本机重装记录无；自 10-13 起一直在位）。
+原始记录留在 §3.16 / §7.23。⚠ **该卸载只发生在远端 clone，本机当时未执行**：10-18 上午复验 npm 26 仍含 `pi-smart-reader`、`overrides` 钉版在盘、`smart_read` 工具正常加载；本机 10-18 下午已按远端基准补卸（见文末对齐条）。
 > 2026-10-14 全局规则 `~/.pi/agent/AGENTS.md` **改中文 + 精简**，并加「读文件」块
 > 2026-10-15 例行 `pi update --extensions`（版本仍不锁）：24 npm 里只动了两条 —— `@ssk_dev/rpiv-todo-lean` 2.12.1 → **2.13.9**、`@xynogen/pix-optimizer` 1.3.2 → **1.3.3**（工具归属未变：前者仍只注册 `todo`，后者仍零工具 + `/optimizer` 面板，`pix.json` 三档 ultra 保留）。两个 git 源 `git fetch` 只多了 tag、无新 commit。§8 体检全绿；`fix-browser-native-compat.mjs` 改判缺失的 `lib/tool-surface.js` 为 `[skip]`（0.9.6 已把它打进 `index.js`，见 §8 表）
-> 2026-10-16 全局规则 `~/.pi/agent/AGENTS.md` **换回英文版**（四块不变：Think / Read files / Search / Download），全文 canonical 入库 `config/agent/AGENTS.md`。⚠ 这两条 AGENTS.md 动作也未落本机——本机盘上文件 10-18 前整份缺失，重建的是中文版（见下条）
-> 2026-10-18 照本机清单更新（**本机计数 28 = 26 npm + 2 git**，含远端 10-14 卸而未卸的 `pi-smart-reader`）：宿主已升 pi 1.3.0，`pi update --extensions` 升了 7 个包（mcp-adapter / agent-browser-native / rpiv-todo-lean / ask-question / web-access / pi-lsp / pix-optimizer）。**漂的还是「必做配置层」**（同 §7.15 的老毛病）：① §7.22 的 `pi-one-ui.json` → `colors.cwd` 这台机从来没写上（盘上 `{"components":{}}`，mtime 停在 09-28）→ 已补，旧文件留 `pi-one-ui.json.bak.2026-10-18-pre-cwd`；② §5 的 `AGENTS.md` 整份缺失——原先只有表格里的文案、仓内无正本（远端 10-16 那份英文版当时未同步过来），照清单换机必丢。已按 §5 重建并**外迁为 `config/agent/AGENTS.md`**（`node install-project-config.mjs` 同步，纳入 `--check`）。③ `fix-browser-native-compat.mjs` 本机改按 `package.json` 的 `pi.extensions` 入口判形态（见 §8 表）。**两台机待对齐**：smart-reader 留不留、AGENTS.md 中文版还是英文版——本条 changelog 已标 ⚠，定了再清历史。
+重建的是中文版（见下两条）
+**两处待对齐已按远端基准收口（见下一条）**。
+> 2026-10-18 按远端基准对齐执行：① 卸 `pi-smart-reader`——远端 10-14 的动作今天才落本机，本机 **28 → 27（25 npm + 2 git）**；`overrides` 整块删（`web-tree-sitter@0.24.7` 钉版无对象，`pi-impact-analyzer` 条目同样无对象），lock、`pi list`、`node_modules` 零残留，`pi --no-session -p` 冒烟干净。远端当时那两行计数自相矛盾（卸前 26 npm，卸 1 应余 25，却写 24），本机以 `package.json` 实数为准。② `AGENTS.md` 恢复 10-16 **英文 canonical**（1263B，`config/agent/AGENTS.md` 入库 → `install-project-config.mjs` 拷盘），本机今早重建的 590B 中文版作废。
 
 **不锁版本**：安装命令一律不带 `@版本号`（取 npm 最新），本清单不维护版本矩阵。要查本机实际装的版本：
 
@@ -133,7 +134,7 @@ pi install "npm:pi-notify"
 
 # 2026-10-07 增补（OCR/跨会话记忆等；PR 插件已卸，见 §7.7；pi-ask-permission 已卸，见 §7.8；no-find 已卸，见 §7.9；pi-cwd-guard 已卸，见 §7.10；pi-zvec 已卸，见 §7.11；budget-guard/warm-cache 已卸，见 §7.12；deepseek-cache/compaction-cache 已卸，见 §7.13 —— 均勿再装）
 # ⚠ pi-lsp / test-runner / ocr / memory / core-subagent 与上面钩子层里的 mono-context-guard / meter 必须成对出现，漏一个清单就漂
-# 26 个 npm 一个都不能漏。
+# 25 个 npm 一个都不能漏。
 for p in @narumitw/pi-lsp pi-test-runner pi-ocr @chendpoc/pi-memory @arhen/pi-core-subagent; do
   pi install "npm:$p" || echo "[失败] $p"
 done
@@ -1423,10 +1424,10 @@ return childGone && pastGrace && pastLost && …;
 | `~/.pi/agent/state/` | 跨会话记账，**2026-10-09 清理后只剩 `pi-pet-autostart.json`**（记「本 pid 已弹过窗 + 落在哪只宠物上」） |
 | `~/.pi/agent/git/` | git 源扩展（lazy-tools fork + dsh-pet，后者扩展被屏蔽，见 §3.6） |
 | `~/.pi/agent/npm/node_modules/` | npm 源扩展 |
-| `~/.pi/agent/npm/package.json` | 26 个 dep + `allowScripts` + `overrides`（钉 `web-tree-sitter@0.24.7`，见 §3.1 / §3.16） |
+| `~/.pi/agent/npm/package.json` | 25 个 dep + `allowScripts`（`overrides` 已随 `pi-smart-reader` 卸载整块删除，2026-10-18，见 §3.16 / §1 changelog） |
 | `~/.pi/agent/pix.json` | `@xynogen/pix-optimizer` 的三档状态（`optimizer.caveman` / `.rtk` / `.ponytail`），**2026-10-12 新建**，见 §3.15 |
 | `~/.pi/agent/pi-one-ui.json` | `pi-one-ui` 的**唯一**配置文件。2026-10-12 起只写一行 `{"colors":{"cwd":"accent"}}`，见 §7.22。**2026-10-18 体检：这台机一直没写上（盘上 `{"components":{}}`），已补，旧文件留 `pi-one-ui.json.bak.2026-10-18-pre-cwd`** |
-| `~/.pi/agent/AGENTS.md` | **全局规则**（用户级 context 文件，跨工作目录生效）：Think: minimal sufficient reasoning, simple → answer; search: fd/rg、`find`→`fd`、`grep`→`rg`，见 §5「全局规则」。**canonical 在仓库 `config/agent/AGENTS.md`**，`node install-project-config.mjs` 拷入（2026-10-18 补：此前盘上整份缺失；本机现存为中文版，远端 10-16 英文版见 §1 changelog ⚠，待对齐） |
+| `~/.pi/agent/AGENTS.md` | **全局规则**（用户级 context 文件，跨工作目录生效）：Think minimal reasoning、Read files 不整读（`offset`/`limit`/`md_inspect`）、Search fd/rg、Download 走国内镜像，见 §5「全局规则」。**canonical 在仓库 `config/agent/AGENTS.md`**（英文，10-16 版），`node install-project-config.mjs` 拷入（2026-10-18 对齐：本机此前缺失、今早重建的中文版已作废） |
 | `~/.pi/agent/bin/rtk` | RTK 官方二进制（2026-10-12 首次加载自动下载并校验 checksum）；`binary.json` → 本目录 → PATH，见 §3.15 |
 | `%APPDATA%\rtk\config.toml` | **rtk 二进制自己的配置**（与 pi 的配置无关）：`[hooks] suppress_hook_warning = true` 掐掉每条 bash 的 hook 提醒，见 §7.24。`rtk config` 可看默认全文 |
 | `~/.pi/agent/config/` | **已空**（smart-context 包卸载后配置已删，新装带 `startupConfig` 的包才会写） |
