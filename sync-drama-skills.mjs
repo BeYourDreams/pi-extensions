@@ -10,6 +10,8 @@
  *   short-drama-storyboard    —— 新增 SHT-30/SHT-31、references/action-physics.md、
  *                                storyboard_check.py 镜长上限检查 + selftest 17 项
  *   short-drama-video-prompts —— 新增 VID-28、references/action-physics.md、SKILL.md 两处
+ *   short-drama-pro           —— 全新自包含复刻+补丁技能（上游不认识该名字，升级不覆盖；
+ *                                check/install 同样重放）
  *
  * 用法：
  *   node sync-drama-skills.mjs check     # 对比项目与全局安装目录，报告漂移（默认）
@@ -30,7 +32,7 @@ import os from "node:os";
 const PROJECT_SKILLS = path.join(import.meta.dirname, "skills");
 const GLOBAL_SKILLS = path.join(os.homedir(), ".pi", "agent", "skills");
 // 与全局安装存在双源、需要本脚本守护的技能：
-const CUSTOM = ["short-drama-write", "short-drama-storyboard", "short-drama-video-prompts"];
+const CUSTOM = ["short-drama-write", "short-drama-storyboard", "short-drama-video-prompts", "short-drama-pro"];
 
 async function walk(dir, base = dir) {
   const out = new Map();
