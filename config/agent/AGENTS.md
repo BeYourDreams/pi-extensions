@@ -14,6 +14,3 @@ Minimal sufficient reasoning: goal → constraints → key intermediates → dec
 Filename/path search via `fd`, content search via `rg`; `find`/`grep` fallback only with narrowed `path`.
 - `fd` excludes build dirs by default; on big trees use `fd --type` or scope path first
 - `fd` tool: always pass `timeoutMs` explicitly; all commands carry a `timeout`
-
-## Download
-**Prefer CN mirrors** (GitHub → `ghproxy.net` / `mirror.ghproxy.com` / `ghfast.top` / `fastgit.org`; npm → `npmmirror.com`). On GFW/timeout/untrusted-chain: switch source, never disable verification; last resort only `--ssl-no-revoke` (curl) or `--use-system-ca` (Node).
