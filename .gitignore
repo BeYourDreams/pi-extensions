@@ -6,3 +6,4 @@
 # 2026-10-10：配置源外迁 config/（canonical、可 review），.pi/ 整体回到「纯运行时目录」
 # → 项目级 settings.json 由 `node install-project-config.mjs` 从 config/pi-project/ 拷入
 .pi/
+__pycache__/
