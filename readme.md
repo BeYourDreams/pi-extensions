@@ -31,7 +31,8 @@
 **两处待对齐已按远端基准收口（见下一条）**。
 > 2026-10-18 按远端基准对齐执行：① 卸 `pi-smart-reader`——远端 10-14 的动作今天才落本机，本机 **28 → 27（25 npm + 2 git）**；`overrides` 整块删（`web-tree-sitter@0.24.7` 钉版无对象，`pi-impact-analyzer` 条目同样无对象），lock、`pi list`、`node_modules` 零残留，`pi --no-session -p` 冒烟干净。远端当时那两行计数自相矛盾（卸前 26 npm，卸 1 应余 25，却写 24），本机以 `package.json` 实数为准。② `AGENTS.md` 恢复 10-16 **英文 canonical**（1263B，`config/agent/AGENTS.md` 入库 → `install-project-config.mjs` 拷盘），本机今早重建的 590B 中文版作废。
 
-> 2026-10-18 晚（同机、清单计数不动）：开机 `[Theme conflicts]` 查清——pi ≥1.0 主题 schema 严格化把 `pi-one-ui` 两个内置主题整体打死，新增 `fix-pi-one-ui-theme.mjs` 删掉主题里越界的 `cwd`/`editorModel`/`editorBorder`（根因、验证、为什么删了不花屏见 §7.26；§7.22 末尾「自建主题加 `colors.cwd`」那条建议据此作废）。
+> 2026-10-18 晚 全局规则 `~/.pi/agent/AGENTS.md` **删「Download」块**（现三块：Think / Read files / Search，1263B → 991B）：镜像/证书那套规矩仍留在 §3.15 与 §8 排障表里，规则块不再重复一遍。
+> 2026-10-18 晚（同机、清单计数不动）：开机 `[Theme conflicts]`
 
 **不锁版本**：安装命令一律不带 `@版本号`（取 npm 最新），本清单不维护版本矩阵。要查本机实际装的版本：
 
@@ -555,7 +556,7 @@ cd() {
 - **ponytail 同理**：只管「**写什么**」——YAGNI 阶梯（该不该存在 → stdlib → 原生平台 → 已装依赖 → 一行 → 最小可用），**验证、错误处理、安全、可访问性永不裁**。与 caveman 正交，一个管写法一个管做法。
 - **RTK 两层自动生效**：① prompt 层注入 RTK 规则（叫模型自己给命令加前缀）；② 执行层**改写 `bash` 调用**，给已知首词（`git` `gh` `cargo` `npm` `pnpm` `docker` `kubectl` `ls` `grep` …）加 `rtk` 前缀。**命令链按 `&&` `||` `;` `|` 拆开后逐段加前缀**：`git add . && git push` → `rtk git add . && rtk git push`；引号内的运算符不算，解析不了就原样放行。**`rtk` 二进制缺失时绝不改写**。
 - **二进制来源**：查找顺序 `binary.json` → `~/.pi/agent/bin` → `PATH`（`@xynogen/pix-runtime` 的 Binaries）。RTK 开着且找不到时，**pi 首次加载会从 `rtk-ai/rtk` 下最新 release 到 `~/.pi/agent/bin`**，用 release 自带的 `checksums.txt` 校验，footer 打一行版本与来源，**不阻塞启动也不阻塞工具调用**。跳过条件：设了 `PI_OFFLINE` / `/optimizer` 里 RTK 关 / `binary.json` 指的路径不存在。`binary.json` 钉了路径时，改写用的就是那个带引号的路径。
-- **二进制手动兜底（2026-10-12 实测，winget/代理下载失败时走这条）**：`winget install rtk-ai.rtk` 报 TLS 握手失败（见 AGENTS.md「下载」铁律），直接绕开：`curl -sSL --ssl-no-revoke -o ~/.pi/agent/bin/rtk.zip https://github.com/rtk-ai/rtk/releases/latest/download/rtk-x86_64-pc-windows-msvc.zip && unzip ~/.pi/agent/bin/rtk.zip rtk.exe -d ~/.pi/agent/bin/`，完事删 zip。本机 0.51.0 已用此法装好。GitHub 直连被墙/超时时，改用 ghproxy 镜像（`https://ghproxy.net/` 或 `https://mirror.ghproxy.com/` 前缀拼 release URL）再取。
+报 TLS 握手失败（证书链问题，见 §8 排障表），直接绕开
 - **对前缀缓存的影响**：caveman / ponytail 都往 system prompt 注入规则文本，**切档 = 换一次前缀文本 = 下一轮 `cacheRead` 归 0**（原理同 §2.2 prefix-stabilizer、§7.17）。**定下来就别反复切。**
 - **rtk 自己的配置在 `%APPDATA%/rtk/config.toml`**（默认不存在，`rtk config --create` 生成）：`[hooks] suppress_hook_warning = true` 关掉每条 bash 前缀的 `[rtk] /!\ No hook installed` 噪音。**别手写半截小节**——rtk 反序列化缺字段即报 `missing field`，见 §7.24。
 - **卸载**：`pi remove npm:@xynogen/pix-optimizer`，再删 `pix.json` 的 `optimizer` 段（§2.4 纪律）。
@@ -790,14 +791,13 @@ pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传
 6. **纯 UI 类扩展可以放心装**：`pi-tps` / `pi-one-ui` / `pi-dsh-pet` / `pi-pet-autostart` 这类只挂事件钩子、只注册命令的扩展，**不注册任何工具**，不进 `defaultTools`，wire 字节不变（§3.6 有 bench 实测：装宠物前后都是 5664B）。反过来，任何**注册工具**的扩展都要重新算 §6.3 那笔账。
 **全局规则：行为约定写 `~/.pi/agent/AGENTS.md`（2026-10-12 新建）**
 
-pi 的用户级 context 文件（`docs/configuration.md`：`<agent-dir>/AGENTS.override.md` / `AGENTS.md` / `CLAUDE.md` **跨所有工作目录生效**；同目录的 `AGENTS.override.md` 可临时顶掉 `AGENTS.md`）。本机**全英文**、分四块（Think / Read files / Search / Download），短且稳：
+本机**全英文**、分三块（Think / Read files / Search），短且稳：
 
 | 规则 | 用意 |
 |---|---|
 | Think: minimal sufficient reasoning (goal → constraints → key intermediates → decision → verify), no restatement/repetition/pleasantries/divergence; simple → answer directly | 思考照走但不铺草稿。与 §3.15 的 caveman 是两层：那管「说给用户听的话」，这条管内部 think |
 | Read files: no full reads by default (only if <400 lines or truly needed); `rg -n` locate → `read` with `offset`/`limit`; `.md` via `md_inspect`; don't re-read | 长文件整读是本机最大的一笔 token 浪费（本仓库 readme 就 152KB）。例外：即将编辑的源码、200 行内配置、陌生结构的探路文件 |
-| Search: `fd` for paths, `rg` for content, `find`/`grep` fallback only with narrowed `path`; `fd` tool always passes `timeoutMs` | 呼应 §4.1 与 §4.2；`fd` 默认排除编译目录，`grep` 工具与 `fd` 一样懒加载（§3.4） |
-| Download: GitHub via ghproxy mirrors, npm via npmmirror; on GFW/cert failure **switch source, never disable verification** | 对齐 §8 排障里的 winget 证书链坑（`unable to verify the first certificate`） |
+
 
 - **canonical 源在本仓库 `config/agent/AGENTS.md`**（2026-10-18 外迁）：`node install-project-config.mjs` 拷进 `~/.pi/agent/AGENTS.md`，`--check` 体检。此前它只在下面表格里留了文案、盘上无正本，换机 / 清理就整份丢失（本机 2026-10-18 体检即命中）。
 - 它进的是**每轮 system 前缀**，所以改它等于改前缀（原理同 §2.2 / §7.17）：别拿它当 scratchpad，也别塞会变的文本。
@@ -1469,7 +1469,7 @@ Other errors:
 | 每条 bash 命令输出前带 `[rtk] /!\ No hook installed` | rtk 找的是 Claude 风格 `PreToolUse` hook，pi 走 pix 的 `tool_call` 改写，它看不见 | `%APPDATA%\rtk\config.toml` 的 `[hooks] suppress_hook_warning = true`（先 `rtk config --create` 再改，详见 §7.24） |
 | 第一次开 pi 时 footer 出现下载 `rtk` 二进制的一行 | RTK 开着且 PATH/`binary.json` 里都找不到 `rtk` | **预期行为**，下到 `~/.pi/agent/bin` 且用 `checksums.txt` 校验过；离线时设 `PI_OFFLINE` 跳过（届时改写也不生效） |
 | **浅色终端里 footer 的文件夹名（cwd）发白 / 颜色不对**，而其它段（token、耗时、git 分支）都正常 | **不是 pi-one-ui 写死了白色**，而是 `cwd` 是全包唯一默认用**裸 ANSI 色**的字段：`renderSourceColor(theme, config.colors.cwd, "cwd", "bold cyan", cwd)` → 主题里没有 `cwd` 这个自定义 token → 退到 `bold cyan`（SGR `1;36`，终端调色板 cyan 槽），浅色背景下就是一片惨白。详见 §7.22 | `~/.pi/agent/pi-one-ui.json` 写 `{"colors":{"cwd":"accent"}}` 然后 `/reload`。**别改主题**、别钉 hex（会把 light/dark 自动切换打死） |
-| `winget install rtk-ai.rtk` 报 `unable to verify the first certificate` | 本机 TLS 链被自定义根 CA/代理劫持（MITM），winget/schannel 不信链上的叶子证书 | **别用 winget**，按 §3.15 的手动兜底 curl release 到 `~/.pi/agent/bin/`；curl 加 `--ssl-no-revoke`、node 加 `--use-system-ca`，GitHub 不通时先走 `ghproxy.net` 镜像（AGENTS.md「下载」铁律） |
+GitHub 不通时先走 `ghproxy.net` 镜像 |
 
 **磁盘布局速查**
 
@@ -1487,7 +1487,7 @@ Other errors:
 | `~/.pi/agent/npm/package.json` | 25 个 dep + `allowScripts`（`overrides` 已随 `pi-smart-reader` 卸载整块删除，2026-10-18，见 §3.16 / §1 changelog） |
 | `~/.pi/agent/pix.json` | `@xynogen/pix-optimizer` 的三档状态（`optimizer.caveman` / `.rtk` / `.ponytail`），**2026-10-12 新建**，见 §3.15 |
 旧文件留 `pi-one-ui.json.bak.2026-10-18-pre-cwd`**。主题侧那三个越界色键不在这里改，走 `node fix-pi-one-ui-theme.mjs`（§7.26） |
-| `~/.pi/agent/AGENTS.md` | **全局规则**（用户级 context 文件，跨工作目录生效）：Think minimal reasoning、Read files 不整读（`offset`/`limit`/`md_inspect`）、Search fd/rg、Download 走国内镜像，见 §5「全局规则」。**canonical 在仓库 `config/agent/AGENTS.md`**（英文，10-16 版），`node install-project-config.mjs` 拷入（2026-10-18 对齐：本机此前缺失、今早重建的中文版已作废） |
+Search fd/rg，见 §5「全局规则」
 | `~/.pi/agent/bin/rtk` | RTK 官方二进制（2026-10-12 首次加载自动下载并校验 checksum）；`binary.json` → 本目录 → PATH，见 §3.15 |
 | `%APPDATA%\rtk\config.toml` | **rtk 二进制自己的配置**（与 pi 的配置无关）：`[hooks] suppress_hook_warning = true` 掐掉每条 bash 的 hook 提醒，见 §7.24。`rtk config` 可看默认全文 |
 | `~/.pi/agent/config/` | **已空**（smart-context 包卸载后配置已删，新装带 `startupConfig` 的包才会写） |
