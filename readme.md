@@ -1430,7 +1430,7 @@ Other errors:
 | `node fix-subagent-check.mjs --check` | 子代理可用（agent 定义目录 / modelPolicy / 插件在位） | 全绿 exit 0；缺 agent 定义 exit 1 |
 | `node fix-browser-native-compat.mjs` | 双路回退兼容（新形态报 `[skip]`）。0.9.6 起上游把 `lib/tool-surface.js` 打进 `dist/extensions/agent-browser/index.js`，老路径不在 ≠ 没装；脚本改按 `package.json` 的 `pi.extensions` 入口判形态（2026-10-18） | `[skip]`（打包形态，宿主自带 `buildSessionProjection`） |
 | `node fix-pi-one-ui-theme.mjs --check` | pi-one-ui 内置主题里是否还有 pi 主题 schema 不认的 `colors` 键（§7.26） | 补过 exit 0；`pi update npm:pi-one-ui` 后会报 `[待修补]` exit 1，重跑不带 `--check` 即修 |
-| `node install-project-config.mjs --check` | `config/` 里的配置/小脚本与 pi 实际读取位置是否一致 | 一致 exit 0 |
+| `node install-project-config.mjs --check` | `config/` 里的配置/小脚本与 pi 实际读取位置是否一致（行尾 CRLF/LF 归一后再比，不算漂移） | 一致 exit 0 |
 | `.sc-test/check-ext-errors.mjs` | 扫会话里的 `extension_error` | 盘上还在，但 `.sc-test/` 是 gitignore、**不入库** → 当一次性探针用，别当长期工具（升级/清理会丢） |
 | ~~`.sc-test/probe-bash-guard.mjs`~~ | bash-guard 回归用例（54 例） | **已不存在**（未入库，随清理丢了）——要回归按 §5 那份清单重写 |
 

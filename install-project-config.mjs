@@ -34,6 +34,9 @@ const NEVER_COPY = new Set(["settings.json"]); // config/agent 下禁止自动�
  *  另：`settings.snapshot-*.json` 一律视为历史快照留档，不往 ~/.pi/agent/ 里拷。 */
 const ARCHIVED = { "pi-project": new Set(["zvec.json"]) };
 const isArchived = (dir, f) => ARCHIVED[dir]?.has(f) === true || f.startsWith("settings.snapshot-");
+/** CRLF → LF 归一：git `core.autocrlf=true` 让仓库工作区文件带 CRLF，盘上（脚本写的）是 LF，
+ *  不归一的话 Windows 上这两项体检永远假红（内容其实逐字相同）。统一按 LF 比、按 LF 写。 */
+const norm = (buf) => Buffer.from(buf.toString("utf8").replace(/\r\n/g, "\n"), "utf8");
 
 const scopes = [
 	{ label: "项目级", src: path.join(repo, "config", "pi-project"), dest: path.join(repo, ".pi") },
@@ -59,8 +62,8 @@ for (const { label, src, dest } of scopes) {
 			continue;
 		}
 		const to = path.join(dest, f);
-		const a = fs.readFileSync(from);
-		const same = fs.existsSync(to) && Buffer.compare(a, fs.readFileSync(to)) === 0;
+		const a = norm(fs.readFileSync(from));
+		const same = fs.existsSync(to) && Buffer.compare(a, norm(fs.readFileSync(to))) === 0;
 		if (same) {
 			console.log(`[ok  ] ${label} ${f}（一致，${a.length}B）`);
 			continue;
