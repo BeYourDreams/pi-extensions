@@ -12,7 +12,8 @@ Advisory for screenplay prose (SCR-23 / SHT-30 patterns), hard for shot duration
 
 Codes: SHT31_SHOT_EXCEEDS_CAP (error), VID28_END_STATE_MISSING (warning),
 VID28_BARE_DISPLACEMENT / SHT30_MISSING_ORIENTATION / SCR23_BARE_DISPLACEMENT /
-SCR23_CHAIN_OVERLOAD / SCR23_HIDDEN_MECHANICS / SCR23_MISSING_LEADING_LIMB (warnings).
+SCR23_CHAIN_OVERLOAD / SCR23_HIDDEN_MECHANICS / SCR23_MISSING_LEADING_LIMB (warnings),
+SAF01_HIGH_RISK_TERM (warning, all document kinds; see stage-script.md §9).
 
 Exit 0 when no errors (warnings only), 1 on errors, 2 on usage problems.
 --selftest runs built-in fixtures.
@@ -52,6 +53,16 @@ GRAB_RE = re.compile(r"(拿起|抓起|取下|接过|掏出|握住|抓起)")
 HIDDEN_RE = re.compile(r"(突然|随即|随后|紧接着)[^。！？\n]{0,24}?(走进|进入|出现在|推到|拉开|跨上|坐上|站到)")
 
 DURATION_RE = re.compile(r"时长[:：]?\s*(\d+(?:\.\d+)?)\s*秒")
+
+# SAF-01: advisory content-safety scan. Only hard, unambiguous terms — real-name/
+# brand/euphemistic risk cannot be regexed; the stage-script.md §9 table is the human net.
+SAFETY_RE = re.compile(
+    r"(吸毒|白粉|冰毒|海洛因|摇头丸|赌场|赌球|开赌|卖淫|嫖|强奸|割腕|割脉|自杀|上吊|跳楼|自焚|"
+    r"血浆|内脏|脑浆|断肢|分尸|碎尸|枪毙|枪杀|砍死|毒死|炸弹|爆炸物|恐怖袭击|"
+    r"傻逼|操你|他妈的|贱人|婊子|"
+    r"法轮|伊斯兰|基督教会|真主|古兰经|"
+    r"未成年.{0,6}(性|裸|脱|强|侵犯))"
+)
 LABEL_LINE_RE = re.compile(r"^\s*[-*]?\s*(起点|终点|唯一动作|状态链|分镜|时长|声音|运镜|景别|机位|输入参考图|静态视觉锚点|起始帧|收尾关键帧|职责|来源)")
 
 
@@ -165,13 +176,23 @@ def check_motion(text: str) -> list[dict[str, Any]]:
     return [f for bid, body in _blocks(text, "MOTION-") for f in _check_block(bid, body, "motion")]
 
 
+def check_safety(text: str) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    for line in text.splitlines():
+        for hit in SAFETY_RE.finditer(line):
+            findings.append({"code": "SAF01_HIGH_RISK_TERM", "severity": "warning",
+                             "snippet": line.strip()[:60], "term": hit.group(0)})
+    return findings
+
+
 def detect_and_check(path: Path) -> list[dict[str, Any]]:
     text = path.read_text(encoding="utf-8")
+    safety = check_safety(text)
     if "## SHOT-" in text:
-        return check_storyboard(text)
+        return safety + check_storyboard(text)
     if "## MOTION-" in text:
-        return check_motion(text)
-    return check_screenplay(text)
+        return safety + check_motion(text)
+    return safety + check_screenplay(text)
 
 
 def _report(findings: list[dict[str, Any]]) -> int:
@@ -187,7 +208,7 @@ def _report(findings: list[dict[str, Any]]) -> int:
 
 def _fmt(item: dict[str, Any]) -> str:
     parts = [item["code"]]
-    for key in ("shot", "duration_seconds", "step_classes", "snippet"):
+    for key in ("shot", "duration_seconds", "step_classes", "term", "snippet"):
         if key in item and item[key] is not None:
             parts.append(f"{key}={item[key]}")
     if "message" in item:
@@ -240,7 +261,13 @@ def selftest() -> int:
         bare = [f for f in fs if f["code"] == "SCR23_BARE_DISPLACEMENT"]
         assert all("背对摄影机" not in f["snippet"] for f in bare), "oriented segment flagged?"
 
-        print("2 self-test groups passed")
+        p3 = Path(td) / "脏剧本.md"
+        p3.write_text("他掏出白色小袋递过去。\n\n她割腕之前看了他一眼，血浆溅在地砖上。\n", encoding="utf-8")
+        terms = {f["term"] for f in check_safety(p3.read_text(encoding="utf-8"))}
+        assert {"割腕", "血浆"} <= terms, terms
+        assert not check_safety("他掏出白色小袋递过去，手一直抖。"), "clean line flagged?"
+
+        print("3 self-test groups passed")
     return 0
 
 
