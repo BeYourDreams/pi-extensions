@@ -57,10 +57,12 @@ DURATION_RE = re.compile(r"时长[:：]?\s*(\d+(?:\.\d+)?)\s*秒")
 # SAF-01: advisory content-safety scan. Only hard, unambiguous terms — real-name/
 # brand/euphemistic risk cannot be regexed; the stage-script.md §9 table is the human net.
 SAFETY_RE = re.compile(
-    r"(吸毒|白粉|冰毒|海洛因|摇头丸|赌场|赌球|开赌|卖淫|嫖|强奸|割腕|割脉|自杀|上吊|跳楼|自焚|"
-    r"血浆|内脏|脑浆|断肢|分尸|碎尸|枪毙|枪杀|砍死|毒死|炸弹|爆炸物|恐怖袭击|"
-    r"傻逼|操你|他妈的|贱人|婊子|"
-    r"法轮|伊斯兰|基督教会|真主|古兰经|"
+    r"(吸毒|白粉|冰毒|海洛因|摇头丸|大麻|吗啡|K粉|迷药|迷魂药|赌场|赌球|开赌|百家乐|老虎机|六合彩|"
+    r"卖淫|嫖|强奸|割腕|割脉|自残|自杀|上吊|跳楼|自焚|服毒|吞药|"
+    r"血浆|血泊|血淋淋|血肉模糊|开膛|爆头|内脏|脑浆|断肢|分尸|碎尸|枪毙|枪杀|砍死|毒死|炸弹|爆炸物|恐怖袭击|"
+    r"裸体|裸露|床戏|脱衣|色情|"
+    r"傻逼|操你|他妈的|贱人|婊子|王八蛋|"
+    r"法轮|伊斯兰|基督教会|真主|古兰经|邪教|"
     r"未成年.{0,6}(性|裸|脱|强|侵犯))"
 )
 LABEL_LINE_RE = re.compile(r"^\s*[-*]?\s*(起点|终点|唯一动作|状态链|分镜|时长|声音|运镜|景别|机位|输入参考图|静态视觉锚点|起始帧|收尾关键帧|职责|来源)")
@@ -265,6 +267,8 @@ def selftest() -> int:
         p3.write_text("他掏出白色小袋递过去。\n\n她割腕之前看了他一眼，血浆溅在地砖上。\n", encoding="utf-8")
         terms = {f["term"] for f in check_safety(p3.read_text(encoding="utf-8"))}
         assert {"割腕", "血浆"} <= terms, terms
+        probe = "他掀开袖子，裸露的伤口下血泊还没干，桌上散着几粒迷药。"
+        assert {"裸露", "血泊", "迷药"} <= {f["term"] for f in check_safety(probe)}
         assert not check_safety("他掏出白色小袋递过去，手一直抖。"), "clean line flagged?"
 
         print("3 self-test groups passed")
