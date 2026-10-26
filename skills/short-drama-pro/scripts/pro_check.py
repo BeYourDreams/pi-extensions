@@ -15,6 +15,9 @@ VID28_BARE_DISPLACEMENT / SHT30_MISSING_ORIENTATION / SCR23_BARE_DISPLACEMENT /
 SCR23_CHAIN_OVERLOAD / SCR23_HIDDEN_MECHANICS / SCR23_MISSING_LEADING_LIMB (warnings),
 SAF01_HIGH_RISK_TERM (warning, all document kinds; see stage-script.md §9).
 
+`--shot-cap 5` tightens the per-shot cap to an accepted short-cut target (a 5-second
+快切档, for example). It can only tighten, never raise, the 12-second suite cap (SHT-31).
+
 Exit 0 when no errors (warnings only), 1 on errors, 2 on usage problems.
 --selftest runs built-in fixtures.
 """
@@ -148,13 +151,14 @@ def _blocks(text: str, prefix: str) -> list[tuple[str, str]]:
     return out
 
 
-def _check_block(block_id: str, body: str, kind: str) -> list[dict[str, Any]]:
+def _check_block(block_id: str, body: str, kind: str,
+                 shot_cap: float = SHOT_CAP_SECONDS) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
     for m in DURATION_RE.finditer(body):
         seconds = float(m.group(1))
-        if seconds > SHOT_CAP_SECONDS:
+        if seconds > shot_cap:
             findings.append({"code": "SHT31_SHOT_EXCEEDS_CAP", "severity": "error",
-                             "shot": block_id, "duration_seconds": seconds, "cap": SHOT_CAP_SECONDS})
+                             "shot": block_id, "duration_seconds": seconds, "cap": shot_cap})
     disp = bool(DISPLACEMENT_RE.search(body))
     if disp and not ORIENTATION_RE.search(body):
         findings.append({"code": "SHT30_MISSING_ORIENTATION" if kind == "shot" else "VID28_BARE_DISPLACEMENT",
@@ -170,12 +174,14 @@ def _check_block(block_id: str, body: str, kind: str) -> list[dict[str, Any]]:
     return findings
 
 
-def check_storyboard(text: str) -> list[dict[str, Any]]:
-    return [f for bid, body in _blocks(text, "SHOT-") for f in _check_block(bid, body, "shot")]
+def check_storyboard(text: str, shot_cap: float = SHOT_CAP_SECONDS) -> list[dict[str, Any]]:
+    return [f for bid, body in _blocks(text, "SHOT-")
+            for f in _check_block(bid, body, "shot", shot_cap)]
 
 
-def check_motion(text: str) -> list[dict[str, Any]]:
-    return [f for bid, body in _blocks(text, "MOTION-") for f in _check_block(bid, body, "motion")]
+def check_motion(text: str, shot_cap: float = SHOT_CAP_SECONDS) -> list[dict[str, Any]]:
+    return [f for bid, body in _blocks(text, "MOTION-")
+            for f in _check_block(bid, body, "motion", shot_cap)]
 
 
 def check_safety(text: str) -> list[dict[str, Any]]:
@@ -187,13 +193,13 @@ def check_safety(text: str) -> list[dict[str, Any]]:
     return findings
 
 
-def detect_and_check(path: Path) -> list[dict[str, Any]]:
+def detect_and_check(path: Path, shot_cap: float = SHOT_CAP_SECONDS) -> list[dict[str, Any]]:
     text = path.read_text(encoding="utf-8")
     safety = check_safety(text)
     if "## SHOT-" in text:
-        return safety + check_storyboard(text)
+        return safety + check_storyboard(text, shot_cap)
     if "## MOTION-" in text:
-        return safety + check_motion(text)
+        return safety + check_motion(text, shot_cap)
     return safety + check_screenplay(text)
 
 
@@ -271,6 +277,19 @@ def selftest() -> int:
         assert {"裸露", "血泊", "迷药"} <= {f["term"] for f in check_safety(probe)}
         assert not check_safety("他掏出白色小袋递过去，手一直抖。"), "clean line flagged?"
 
+        p4 = Path(td) / "fastcut.md"
+        p4.write_text("## SHOT-010\n- 时长：8 秒\n- 起点：她面朝窗站在桌前\n"
+                      "- 唯一动作：她把杯子推过桌面\n- 终点：杯子停在桌沿，她胸朝窗\n",
+                      encoding="utf-8")
+        text4 = p4.read_text(encoding="utf-8")
+        assert check_storyboard(text4) == [], "8s must pass at the 12s suite cap"
+        tight = check_storyboard(text4, shot_cap=5.0)
+        assert {f["code"] for f in tight} == {"SHT31_SHOT_EXCEEDS_CAP"}, tight
+        assert tight[0]["cap"] == 5.0, tight
+        assert main(["--shot-cap", "0", str(p4)]) == 2, "zero cap accepted"
+        assert main(["--shot-cap", "abc", str(p4)]) == 2, "non-numeric cap accepted"
+        assert main(["--shot-cap=5", str(p4)]) == 1, "--shot-cap=5 did not tighten"
+
         print("3 self-test groups passed")
     return 0
 
@@ -278,11 +297,27 @@ def selftest() -> int:
 def main(argv: list[str]) -> int:
     if argv and argv[0] == "--selftest":
         return selftest()
-    if not argv:
+    rest = list(argv)
+    shot_cap = SHOT_CAP_SECONDS
+    while rest and rest[0].startswith("--shot-cap"):
+        flag = rest.pop(0)
+        value = flag.split("=", 1)[1] if "=" in flag else (rest.pop(0) if rest else "")
+        try:
+            # Only tightening is honest: an accepted profile moves the target inside
+            # the suite cap, it never lifts the cap (SHT-31).
+            shot_cap = min(float(value), SHOT_CAP_SECONDS)
+        except ValueError:
+            print(f"usage error: --shot-cap needs a number of seconds, got {value!r}",
+                  file=sys.stderr)
+            return 2
+        if shot_cap <= 0:
+            print("usage error: --shot-cap must be positive", file=sys.stderr)
+            return 2
+    if not rest:
         print(__doc__)
         return 2
     try:
-        findings = [detect_and_check(Path(a)) for a in argv for _ in [0]]
+        findings = [detect_and_check(Path(a), shot_cap) for a in rest]
     except OSError as exc:
         print(f"usage error: {exc}", file=sys.stderr)
         return 2

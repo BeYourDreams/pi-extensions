@@ -27,12 +27,12 @@
 ## 3. 形式与制作边界
 
 - **主要语言**：【填写】
-- **画幅/观看场景**：【如有明确约束则填写】
+- **画幅/观看场景**：【竖屏 9:16（默认）/ 横屏 16:9 / 其他；决定 init 的 `--aspect-ratio`，下游只传这一个值】
 - **单集与系列形式**：【仅记录创作者已选约束，不据此推导剧情】
 - **可用角色与场景规模**：【填写】
 - **难以承受的制作元素**：【填写】
 - **必须保留的视觉/声音特征**：【填写】
-- **项目节奏档案（候选）**：【按制作形态从分集设计的默认值起步；改了哪项写一句理由。创作者接受后写入项目配置】
+- **项目节奏档案（候选）**：【先问一句要**常规档**还是**爆点档**（前几秒就进冲突）：按制作形态从分集设计 §10 的默认值起步，爆点档按 §10.1 覆盖四项；改了哪项写一句理由。创作者接受后写入项目配置】
 
 ```json
 {"status": "proposed", "form": "ai_live_action", "first_hook_seconds": 5, "beat_interval_seconds_max": 30, "opposed_reversals_per_episode_min": 1, "end_on_peak": true, "reprise_previous_last_beat": true, "vo_share_max": 0.3, "target_avg_shot_seconds": 2.5, "close_shot_share_min": 0.45, "first_major_payoff_by_episode": 1}
