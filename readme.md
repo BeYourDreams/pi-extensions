@@ -49,7 +49,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 |---|---|---|
 | `npm:pi-tps` | 底部 token/speed 状态栏 | 装后跑 `fix-tps-theme.ps1` 让配色跟随系统主题 |
 | `npm:@injaneity/pi-computer-use` | 桌面截图 / 点击 / 输入 | **唯一需批准 install 脚本的包**，见 §3.1 |
-| `npm:pi-one-ui` | TUI 统一美化（Header/Context/WorkingLine/Editor/Footer） | 取代旧 `alps-pi`；要求 Node ≥22.19、Pi ≥0.84。**装完必配** `~/.pi/agent/pi-one-ui.json` 的 `colors.cwd`，否则浅色终端里文件夹名发白，见 §7.22。**pi ≥1.0 还要跑一次 `node fix-pi-one-ui-theme.mjs`**：它内置主题里的 `cwd`/`editorModel`/`editorBorder` 撞上严格主题 schema，整份主题被判非法（`[Theme conflicts]`），见 §7.26 |
+| `npm:pi-one-ui` | TUI 统一美化（Header/Context/WorkingLine/Editor/Footer） | 取代旧 `alps-pi`；要求 Node ≥22.19、Pi ≥0.84。**装完必配** `~/.pi/agent/pi-one-ui.json` 的 `colors.cwd`，否则浅色终端里文件夹名发白，见 §7.22。**本机已改为本地源码安装**（`D:\AI\pi-one-ui`，见 §7.26）：源码里的主题已删掉撞严格 schema 的三键，故不用再跑 `fix-pi-one-ui-theme.mjs`；走 npm 包的用户 pi ≥1.0 仍需跑一次 |
 | `npm:pi-cache-guardian` | 缓存命中巡检 + 前缀漂移告警 | 与 §6 的 prefix-stabilizer 是同一根因的两端，一并用 |
 | `npm:@tian.zuo/pi-find` | `grep` / `find` 工具 | **覆盖内建同名工具**（替换，不是并列）。本机只用它的 `grep`；`find` 已降为懒加载兜底（见 §4.1） |
 | `npm:@trycedar/pi-mdiff` | `md_inspect` / `md_diff` / `md_edit` | Markdown 结构化编辑，`.md` 改动优先用它 |
@@ -200,6 +200,7 @@ pi list                                # 升完核一遍实际版本
 > **`pi update npm:<包>` / 重装那个包会连它目录里的补丁一起冲掉**：`fix-pi-one-ui-theme.mjs` 打在 `npm/node_modules/pi-one-ui/themes/*.json` 上的补丁同理（§7.26），升完按 §8 表重跑。
 
 > `pi-dsh-pet` 换成 git 源后**不再有「反复重下 48MB 动画」的问题**——clone 就带 `assets/thumb`（91 个 WebM，整仓 202M），`pi update` 只拉增量；只有第一次 `/pet` 要下 Electron ≈100MB。
+> **`pi-one-ui` 已改为本地源码安装**（本机 2026-10-27）：跳过上面循环里的 `pi-one-ui`，改在源码目录装 —— `cd D:\AI\pi-one-ui && pi install ./`（写入 `~/.pi/agent/settings.json` 的绝对路径，`pi list` 里显示 `D:\AI\pi-one-ui`）。这样 `settings.json` 里不再有 `npm:pi-one-ui`，`~/.pi/agent/npm/node_modules/pi-one-ui` 也随之卸掉；源码层的主题已经合规（§7.26），不用再跑补丁脚本。
 
 **处理办法见 §3.4；升完必跑一次 bench 确认 wire 工具集没变**（本次实测未变：升完是 8 个工具 / 8317B，`extension_error` 0；随后按「只保留默认工具」收敛为 6 个 / 6010B，2026-09-30 卸 `pi-web-access` 后为 **5 个 / 5664B**）。
 
@@ -1362,7 +1363,7 @@ return childGone && pastGrace && pastLost && …;
 
 **顺带发现（未改）**：`npm run sync` 的「把宿主那份检出收干净」那步其实收不干净 —— 同步写完文件后 `git merge --ff-only` 会以「有本地改动」拒绝（现场：`origin/main` 已快进到远端，那份检出的 HEAD 还停在旧提交）。要收干净得手动 `git checkout -- <被同步的文件>` 再 `merge --ff-only`（内容已在远端时这俩合起来等价，且不丢东西）。
 
-### 7.26 `[Theme conflicts] Invalid theme cc-dark.json`：pi 收紧主题 schema，把 pi-one-ui 内置主题整体打死（2026-10-18 已修，`fix-pi-one-ui-theme.mjs`）
+### 7.26 `[Theme conflicts] Invalid theme cc-dark.json`：pi 收紧主题 schema，把 pi-one-ui 内置主题整体打死（2026-10-18 已修，`fix-pi-one-ui-theme.mjs`；2026-10-27 上游源码层已修）
 
 **现象**：开机 / `/reload` 在已加载资源区弹两段（标题就是 `[Theme conflicts]`，`interactive-mode.js` 拿主题 diagnostics 渲的）：
 
@@ -1392,6 +1393,8 @@ Other errors:
 | `editorBorder` | 原生默认 `borderMuted`（`EDITOR_BORDER_FALLBACK`） |
 
 **验证**：ajv + `D:\agent\pi\theme\theme-schema.json`（required / 色值格式一起校）：未补两份各 4 条错 → 补后两份 `VALID`；`node fix-pi-one-ui-theme.mjs --check` exit 0。
+
+**2026-10-27 上游源码层已修（本机改吃本地源码）**：`D:\AI\pi-one-ui`（`git:github.com/qq458249269/pi-one-ui`，与 npm 0.9.2 同源）里把那两个主题的 `cwd` / `editorModel` / `editorBorder` 直接删了，并补了回归用例 `tests/themes/builtin-themes-schema.test.ts`：拿 `@earendil-works/pi-coding-agent` 自带的 `dist/modes/interactive/theme/theme-schema.json` 校顶层键与 `colors`/`export` 的额外键（修前必红、修后绿）。文档一并改口：这三个键**只能写在 `~/.pi/agent/pi-one-ui.json`**，写进任何主题文件（包括 `~/.pi/agent/themes/`）都会把整份主题判非法。本机安装随之改成 `pi install ./`（见 §2.1 注），`settings.json` 里不再有 `npm:pi-one-ui`，所以补丁脚本现在直接 `[skip]`（npm 副本已不存在，脚本对“目录不在”改为 exit 0）。
 
 **别走的两条路**：
 - ❌ 抹掉整个 `pi-one-ui` 主题声明（`package.json` 的 `pi.themes`）：能止错，但连官方那两个皮肤都没了。
@@ -1429,7 +1432,7 @@ Other errors:
 | `node fix-proper-lockfile-proxy.mjs --check` | proper-lockfile 补丁在位 | 一致 exit 0 |
 | `node fix-subagent-check.mjs --check` | 子代理可用（agent 定义目录 / modelPolicy / 插件在位） | 全绿 exit 0；缺 agent 定义 exit 1 |
 | `node fix-browser-native-compat.mjs` | 双路回退兼容（新形态报 `[skip]`）。0.9.6 起上游把 `lib/tool-surface.js` 打进 `dist/extensions/agent-browser/index.js`，老路径不在 ≠ 没装；脚本改按 `package.json` 的 `pi.extensions` 入口判形态（2026-10-18） | `[skip]`（打包形态，宿主自带 `buildSessionProjection`） |
-| `node fix-pi-one-ui-theme.mjs --check` | pi-one-ui 内置主题里是否还有 pi 主题 schema 不认的 `colors` 键（§7.26） | 补过 exit 0；`pi update npm:pi-one-ui` 后会报 `[待修补]` exit 1，重跑不带 `--check` 即修 |
+| `node fix-pi-one-ui-theme.mjs --check` | pi-one-ui 内置主题里是否还有 pi 主题 schema 不认的 `colors` 键（§7.26） | 补过 exit 0；本机走本地源码安装后无 npm 副本 → `[skip]` exit 0；走 npm 包时 `pi update npm:pi-one-ui` 后会报 `[待修补]` exit 1，重跑不带 `--check` 即修 |
 | `node install-project-config.mjs --check` | `config/` 里的配置/小脚本与 pi 实际读取位置是否一致（行尾 CRLF/LF 归一后再比，不算漂移） | 一致 exit 0 |
 | `.sc-test/check-ext-errors.mjs` | 扫会话里的 `extension_error` | 盘上还在，但 `.sc-test/` 是 gitignore、**不入库** → 当一次性探针用，别当长期工具（升级/清理会丢） |
 | ~~`.sc-test/probe-bash-guard.mjs`~~ | bash-guard 回归用例（54 例） | **已不存在**（未入库，随清理丢了）——要回归按 §5 那份清单重写 |

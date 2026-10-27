@@ -84,8 +84,10 @@ function allowedColorKeys(schemaFile) {
 }
 
 if (!fs.existsSync(THEME_DIR)) {
-	console.error(`[fail] 未找到 pi-one-ui 主题目录（包未装？）: ${THEME_DIR}`);
-	process.exit(1);
+	console.log(
+		`[skip] 未找到 pi-one-ui 主题目录（未装 npm 副本，本机改用本地源码安装）: ${THEME_DIR}`,
+	);
+	process.exit(0);
 }
 
 const schemaFile = detectSchemaFile();
