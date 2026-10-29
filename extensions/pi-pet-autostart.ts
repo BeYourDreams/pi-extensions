@@ -48,7 +48,7 @@
  *   └ /control（REST + token）────▶ show / hide / say / restart / set-ctrl
  * ```
  * 上游自带的扩展（`pi/extensions/index.ts`）**已被 settings.json 关掉**
- * （`{"source":"git:github.com/qq458249269/pi-dsh-pet","extensions":[]}`），因为它就是
+ * （`{"source":"git:github.com/BeYourDreams/pi-dsh-pet","extensions":[]}`），因为它就是
  * 铁律 1 的受害者；本文件接管它的全部职责，**不依赖它加载**（所以不通过 `/pet` 命令反查
  * 包目录，见 `petPackageRoot()`）。
  *

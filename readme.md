@@ -57,12 +57,12 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `npm:pi-agent-browser-native` | 原生 `agent_browser*` 工具（8 个） | 0.9.3 起直接遍历宿主的 `sessionManager.buildSessionProjection()`，不再走 `getCurrentSystemMessage` 旧路径。Pi 1.0.0+ 宿主自带该 API，**不需要**兼容补丁。**但它声明 `node >=24.21.0`，本机 24.16.0 → 装卸时必有 `EBADENGINE` 警告（无害，见开头基线注）** |
 | `npm:@agenticup/pi-loop` | `loop` 递归深潜工具 | 入口是 `extensions/loop.ts`，不是 `dist/index.js` |
 | `npm:@arhen/pi-core-subagent` | 子代理（后台默认） | 2026-10-06 装；2026-10-08 发现清单漂移（列了但实际未装）后补装。`subagent`/`subagent_status`/`await_subagent`/`steer_subagent` 等；模型继承 leader（`1/1`），不读旧 `~/.pi/subagent.json` |
-| `git:github.com/qq458249269/pi-lazy-tools` | 按需工具加载（`omnify` 一站式：搜索 / 补参 / 代理执行） | **fork，含 jiti 加载器补丁**；npm 版 `@wolido/pi-lazy-tools` 已下架。**0.4.0 是 breaking**：常驻名单从自建 `~/.pi/lazy-tools.json` 改读 pi 的 `defaultTools`（见 §3.4）。本地 clone 在 `D:\AI\pi-lazy-tools`，改完直接 commit + push，`pi update --extensions` 就能带上 |
+| `git:github.com/BeYourDreams/pi-lazy-tools` | 按需工具加载（`omnify` 一站式：搜索 / 补参 / 代理执行） | **fork，含 jiti 加载器补丁**；npm 版 `@wolido/pi-lazy-tools` 已下架。**0.4.0 是 breaking**：常驻名单从自建 `~/.pi/lazy-tools.json` 改读 pi 的 `defaultTools`（见 §3.4）。本地 clone 在 `D:\AI\pi-lazy-tools`，改完直接 commit + push，`pi update --extensions` 就能带上 |
 | `npm:pi-prefix-stabilizer` | 系统提示词前缀稳定 + 漂移检测 | 与 cache-compact 有先后要求，见 §2.2 |
 | `npm:@henryqw/pi-ask-question` | `ask_question` 交互式提问（单题，1–3 选项 + 自定义答案，首项为推荐） | 歧义时问用户，比猜省事 |
 | `npm:@ssk_dev/rpiv-todo-lean` | `todo` 任务清单工具 + TUI overlay | `ctrl+shift+t` 折叠；`/todos` 看全量 |
 | `npm:@aboutlo/pi-smart-edit` | 覆盖内建 `edit`，容忍引号/空白不匹配 | **已生效**；`edit` 归它，匹配走「精确 → NFKC 归一化行」 |
-| `git:github.com/qq458249269/pi-dsh-pet` | 桌面宠物：Electron 透明浮窗 + 91 个 WebM 动画，随 agent 状态（思考/写代码/空闲）切换 | **纯命令扩展**（`/pet` `/pet-stop`），零工具、零 wire 开销。**必须 `pi install`**，光 `npm i -g` pi 不加载（见 §3.6）。**2026-09-30 从 `npm:pi-dsh-pet` 换成 git 源**（自己 fork 的仓库，改完 `git pull` 就生效；`pi update --extensions` 也认它）。常驻与「整机只留一只」由本仓库的 `pi-pet-autostart.ts` 接管 |
+| `git:github.com/BeYourDreams/pi-dsh-pet` | 桌面宠物：Electron 透明浮窗 + 91 个 WebM 动画，随 agent 状态（思考/写代码/空闲）切换 | **纯命令扩展**（`/pet` `/pet-stop`），零工具、零 wire 开销。**必须 `pi install`**，光 `npm i -g` pi 不加载（见 §3.6）。**2026-09-30 从 `npm:pi-dsh-pet` 换成 git 源**（自己 fork 的仓库，改完 `git pull` 就生效；`pi update --extensions` 也认它）。常驻与「整机只留一只」由本仓库的 `pi-pet-autostart.ts` 接管 |
 
 | `npm:pi-web-access` | `web_search` / `source_check` / `fetch_content` / `get_search_content` + `/websearch` `/search` `/curator` | 2026-10-06 **复装**（曾于 2026-09-30 卸载，§7.4）。**必做配置** `~/.pi/agent/web-search.json` 写 `toolActivation: "eager"`，见 §3.7 —— 不写就用 `web_enable` 加载器中途改 active 集，会把前缀缓存掀掉（正是当年卸掉它的原因）。26 个搜索源，duckduckgo 无需 key。**实测对 wire 与缓存零影响**（§3.7），要时 `omnify` 捞 |
 | `npm:pi-notify` | `agent_end` → Windows toast | 2026-10-06 装，零配置零依赖。Windows Terminal 走 PowerShell toast（`WT_SESSION` 判定），其他终端 OSC 777/9/99。subagent / `loop` 后台跑完靠它收通知。实测：headless 也发（OSC 777 直接打在 stdout） |
@@ -129,8 +129,8 @@ for p in pi-prefix-stabilizer pi-cache-compact \
 done
 
 # git 源单独装（两个都要串行；宠物从 npm 换 git 时先 remove，见 §3.6）
-pi install git:github.com/qq458249269/pi-lazy-tools
-pi install git:github.com/qq458249269/pi-dsh-pet
+pi install git:github.com/BeYourDreams/pi-lazy-tools
+pi install git:github.com/BeYourDreams/pi-dsh-pet
 pi install "npm:pi-web-access"
 pi install "npm:@bacnh85/pi-checkpoint"
 pi install "npm:pi-notify"
@@ -162,8 +162,8 @@ node install-project-config.mjs
 >
 > ```bash
 > git config --global url."https://gh-proxy.com/https://github.com/".insteadOf "https://github.com/"
-> pi install git:github.com/qq458249269/pi-lazy-tools
-> pi install git:github.com/qq458249269/pi-dsh-pet
+> pi install git:github.com/BeYourDreams/pi-lazy-tools
+> pi install git:github.com/BeYourDreams/pi-dsh-pet
 > # 不想留全局改写就改完装完撤掉：
 > git config --global --unset url."https://gh-proxy.com/https://github.com/".insteadOf
 > ```
@@ -359,20 +359,20 @@ npm rebuild better-sqlite3  # 批完必须重编，批准本身不建原生 bind
 
 **零 token 成本（实测）**：两个扩展都**不注册工具**，不进 `defaultTools`（§3.4 硬规则）。装完跑 bench：system 3026B + tools 2638B（5 个）= **5664B，与装之前逐字节一致**。
 
-**安装路径的坑**：上游 README 写 `npm install -g pi-dsh-pet`，但 **pi 不扫全局 `node_modules`** —— 只全局装的话 `/pet` 根本不存在。必须在 pi 里注册一次。本机 2026-09-30 换成 git 源：`pi remove npm:pi-dsh-pet` + `pi install git:github.com/qq458249269/pi-dsh-pet`（两份同时声明会被当两个包各加载一次，必须先 remove；`pi remove` 报 `EBUSY` 说明还有 Electron 窗占着旧目录 —— 先 `/pet-auto off` 或 `taskkill` 掉它）。装完落在 `~/.pi/agent/git/github.com/qq458249269/pi-dsh-pet`。
+**安装路径的坑**：上游 README 写 `npm install -g pi-dsh-pet`，但 **pi 不扫全局 `node_modules`** —— 只全局装的话 `/pet` 根本不存在。必须在 pi 里注册一次。本机 2026-09-30 换成 git 源：`pi remove npm:pi-dsh-pet` + `pi install git:github.com/BeYourDreams/pi-dsh-pet`（两份同时声明会被当两个包各加载一次，必须先 remove；`pi remove` 报 `EBUSY` 说明还有 Electron 窗占着旧目录 —— 先 `/pet-auto off` 或 `taskkill` 掉它）。装完落在 `~/.pi/agent/git/github.com/BeYourDreams/pi-dsh-pet`。
 
-> **上游自带的扩展已禁用** —— 但**写法很关键**：必须在 `settings.json` 的 `packages` 里把 `pi-dsh-pet` 写成 **object form**（`{"source": "git:github.com/qq458249269/pi-dsh-pet", "extensions": []}`），**光写纯字符串 `git:github.com/...` 屏不掉上游扩展**（`extensions: []` 只筛 npm 包内的子扩展，对仓库顶层 `pi/extensions/index.ts` 无效 —— docs/packages.md「Select package resources」确认 1.1.0 支持 object form 的 `extensions` 选择）。
+> **上游自带的扩展已禁用** —— 但**写法很关键**：必须在 `settings.json` 的 `packages` 里把 `pi-dsh-pet` 写成 **object form**（`{"source": "git:github.com/BeYourDreams/pi-dsh-pet", "extensions": []}`），**光写纯字符串 `git:github.com/...` 屏不掉上游扩展**（`extensions: []` 只筛 npm 包内的子扩展，对仓库顶层 `pi/extensions/index.ts` 无效 —— docs/packages.md「Select package resources」确认 1.1.0 支持 object form 的 `extensions` 选择）。
 >
 > | 写法 | 上游扩展 | 症状 |
 > |---|---|---|
-> | `"git:github.com/qq458249269/pi-dsh-pet"` | **照旧加载**（本机踩了一个月才发现） | 重复注册 `/pet` `/pet-stop` `/pet-say` `/pet-status`（本地薄客户端也注册同名 + `/pet-auto`）；多一条 `session_start → ensureHost()` 走 `state.json` 单一来源；终端刷 `[pi-dsh-pet] /feed 连接断开，2s 后重连`，headless 跑不完（§7.13 的 exit 124 噪音一半来自它） |
-> | `{"source": "git:...", "extensions": []}` | **不加载** ✅ | 干净：`pi list` 该行显示 `git:github.com/qq458249269/pi-dsh-pet (filtered)`，终端只剩本地客户端的 `[pi-pet-autostart]` |
+> | `"git:github.com/BeYourDreams/pi-dsh-pet"` | **照旧加载**（本机踩了一个月才发现） | 重复注册 `/pet` `/pet-stop` `/pet-say` `/pet-status`（本地薄客户端也注册同名 + `/pet-auto`）；多一条 `session_start → ensureHost()` 走 `state.json` 单一来源；终端刷 `[pi-dsh-pet] /feed 连接断开，2s 后重连`，headless 跑不完（§7.13 的 exit 124 噪音一半来自它） |
+> | `{"source": "git:...", "extensions": []}` | **不加载** ✅ | 干净：`pi list` 该行显示 `git:github.com/BeYourDreams/pi-dsh-pet (filtered)`，终端只剩本地客户端的 `[pi-pet-autostart]` |
 >
-> 验证法（改完 `/reload` 后跑）：`timeout 70 pi --no-session -p "reply with: ok"` → 输出里应**不出现** `[pi-dsh-pet]` 前缀的行；`pi list` 应出现 `(filtered)` 且条目数不变（29）。上游源码留着做参考（`~/.pi/agent/git/github.com/qq458249269/pi-dsh-pet/pi/extensions/index.ts`），本机跑的是本地薄客户端。
+> 验证法（改完 `/reload` 后跑）：`timeout 70 pi --no-session -p "reply with: ok"` → 输出里应**不出现** `[pi-dsh-pet]` 前缀的行；`pi list` 应出现 `(filtered)` 且条目数不变（29）。上游源码留着做参考（`~/.pi/agent/git/github.com/BeYourDreams/pi-dsh-pet/pi/extensions/index.ts`），本机跑的是本地薄客户端。
 
 **首次开窗要下 Electron ≈100MB**（上游在 Windows 自动设 `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`）；包里 91 个透明 WebM，`assets/thumb` 解包 48MB。
 
-这一轮重构定下的几条回归约束（历史探针随 `.sc-test/` 一起删除，改本扩展时按这几条自查）：**先打再探**（启动时零能力探测，命令失败才两个只读 GET）、**只有 `home/port` 也能复用宿主**（两宿主互锁的入场券）、**心跳陈旧不再单独判死**（`/health` + pid 才权威，陈旧且探不通才重拉）、**退出码翻译**（2 参数错 / 3 缺依赖 → `cd <pkg> && npm install` / 4 端口）、**一次 `/feed` 连接**（并发重连不许叠连接，见 §7.5）。回退：`pi remove git:github.com/qq458249269/pi-dsh-pet` + 删 `extensions/pi-pet-autostart.ts` 与 `pi-dsh-pet.json` 再 `/reload`。
+这一轮重构定下的几条回归约束（历史探针随 `.sc-test/` 一起删除，改本扩展时按这几条自查）：**先打再探**（启动时零能力探测，命令失败才两个只读 GET）、**只有 `home/port` 也能复用宿主**（两宿主互锁的入场券）、**心跳陈旧不再单独判死**（`/health` + pid 才权威，陈旧且探不通才重拉）、**退出码翻译**（2 参数错 / 3 缺依赖 → `cd <pkg> && npm install` / 4 端口）、**一次 `/feed` 连接**（并发重连不许叠连接，见 §7.5）。回退：`pi remove git:github.com/BeYourDreams/pi-dsh-pet` + 删 `extensions/pi-pet-autostart.ts` 与 `pi-dsh-pet.json` 再 `/reload`。
 
 
 
@@ -921,7 +921,7 @@ Tool "edit" conflicts with ".../pi-edit-guard/dist/index.js"
 1. **内建工具执行不了却说「执行定义加载失败」**：pi 内建工具由内部工厂生成，`sourceInfo` 是合成标记（`agent-session.js:2502` `createSyntheticSourceInfo('<sdk:ls>', { source: "sdk" })`），jiti 没法 import。新增纯函数 `lazy-tools/core.ts` 的 `nonLoadableSourceReason()`，**先判后 import**，直接给「内建工具 omnify 执行不了，请用 bash / powershell」的可执行原因。
 2. **非指名模式下静默执行错工具（假成功）**：旧代码候选失败后无条件 `continue`；schema 宽松的 `mcp`（`Record<string, unknown>`）会照单全收，返回 `MCP: 0/0 servers, 0 tools` 冒充成功。改为：**候选一旦通过参数校验并开始执行，它就是最佳匹配，失败即最终失败**（`break`）；校验不符时仍按原逻辑（非指名继续试下一个，指名立即返回要求）。
    - **BREAKING**：不再有「首个候选失败后自动换一个工具」。
-   - 回归：`npm test` 76 passed（新增 4 条），`tsc --noEmit` 干净；改动同步到已装副本 `~/.pi/agent/git/github.com/qq458249269/pi-lazy-tools/`，`check-ext-errors` 的 `extension_error` 0。
+   - 回归：`npm test` 76 passed（新增 4 条），`tsc --noEmit` 干净；改动同步到已装副本 `~/.pi/agent/git/github.com/BeYourDreams/pi-lazy-tools/`，`check-ext-errors` 的 `extension_error` 0。
 
 ### 7.4 `pi-web-access`：卸过一次又装回来了（2026-09-30 卸 → 2026-10-06 复装）
 
@@ -1075,7 +1075,7 @@ property should be the same value as the target's property
 
 | # | 发现 | 根因 | 修法 | 验证 |
 |---|---|---|---|---|
-| 1 | **上游 `pi-dsh-pet` 扩展一直在加载**，与本地薄客户端重复注册 `/pet` `/pet-stop` `/pet-say` `/pet-status`（铁律 1 的事故源） | `extensions: []` 只筛 **npm 包内的子扩展**，对 git 仓库顶层 `pi/extensions/index.ts` 无效；以前一直以为「写了 extensions:[] 就算屏蔽」 | `packages` 里改成 object form：`{"source": "git:github.com/qq458249269/pi-dsh-pet", "extensions": []}`（§3.6） | `pi list` 该行显示 `(filtered)`；headless `pi --no-session -p "reply with: ok"` 里**再没有** `[pi-dsh-pet] /feed 连接断开，2s 后重连`，只剩本地客户端的 notify OSC 777 + `ok`；条目数仍 28 |
+| 1 | **上游 `pi-dsh-pet` 扩展一直在加载**，与本地薄客户端重复注册 `/pet` `/pet-stop` `/pet-say` `/pet-status`（铁律 1 的事故源） | `extensions: []` 只筛 **npm 包内的子扩展**，对 git 仓库顶层 `pi/extensions/index.ts` 无效；以前一直以为「写了 extensions:[] 就算屏蔽」 | `packages` 里改成 object form：`{"source": "git:github.com/BeYourDreams/pi-dsh-pet", "extensions": []}`（§3.6） | `pi list` 该行显示 `(filtered)`；headless `pi --no-session -p "reply with: ok"` 里**再没有** `[pi-dsh-pet] /feed 连接断开，2s 后重连`，只剩本地客户端的 notify OSC 777 + `ok`；条目数仍 28 |
 | 2 | `cache-compact.json` 是 debug 配置，会 dump 全量 payload（1.1MB） | 当初为取证开后忘关 | 改生产白名单 `{"models": ["1/1"]}`，删 `cache-compact-debug.jsonl`（§3.3） | 文件 23B，`debug` 键没了 |
 | 3 | 一批死数据/死配置 | 旧架构 + 已卸包的遗留 | 列在 §7.2 表格，一律删 | `config/` 空、`state/` 只剩 `pi-pet-autostart.json` |
 | 4 | **better-sqlite3 binding 丢了**（pi-memory 的 vec 索引用不了，报 `Could not locate the bindings file. Tried:`） | `npm uninstall` 触发整棵树重解析：`allowScripts` 里钉的 `better-sqlite3@13.0.3` 与树内实际的 `12.11.1`（pi-memory 的 `^12.10.0`）对不上 → npm 当「未覆盖」→ `node-gyp rebuild` 被挡 | `npm install-scripts approve better-sqlite3`（**不带版本号**）+ `npm rebuild better-sqlite3`（§3.1） | `node -e "require('better-sqlite3')(':memory:')"` OK；`npm install-scripts ls` 只剩 pi-memory 的 postinstall（有意不批） |
@@ -1394,7 +1394,7 @@ Other errors:
 
 **验证**：ajv + `D:\agent\pi\theme\theme-schema.json`（required / 色值格式一起校）：未补两份各 4 条错 → 补后两份 `VALID`；`node fix-pi-one-ui-theme.mjs --check` exit 0。
 
-**2026-10-27 上游源码层已修（本机改吃本地源码）**：`D:\AI\pi-one-ui`（`git:github.com/qq458249269/pi-one-ui`，与 npm 0.9.2 同源）里把那两个主题的 `cwd` / `editorModel` / `editorBorder` 直接删了，并补了回归用例 `tests/themes/builtin-themes-schema.test.ts`：拿 `@earendil-works/pi-coding-agent` 自带的 `dist/modes/interactive/theme/theme-schema.json` 校顶层键与 `colors`/`export` 的额外键（修前必红、修后绿）。文档一并改口：这三个键**只能写在 `~/.pi/agent/pi-one-ui.json`**，写进任何主题文件（包括 `~/.pi/agent/themes/`）都会把整份主题判非法。本机安装随之改成 `pi install ./`（见 §2.1 注），`settings.json` 里不再有 `npm:pi-one-ui`，所以补丁脚本现在直接 `[skip]`（npm 副本已不存在，脚本对“目录不在”改为 exit 0）。
+**2026-10-27 上游源码层已修（本机改吃本地源码）**：`D:\AI\pi-one-ui`（`git:github.com/BeYourDreams/pi-one-ui`，与 npm 0.9.2 同源）里把那两个主题的 `cwd` / `editorModel` / `editorBorder` 直接删了，并补了回归用例 `tests/themes/builtin-themes-schema.test.ts`：拿 `@earendil-works/pi-coding-agent` 自带的 `dist/modes/interactive/theme/theme-schema.json` 校顶层键与 `colors`/`export` 的额外键（修前必红、修后绿）。文档一并改口：这三个键**只能写在 `~/.pi/agent/pi-one-ui.json`**，写进任何主题文件（包括 `~/.pi/agent/themes/`）都会把整份主题判非法。本机安装随之改成 `pi install ./`（见 §2.1 注），`settings.json` 里不再有 `npm:pi-one-ui`，所以补丁脚本现在直接 `[skip]`（npm 副本已不存在，脚本对“目录不在”改为 exit 0）。
 
 **别走的两条路**：
 - ❌ 抹掉整个 `pi-one-ui` 主题声明（`package.json` 的 `pi.themes`）：能止错，但连官方那两个皮肤都没了。
@@ -1457,10 +1457,10 @@ Other errors:
 | 开机 / `/reload` 弹 `[Theme conflicts] Invalid theme "…pi-one-ui\themes\cc-dark.json"`（`/colors/cwd: schema is false` 那四条），`/theme` 里找不到 cc-dark/cc-light | pi ≥1.0 主题 schema 转严格（`colors.additionalProperties=false`），而 pi-one-ui 0.9.1 把自家 `cwd`/`editorModel`/`editorBorder` 写进内置主题 → 整份主题被判非法。详见 §7.26 | `node fix-pi-one-ui-theme.mjs`（幂等，删那 3 个键）后 `/reload`；`pi update npm:pi-one-ui` 会冲掉，复发就重跑 |
 | `omnify` 搜不到 `web_search` / 每轮前缀突然被掀 | `web-search.json` 缺 `toolActivation: "eager"`，退回了 `web_enable` 加载器 | 写上该键 `/reload`（§3.7）；掀缓存的现场见 §7.4 表 |
 | 跑完没通知 | 终端不支持（Terminal.app / Alacritty） | `pi-notify` 只覆盖 OSC 777/9/99 与 Windows Terminal；换终端，或改用 §1.2 桌宠看状态 |
-| `/pet` 提示命令不存在 | 只 `npm i -g` 装过，pi 不扫全局 `node_modules` | `pi install git:github.com/qq458249269/pi-dsh-pet` → `/reload`（见 §3.6） |
+| `/pet` 提示命令不存在 | 只 `npm i -g` 装过，pi 不扫全局 `node_modules` | `pi install git:github.com/BeYourDreams/pi-dsh-pet` → `/reload`（见 §3.6） |
 | 宠物窗口不弹 | 首次要下 Electron ≈100MB；或自动启动被关了 | 看启动提示；`/pet-auto status` 看当前开关；`/pet small` 换小号试；关掉了就写回 `{"autostart": true}` |
 | pi 整个进程崩，只留 `TypeError: Proxy handler's 'get' result … should be the same value as the target's property`（frame 指向 `proper-lockfile/lib/mtime-precision.js:6:29`） | proper-lockfile 把 mtime 精度缓存挂到 fs 对象上，而 jiti interop 把它包成了 Proxy；同进程第二次加锁即触发 JSC 不变量（多由 subagent 跑着跑着踩到） | 跑 `node fix-proper-lockfile-proxy.mjs`（幂等）；pi 升本体后若复发，重跑即可。根因与复现见 §7.14 |
-| `pi list` 里某行带 `(filtered)` | 该包在 `packages` 里写成 object form 且注明了要屏蔽的部分 | **预期**（本机只有 `git:github.com/qq458249269/pi-dsh-pet (filtered)`，见 §3.6） |
+| `pi list` 里某行带 `(filtered)` | 该包在 `packages` 里写成 object form 且注明了要屏蔽的部分 | **预期**（本机只有 `git:github.com/BeYourDreams/pi-dsh-pet (filtered)`，见 §3.6） |
 | subagent 调不起来 / 报 `Provide one subagent mode: agent+task (single)…` | **不是插件坏了**，是 `agentfile.ts` 的三个发现目录（`.agents/agents`、`.claude/agents`、`.pi/agents`）一个都不存在 → 没有 agent 可填。详见 §7.16 | `node fix-subagent-check.mjs`（幂等，缺就补一个最小 `default.md`） |
 | subagent 报 `2 model(s) available …` 后卡住 | `~/.pi/subagent.json` 的 `modelPolicy` 没锁 `default.model` | 写 `{"modelPolicy":{"default":{"model":"<provider>/<id>"}}}`（本机 `1/1`） |
 | `pi --no-session -p ...` 不退出（shell 报 exit 124） | 桌宠的 `/feed` 长连接或宿主进程挂着父会话；headless 永远不会自己走完 | 用 `timeout 70 pi ...` 包一层（§7.13 已记录）；屏蔽上游扩展后刷屏的重连日志也会消失（§7.15） |

@@ -27,10 +27,10 @@ const fromEnv = process.env.PI_LAZY_TOOLS_REPO;
 		if (fs.existsSync(p)) return p;
 		console.warn(`[fix-lazy-tools-notes] PI_LAZY_TOOLS_REPO=${fromEnv} 无 lazy-tools.ts，改用自动定位`);
 	}
-	for (const dir of ["D:\\AI\\pi-lazy-tools", path.join(os.homedir(), ".pi", "agent", "git", "github.com", "qq458249269", "pi-lazy-tools")]) {
+	for (const dir of ["D:\\AI\\pi-lazy-tools", path.join(os.homedir(), ".pi", "agent", "git", "github.com", "BeYourDreams", "pi-lazy-tools")]) {
 		if (fs.existsSync(path.join(dir, "lazy-tools.ts"))) return path.join(dir, "lazy-tools.ts");
 	}
-	return path.join(os.homedir(), ".pi", "agent", "git", "github.com", "qq458249269", "pi-lazy-tools", "lazy-tools.ts");
+	return path.join(os.homedir(), ".pi", "agent", "git", "github.com", "BeYourDreams", "pi-lazy-tools", "lazy-tools.ts");
 }
 
 const FORK = resolveFork();
