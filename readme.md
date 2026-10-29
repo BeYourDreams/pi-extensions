@@ -101,10 +101,10 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 |---|---|---|
 | `cangjie-skill`（仓颉） | `git clone github.com/kangarooking/cangjie-skill` | 把书 / 长视频 / 播客 / 课程蒸馏成可执行 skills |
 | `goutoujunshi`（狗头军师） | `git clone github.com/shengjidaguai-china/goutoujunshi` | 恋爱军师与情绪支持 |
-| `drama-skills`（上游 8 条 + 本地 `short-drama-pro`，目录名 `short-drama*`） | **唯一更新源 = 本仓库 `skills/`**：`node sync-drama-skills.mjs install` 精确镜像到 `~/.pi/agent/skills/`（逐文件复制 + 删除全局多余 + 自动清掉退役的三件），`check` 体检漂移。**不再跑上游安装器**（`npx skills add …` 会整目录覆盖本地补丁、并装回已删三件）；上游只作参考快照，版本与人工吸收流程见 `skills/UPSTREAM.md`。需 Python 3.9+（本机 3.12 ✓）；剪辑成片另需 ffmpeg（本机未装，只影响 `$short-drama-edit`） | AI 短剧/漫剧全产线：原著分析 → 开发方案 → 分集剧本 → 视觉设定 → 图片提示词 → **分镜（含冻结关键帧/连续性核对）** → **视频提示词**（内置 Seedance 2.0/2.5、MiniMax H3、Wan 3.0 方言）→ 确认后生产（gpt-image-2 / Seedance / MiniMax 视频·语音·配乐 adapter）→ 剪辑 → 审查；剧本/分镜/视频提示词三阶段由 `short-drama-pro` 负责（内置动作物理补丁 + 单镜 ≤12 秒上限）。MIT |
+| `drama-skills`（上游 8 条 + 本地 `short-drama-pro`，目录名 `short-drama*`） | **唯一更新源 = 本仓库 `skills/`**：`node sync-drama-skills.mjs install` 精确镜像到 `~/.pi/agent/skills/`（逐文件复制 + 删除全局多余 + 自动清掉退役的三件），`check` 体检漂移。**不再跑上游安装器**（`npx skills add …` 会整目录覆盖本地补丁、并装回已删三件）；上游只作参考快照，版本与人工吸收流程见 `skills/UPSTREAM.md`。需 Python 3.9+（本机 3.12 ✓）；剪辑成片另需 ffmpeg（本机未装，只影响 `$short-drama-edit`） | AI 短剧/漫剧全产线：原著分析 → 开发方案 → 分集剧本 → 视觉设定 → 图片提示词 → **分镜（含冻结关键帧/连续性核对）** → **视频提示词**（内置 Seedance 2.0/2.5、MiniMax H3、Wan 3.0 方言）→ 确认后生产（gpt-image-2 / Seedance / MiniMax 视频·语音·配乐 adapter）→ 剪辑 → 审查；剧本/分镜/视频提示词三阶段由 `short-drama-pro` 负责（内置动作物理补丁 + 单镜 ≤12 秒上限）。上游快照 `v0.9.2`（2026-10-29 吸收）。MIT |
 | `pimeter` | **不用装**：`npm:pi-meter` 自带（`~/.pi/agent/npm/node_modules/pi-meter/skills/pimeter/`） | 花费账单怎么看：本机走本地代理，内置价格表对不上，**数字仅供参考**（见 §1.1 pi-meter 行） |
 
-> skill 不再常驻注入系统提示词（见 §6.2），需要时用 `omnify` 检索。实测本机技能清单 = 上述 3 组自装（`cangjie-skill` / `goutoujunshi` / drama 线 9 条 = 上游 `short-drama-*` 8 条 + 本地 `short-drama-pro`，2026-10-18 起）+ `pi-meter` 自带 `pimeter`，共 12 条；新装 skill 要开新会话才加载（本会话内装的，omnify 当轮检索不到，2026-10-18 实验）；2026-10-12 后 **pi-caveman / pi-ponytail 自带的 8 条 skill 随包卸载消失**（`pi list`/agent 技能面板可见）。
+> skill 不再常驻注入系统提示词（见 §6.2），需要时用 `omnify` 检索。实测本机技能清单 = 上述 3 组自装（`cangjie-skill` / `goutoujunshi` / drama 线 9 条 = 源自上游的 `short-drama-*` 8 条 + 本地自建的 `short-drama-pro`（九条全部由本仓库 `skills/` 镜像安装，均含本地定制，2026-10-18 起））+ `pi-meter` 自带 `pimeter`，共 12 条；新装 skill 要开新会话才加载（本会话内装的，omnify 当轮检索不到，2026-10-18 实验）；2026-10-12 后 **pi-caveman / pi-ponytail 自带的 8 条 skill 随包卸载消失**（`pi list`/agent 技能面板可见）。
 
 ---
 
@@ -1417,7 +1417,9 @@ Other errors:
 - **策略：不再跑上游安装器。** 本仓库 `skills/` 是九个已装 drama 技能的**唯一更新源**：`node sync-drama-skills.mjs install` 精确镜像到全局（逐文件复制 + 删除全局多余 + 清掉退役三件），`check` 体检、`save` 抢救；上游降级为参考快照，版本与人工吸收流程见 `skills/UPSTREAM.md`；
 - 顺带修掉上游索引器的一处消息缺陷：裸写 `[转场]`（标签后无正文）原报「不支持生产标签 [转场]」，实际它受支持、只是缺正文；现在报 `production_tag_missing_body` 并给出写法（`selftest_write` 增至 15 项）。
 
-**验证**：`node sync-drama-skills.mjs check` 无漂移；`short-drama-pro` 四组自检全绿（pro_check 2 组 + 15 + 17 + 10），router `selftest` 17 项全绿；样例剧本过 `screenplay_index.py` 得 `review_status: clean`、过 `pro_check.py` 0 error。旧三件备份在 `~/.pi/agent/skills-backup/short-drama-{write,storyboard,video-prompts}.uninstalled-20261018-204641`，内容同时保留在 git 提交 `b611013` / `2089f9b`。
+**验证**：`node sync-drama-skills.mjs check` 无漂移；`short-drama-pro` 四组自检全绿（`pro_check --selftest` 3 组 + `selftest_write` 15 + `selftest_storyboard` 17 + `selftest_video` 10），router `selftest` 17 项全绿；样例剧本过 `pro_check.py` 得 0 error 0 warning。**注意**：过 `screenplay_index.py` 是 `review_status: review_required`（7 个 `source_issue`）——样例是带 `【地点】` 占位符的模板，报的是占位符与待认领对白，属预期，不是缺陷；判定 pro 是否健康看 `pro_check` 与四组自检。旧三件备份在 `~/.pi/agent/skills-backup/short-drama-{write,storyboard,video-prompts}.uninstalled-20261018-204641`，内容同时保留在 git 提交 `b611013` / `2089f9b`。
+
+**2026-10-29 上游吸收 v0.9.2**（`dafe80e` → `91fddb2`，16 commits / 83 files）：上游把八个旧 JSON 检查器移进 `tests/legacy/` 并删掉 assets / image-prompts / review 三个技能的整个 `scripts/`——本仓库**不跟这个删除**，因为这些检查器是 pro 三阶段检查器的活跃依赖、且含自加的 SHT-31 上限，跟着删会让检查能力塌掉；三个技能的 `scripts/` 与 `selftest.py` 全部保留。同期收进 `--partial` 局部核对、`profile_notes` 算术冲突提示、`format.episode_count` 与 `multi_shot_containers` 决策写入。吸收明细见 `skills/UPSTREAM.md`。
 
 ## 8. 体检与排障
 
