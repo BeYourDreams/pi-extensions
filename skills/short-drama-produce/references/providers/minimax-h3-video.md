@@ -77,7 +77,7 @@ This release generates audio in the same pass as the picture. Its direct prompt 
 structured: base/first-frame/first-last-frame tasks use `integrated_multimodal_description`,
 `overall_soundscape`, and `non_diegetic_music`; full-reference tasks use the six-section H3 reference
 form. Chinese dialogue remains exact inside `<d>[Chinese] ...</d>`. Use
-`$short-drama-pro` for the full H3 prompt dialect.
+`$short-drama-pro（视频阶段）` for the full H3 prompt dialect.
 
 State the intended sound layers in the prompt. For no non-diegetic music, the
 H3 dialect uses `non_diegetic_music: N/A`; small probes observed unwanted music

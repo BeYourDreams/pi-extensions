@@ -53,7 +53,7 @@ references but no bindings fails closed rather than guessing.
 
 Prompt wording for Seedance 2.0 is version-specific: normal reference uses “参考 @视频1”, while
 continuation says “向后延长 @视频1” and binds the actual tail as `@图片1`. Use
-`$short-drama-pro` for the version's prompt dialect.
+`$short-drama-pro（视频阶段）` for the version's prompt dialect.
 These are compiler capabilities; the current creator-first source selector cannot declare the
 continuation video, so that route remains unsubmitted in the bundled workflow. See the
 [source-interface boundary](../adapter-contract.md).

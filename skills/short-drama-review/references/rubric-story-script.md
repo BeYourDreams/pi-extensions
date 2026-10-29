@@ -238,7 +238,7 @@ nothing else:
 | `opposed_reversals_per_episode_min` | Reversals driven or suffered by a human opponent with an agenda; changes completed by a system, a number, or the environment alone do not count. |
 | `end_on_peak` | Whether the last beat sits on or just before the peak, with no afterglow, summary, or quiet coda after it. |
 | `reprise_previous_last_beat` | Whether the opening replays the previous episode's last beat. Not applicable to the first episode. |
-| `vo_share_max` | `[VO]` characters as a share of all dialogue characters under the write estimate's convention: whitespace and parenthetical directions removed, punctuation retained; `[OS]` belongs only in the denominator. `$short-drama-pro` reports the share with the project file when the accepted ceiling is valid and dialogue is present. |
+| `vo_share_max` | `[VO]` characters as a share of all dialogue characters under the write estimate's convention: whitespace and parenthetical directions removed, punctuation retained; `[OS]` belongs only in the denominator. `$short-drama-pro（剧本阶段）` reports the share with the project file when the accepted ceiling is valid and dialogue is present. |
 | `first_major_payoff_by_episode` | Series review only: the episode in which the first major payoff lands. |
 
 Seconds come from the project's declared pacing, or from a real-time read-through

@@ -94,7 +94,7 @@ Reviewer 必须说明：重复是否是 creator choice、第二次新增了什�
 - 证据：两场都由主管主动说出隐藏事实，主角没有选择。
 - 影响：主角策略不参与揭示，连续两集的回报来自对手自曝。
 - 修订结果：保留两项事实，但让至少一项揭示由主角有代价的策略触发。
-- Owner：short-drama-pro
+- Owner：short-drama-pro（剧本阶段）
 - 规则：SCR-04 · craft_default
 ~~~
 

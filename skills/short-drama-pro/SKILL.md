@@ -6,7 +6,7 @@ license: MIT
 
 # 短剧创作 Pro（复刻 + 补丁）
 
-复刻自 `$short-drama-write` / `$short-drama-storyboard` / `$short-drama-video-prompts` 三个创作阶段，
+复刻自 `$short-drama-pro（剧本阶段）` / `$short-drama-pro（分镜阶段）` / `$short-drama-pro（视频阶段）` 三个创作阶段，
 把本项目的动作物理与镜长补丁内建为默认纪律，并搬入原三阶段的全部深度参考，
 使本技能不依赖上游任何文件。产物路径与标题语法与上游一致，
 资产、生产、剪辑、终审仍用 `$short-drama-assets|produce|edit|review`。

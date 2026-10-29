@@ -176,7 +176,7 @@ python3 {技能目录}/scripts/novel_index.py coverage \
 泛指的外貌称谓或职务不触发合并。
 
 **人物归并是候选，不是资产**。 这里的人物条目带 `unresolved` 与来源引用，
-交给 `$short-drama-develop` 定改编决定、`$short-drama-pro` 写进剧本之后，
+交给 `$short-drama-develop` 定改编决定、`$short-drama-pro（剧本阶段）` 写进剧本之后，
 才由 `$short-drama-assets` 从已接受剧本建立真正的资产身份。绕过这条链直接建资产，
 等于让原著的人物表冒充剧本的出现证据。
 

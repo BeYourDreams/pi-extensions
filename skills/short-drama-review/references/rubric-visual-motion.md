@@ -39,13 +39,7 @@
   is also a finding.
 - Are Location/View, axis, screen direction, eyelines, entrances, positions,
   hands, and props coherent?
-- For a shot that crosses a threshold — door, gate, window, curtain, vehicle, lift — is the
-  camera's side of it written (inside/outside, and which way it looks), together with the
-  subject's chest/back orientation, the interface's opening direction, and the travel
-  direction, so the four imply each other? An unstated side is not neutral: the executor's
-  default is the subject facing the lens, so a shot written as a back-view entrance comes
-  back as a front-view one. Owner: `$short-drama-pro` (`references/storyboard/shot-craft.md`).
-
+- Are exact asset variants bound?
 - Does the shot expose every fact it must carry while protecting
   facts the source withholds until a later action or cut?
 - Do crop, occlusion, focus, back view, and offscreen space serve that information

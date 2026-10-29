@@ -7,8 +7,8 @@ license: MIT
 # 确认后生产
 
 本技能把已经写好的生产规格送到运行环境配置的 adapter。图片提示词归
-`$short-drama-image-prompts`，视频提示词归 `$short-drama-pro`，台词归
-`$short-drama-pro`，声音身份归 `$short-drama-assets`。
+`$short-drama-image-prompts`，视频提示词归 `$short-drama-pro（视频阶段）`，台词归
+`$short-drama-pro（剧本阶段）`，声音身份归 `$short-drama-assets`。
 
 ## Quick Start
 
@@ -102,6 +102,8 @@ python3 <本技能目录>/scripts/production_tool.py audit <project>
   `reference_video + reference_image`。当前 creator-first 来源选择器只解析图片与角色参考音频，
   尚不能声明续接视频，因此这条内置生产路径不能提交续接段。报告接口缺口并保留已选路线，
   不省略来源选择器、不拿计划尾帧冒充真实输入，也不擅自改为独立文生视频。
+  `视频提示词.md` 里的 `GROUP-*` 多镜分组正文同样还不能作为来源：选择器只认 `MOTION-*`。创作者要提交分组时，
+  把分组正文复制到自己的生成工具；不要拿某个成员的 `MOTION-*` 代替整组提交。
 - **tts**：从 `剧本.md` 读取原句与表演要求，声音参考由用户或现有媒体明确提供。不得在生产 job
   中改词，也不为 TTS 新建第六份创作文档。表演要求来自这句台词的括注和上下文。外部执行端若把
   prompt 解释为含表演指令的输入，可在台词前写一句语气说明（「憋屈地压低声音，咬着牙应一声：是。」）；
@@ -140,7 +142,7 @@ adapter 配置必须在项目外，包含 argv 命令、超时和可选的 `refe
   按普通创作者输入放在 `输入/`，不能据此声称本适配器会读取或克隆它。
 - [MiniMax H3 视频](references/providers/minimax-h3-video.md)：模型 ID、分辨率集合与时长区间必须
   由账号显式配置；提示词进 `content` 的 text 项，本地参考按显式 role 绑定并编码为 data URI。
-  该模型与画面同一次生成声音，写法影响见 `$short-drama-pro` 的目标模型能力档案。
+  该模型与画面同一次生成声音，写法影响见 `$short-drama-pro（视频阶段）` 的目标模型能力档案。
 
 这些 adapter 实现本文列出的请求契约；账号可用性需由部署方核实，生成质量需另行观察和审查。
 正式生产仍须经过本次预览后的明确确认。

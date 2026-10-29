@@ -146,8 +146,10 @@ KIND_CODES = {
 # digits would have made EP1000 a legal directory but an illegal heading.
 _EPISODE = r"EP(?:[0-9]{3}|[1-9][0-9]{3,})"
 EPISODE_HEADING_RE = re.compile(rf"^# (?P<episode>{_EPISODE})(?: .+)?$")
+# A project that scopes ids by season writes `S01-EP001-SC001`; the episode is
+# still the `EP` segment, and the cross-document checker accepts the same form.
 SCENE_HEADING_RE = re.compile(
-    rf"^## (?P<scene>{_EPISODE}-SC[0-9]{{3}}) "
+    rf"^## (?P<scene>(?:[A-Za-z0-9]+-)*?(?P<episode>{_EPISODE})-SC[0-9]{{3}}) "
     r"(?P<space>内外|内|外) · (?P<location>\S(?:.*\S)?) · "
     r"(?P<time>\S(?:.*\S)?)$"
 )
@@ -160,10 +162,6 @@ ASCII_DIALOGUE_RE = re.compile(
 )
 TAG_RE = re.compile(r"^\[(?P<tag>VO|OS|SFX|画面文字|连续性|转场)\]\s*(?P<body>\S[\s\S]*)$")
 ANY_TAG_RE = re.compile(r"^\[(?P<tag>[^\]\r\n]+)\]")
-# A supported tag written alone (no body) reaches ANY_TAG_RE first and used to be
-# reported as an unsupported tag, which sends the owner looking for a tag that
-# this suite in fact supports. Name the real defect instead.
-BARE_TAG_RE = re.compile(r"^\[(?P<tag>VO|OS|SFX|画面文字|连续性|转场)\]$")
 # Production dialects write tags with full-width brackets (【特写】/【闪回】).
 # Without this the paragraph matches nothing and is emitted as a plain action
 # block with no issue, so the owner never learns the source needs
@@ -178,7 +176,19 @@ FULLWIDTH_TAG_RE = re.compile(
     r"(?!\s*(?:（[^（）\r\n]*）|\([^()\r\n]*\))?\s*[：:])"
 )
 MALFORMED_TAG_RE = re.compile(r"^\[(?:VO|OS|SFX|画面文字|连续性|转场)(?:\s|：|:)")
-VOICE_TAG_BODY_RE = re.compile(r"^(?P<speaker>[^\s：（）:\[\]#]{1,40})：(?P<text>\S[\s\S]*)$")
+# A voiced tag carries the same optional performance cue as plain dialogue
+# (``[OS] 角色（提示）：台词``); the duration estimate already times it that way.
+VOICE_TAG_BODY_RE = re.compile(
+    r"^(?P<speaker>[^\s：（）:\[\]#]{1,40})"
+    r"(?:（(?P<cue>[^（）\r\n]+)）)?：(?P<text>\S[\s\S]*)$"
+)
+
+
+# A supported tag written alone (no body) reaches ANY_TAG_RE first and used to be
+# reported as an unsupported tag, which sends the owner looking for a tag that
+# this suite in fact supports. Name the real defect instead.
+BARE_TAG_RE = re.compile(r"^\[(?P<tag>VO|OS|SFX|画面文字|连续性|转场)]$")
+
 BLOCK_ID_RE = re.compile(r"^BLK-(?P<scope>.+)-(?P<code>[HADPC])(?P<number>\d+)$")
 
 
@@ -333,7 +343,7 @@ def _parse_screenplay(
                 )
             else:
                 scene_id = match.group("scene")
-                heading_episode = scene_id.split("-", 1)[0]
+                heading_episode = match.group("episode")
                 if episode_id and episode_id != heading_episode:
                     issues.append(
                         _issue(span, "episode_scene_mismatch", "场景 ID 与当前集标题的集 ID 不一致。")
@@ -422,23 +432,26 @@ def _parse_screenplay(
                 voice_match = VOICE_TAG_BODY_RE.fullmatch(body)
                 if not voice_match:
                     issues.append(
-                        _issue(span, "invalid_voice_tag_syntax", f"[{tag}] 必须明确说话者并使用全角冒号。")
+                        _issue(span, "invalid_voice_tag_syntax", f"[{tag}] 写成「[{tag}] 角色（可选提示）：台词」：要有说话者、全角冒号，提示用全角括号。")
                     )
                     index = end_index + 1
                     continue
                 fields["speaker"] = voice_match.group("speaker")
+                if voice_match.group("cue"):
+                    fields["performance_cue"] = voice_match.group("cue")
             append_block("production_tag", span, **fields)
             index = end_index + 1
             continue
 
+        # Check for bare production tags (no body) before unsupported tag
         bare_tag = BARE_TAG_RE.match(paragraph)
         if bare_tag:
             issues.append(
                 _issue(
                     span,
                     "production_tag_missing_body",
-                    f"[{bare_tag.group('tag')}] 是本套件支持的标签，但需要正文；"
-                    "转场写成 [转场] 加去向说明，例如 [转场] 直接切到门外走廊。",
+                    f"[{bare_tag.group('tag')}] is a supported tag but needs a body; "
+                    "e.g. [转场] must include a destination.",
                 )
             )
             index = end_index + 1
