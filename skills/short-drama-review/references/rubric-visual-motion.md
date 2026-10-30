@@ -80,6 +80,7 @@ from screenplay word counts instead of the scene's sound timeline (`SHT-28`).
 
 - Does it start from the accepted frame/boundary?
 - Are subject actions ordered and feasible within the accepted duration while preserving the intended performance?
+- Does the shot's line fit at normal speaking pace — about **2 pronounceable characters per second** for Chinese plus its pauses (project-declared `format.pacing.spoken_characters_per_second` wins)? A budget that only closes at a rushed rate (H3 ≈4.1, Wan 3.0 ≈4.6) is a finding: name the shot, the character count and the seconds it needs, and ask for a split or a rewrite rather than accepting faster delivery. Pauses — the wait before the first word, in-line breaths, the gap between lines, the landing after the last — must be allocated seconds; a timeline that omits them deleted the performance to make the arithmetic close.
 - Does performance change express the story move rather than stack synonyms?
 - In multi-character motion: do the actors who actually change have distinct,
   readable triggers, choices, leaks, or landings — as this shot needs, not one

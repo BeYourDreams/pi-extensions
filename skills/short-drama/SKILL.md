@@ -97,6 +97,14 @@ python3 {技能目录}/scripts/project_tool.py set-authority <project> \
 语速 `format.pacing` 和集数 `format.episode_count` 走同样的决策写入：`--field /format/pacing`，
 `accepted_value` 写 `{"spoken_characters_per_second": <每秒可发声字数>, "seconds_per_action_paragraph": <每段动作秒数>}`，
 两项都要给；画面文字多、要按读字时间计时的项目，可再加 `"on_screen_text_characters_per_second"`。
+句内停顿要进秒数时再加 `"pause_seconds_per_punctuation_mark"`（每个标点计多少秒），
+`duration_estimate.py` 会按 `(dialogue_characters - voiced_characters) × 该值` 累加并单列
+`pause_seconds`；换气、情绪顿与句间空档不进脚本，仍按停顿表在分镜与视频提示词里手算。
+项目未声明语速时，提出起点 **2.0 个可发声字/秒**（中文正常语速；停顿另计，不折进字/秒里）——
+各目标模型方言里更快的实测速率（H3 ≈4.1、Wan 3.0 ≈4.6）是赶词与静默截断的风险线，不作预算。
+按 `$short-drama-pro` 的 [语速基线](../short-drama-pro/references/pacing.md)（PAC-01 / PAC-02）向创作者说明后写入。
+`spoken_characters_per_second` 与 `seconds_per_action_paragraph` 两项齐备才算声明；
+只有其中一项时写作阶段仍算不出秒数。
 `--field /format/episode_count`，`accepted_value` 写正整数。没有语速时写作阶段算不出秒数。
 `status` 的 `profile_notes` 会列出各自有效、合在一起却做不到的设定，例如平均镜长低于目标模型原生最短时长，
 或设了单集目标时长却没有语速；看到就交创作者决定，不要等到分镜才发现。创作者选择用多镜容器解决镜长冲突时，

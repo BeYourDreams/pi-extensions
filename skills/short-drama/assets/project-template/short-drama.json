@@ -10,7 +10,8 @@
     "target_seconds_per_episode": null,
     "pacing": {
       "spoken_characters_per_second": null,
-      "seconds_per_action_paragraph": null
+      "seconds_per_action_paragraph": null,
+      "pause_seconds_per_punctuation_mark": null
     }
   },
   "creator_authority": {

@@ -242,7 +242,11 @@ nothing else:
 | `first_major_payoff_by_episode` | Series review only: the episode in which the first major payoff lands. |
 
 Seconds come from the project's declared pacing, or from a real-time read-through
-labelled as a text estimate; state which. A deviation is a `craft_default` finding that
+labelled as a text estimate; state which. Without declared rates, the baseline for a
+read-through is normal speaking pace — Chinese at about **2 pronounceable characters per
+second**, with pauses budgeted separately (`PAC-01` / `PAC-02`); a read-through at a
+model's rushed rate (H3 ≈4.1, Wan 3.0 ≈4.6) understates every timing field below and must
+not be used. A deviation is a `craft_default` finding that
 cites the field, the accepted value, the measured value, and the location. Severity
 follows audience impact and is never `blocker`; the creator may keep the episode with a
 stated reason. Storyboard fields (`target_avg_shot_seconds`, `close_shot_share_min`)

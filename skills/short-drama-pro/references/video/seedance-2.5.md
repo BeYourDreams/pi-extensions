@@ -119,8 +119,10 @@
 Seedance 2.5 手动指定的整数时长是 4–30 秒。项目采用一镜一生成时每镜均落在此区间；采用 30 秒多镜容器时，
 先按交付形态确认容器，不把若干独立镜头擅自合并。短动作到达终点后 hold，超长动作按状态闭合点拆分。
 
-对白、VO、OS 同样按 [performance-action-timing.md](performance-action-timing.md) 先预算再排时。
-30 秒扩大了可用容量，不代表固定短镜中的长对白会自动恢复自然语速。
+对白、VO、OS 同样按 [performance-action-timing.md](performance-action-timing.md) 先预算再排时；
+预算用 [语速基线](../pacing.md) 的 **2 个可发声字/秒 + 停顿**（项目已声明
+`format.pacing.spoken_characters_per_second` 时用声明值）。30 秒扩大了可用容量，不代表固定短镜中的
+长对白会自动恢复自然语速——容量不够时按语义拆镜或回上游减词，不让模型把话赶完。
 
 - 普通生成/参考任务支持 `duration: -1`，由模型在 4–30 秒内选择，2.5 默认也采用该值。固定时长交付
   仍显式传已接受的正整数；采用自动时长时，不把规划镜长写成已经保证的输出长度。

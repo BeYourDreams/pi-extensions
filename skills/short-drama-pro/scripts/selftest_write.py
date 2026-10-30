@@ -84,6 +84,35 @@ def test_duration_uses_the_projects_own_rates() -> None:
     require(report["delta_seconds"] == -6.0, "delta is reported against the target")
 
 
+def test_a_declared_pause_rate_adds_pause_seconds() -> None:
+    """PAC-02: pauses are budgeted separately, never folded into characters/second."""
+    project = {
+        "format": {
+            "pacing": {
+                "spoken_characters_per_second": 3.0,
+                "seconds_per_action_paragraph": 2.0,
+                "pause_seconds_per_punctuation_mark": 0.3,
+            },
+        }
+    }
+    # One punctuation mark, so 6 / 3.0 + 1 * 0.3 == 2.3 rather than the 2.0
+    # a bare character count would give.
+    report = measure_text("甲：一二三四五六。\n", project)
+    require(report["seconds"] == 2.3, f"expected 2.3s, got {report['seconds']}")
+    require(report["pause_seconds"] == 0.3, "pause seconds are reported")
+
+
+def test_no_declared_rates_still_offers_the_suite_starting_point() -> None:
+    """No seconds without rates, but the 2.0 chars/sec baseline is offered."""
+    report = measure_text("甲：一二三四五六。\n")
+    require(report["seconds"] is None, "seconds must stay unknown without rates")
+    proposed = report["proposed_pacing_starting_point"]
+    require(
+        proposed["spoken_characters_per_second"] == 2.0,
+        "the suite's normal-speaking starting point is 2.0 characters/second",
+    )
+
+
 def test_production_tags_are_not_performed_time() -> None:
     report = measure_text("[画面文字] 账号后台：粉丝 2\n\n他把门关上。\n")
     require(report["counts"]["production_tag_lines"] == 1, "tag counted separately")
@@ -248,6 +277,8 @@ def main() -> int:
 
     test_duration_reports_counts_without_rates()
     test_duration_uses_the_projects_own_rates()
+    test_a_declared_pause_rate_adds_pause_seconds()
+    test_no_declared_rates_still_offers_the_suite_starting_point()
     test_production_tags_are_not_performed_time()
     test_voice_over_is_performed_time()
     test_one_action_paragraph_is_one_paragraph_however_many_lines()
@@ -255,7 +286,7 @@ def main() -> int:
     test_a_supported_tag_written_alone_names_the_real_defect()
     test_an_index_from_other_bytes_is_refused()
 
-    print("15 self-tests passed")
+    print("17 self-tests passed")
     return 0
 
 

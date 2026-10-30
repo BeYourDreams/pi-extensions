@@ -253,6 +253,13 @@ def declared_rates(project: dict[str, Any] | None) -> dict[str, Any]:
         and math.isfinite(reading)
         and reading > 0
     )
+    pause = pacing.get("pause_seconds_per_punctuation_mark")
+    pause_usable = (
+        isinstance(pause, (int, float))
+        and not isinstance(pause, bool)
+        and math.isfinite(pause)
+        and pause > 0
+    )
     return {
         "declared": bool(usable),
         "spoken_characters_per_second": per_second if usable else None,
@@ -260,6 +267,9 @@ def declared_rates(project: dict[str, Any] | None) -> dict[str, Any]:
         # Optional: a project that holds text on screen as its own beat can
         # declare how fast it is read. Without it the text stays untimed.
         "on_screen_text_characters_per_second": reading if reading_usable else None,
+        # Optional: seconds per punctuation mark (句内停顿). When declared and
+        # usable, added as pauses = (dialogue_characters - voiced_characters) * rate.
+        "pause_seconds_per_punctuation_mark": pause if pause_usable else None,
     }
 
 
@@ -347,6 +357,17 @@ def estimate(
         }
 
     if not rates["declared"]:
+        # No declared rates: do not guess seconds, but return a proposed starting
+        # point so the creator can see the suite's default baseline (2.0 chars/sec)
+        # and decide whether to accept it via `$short-drama --field /format/pacing`.
+        result["proposed_pacing_starting_point"] = {
+            "spoken_characters_per_second": 2.0,
+            "note": (
+                "suite default normal-speaking rate for Chinese; pauses are "
+                "budgeted separately (PAC-01/PAC-02). Accept it with "
+                "$short-drama --field /format/pacing"
+            ),
+        }
         result["note"] = (
             "the project declares no format.pacing rates, so seconds cannot be "
             "derived; the counts above are still exact"
@@ -361,6 +382,14 @@ def estimate(
         counts["voiced_characters"] / rates["spoken_characters_per_second"]
         + counts["action_paragraphs"] * rates["seconds_per_action_paragraph"]
     )
+    # Pause seconds from declared pause rate (per punctuation mark)
+    pause_rate = rates.get("pause_seconds_per_punctuation_mark")
+    if pause_rate is not None and counts.get("dialogue_characters") and counts.get("voiced_characters"):
+        punctuation_marks = counts["dialogue_characters"] - counts["voiced_characters"]
+        if punctuation_marks > 0:
+            pause_seconds = punctuation_marks * pause_rate
+            result["pause_seconds"] = round(pause_seconds, 1)
+            seconds += pause_seconds
     reading = rates["on_screen_text_characters_per_second"]
     if reading is not None and counts.get("on_screen_text_characters"):
         reading_seconds = counts["on_screen_text_characters"] / reading

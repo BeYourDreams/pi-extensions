@@ -40,4 +40,19 @@ The request is non-streaming with `output_format: hex`, `POST /t2a_v2`, and carr
 `surprised`, `neutral`. Anything outside that set is refused before submission; it may be an
 unsupported direction rather than a typo and needs an explicit mapping to an available value.
 
+## Speech rate
+
+`speed` is accepted in `0.5`–`2.0`. **Its default is not a natural-speech guarantee**: the value that
+yields normal pacing differs by voice and model, and `1.0` is only whatever that endpoint does with
+no explicit value. The target it is measured against is the project's own baseline — Chinese at about
+**2 pronounceable characters per second**, or `format.pacing.spoken_characters_per_second` when the
+project declared one (see `$short-drama-pro` 语速基线, PAC-01).
+
+Calibrate before a batch: synthesise one representative line for the chosen `voice_id`, measure its
+actual characters-per-second from the returned audio, and pick the `speed` that lands on the
+project's baseline. Reuse that value for every line of the same character, and re-measure after a
+voice or model change. Pauses are part of the performance the stage documents: confirm from the
+sample that in-line breaths and the gap between sentences survive, rather than assuming a parameter
+default preserves them.
+
 Protocol reference: [MiniMax Text to Speech](https://platform.minimax.io/docs/api-reference/speech-t2a-http).
