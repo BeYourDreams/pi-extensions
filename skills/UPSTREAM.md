@@ -29,7 +29,7 @@ node sync-drama-skills.mjs save      # 抢救：把全局侧的手改回收进�
 
 | 技能 | 定制 |
 | --- | --- |
-| `short-drama-pro` | **新增**。复刻并取代原 write / storyboard / video-prompts 三件：生成就绪五问、动作因果链与朝向绑定（SCR-23 / SHT-30 / VID-28）、单镜 ≤12 秒上限（SHT-31，含机械检查）、**正常语速 2 个可发声字/秒且停顿另计的台词预算（PAC-01 / PAC-02，`references/pacing.md`）**、全部深度参考、三阶段检查器与 `pro_check.py` |
+（PAC-01 / PAC-02，`references/pacing.md`）**、**按剧情逐句定语速档与三根发声杠杆的台词交付规格（PAC-03 / PAC-04 / PAC-05，`references/delivery-spec.md`）**、**每镜重述站位/朝向/衣着的跨镜人物一致规则（CON-08，`references/identity-continuity.md`）**、全部深度参考
 | `duration_estimate.py`（pro） | 本仓库定制：未声明语速时返回 `proposed_pacing_starting_point`（2.0 字/秒）；声明 `format.pacing.pause_seconds_per_punctuation_mark` 时按标点个数累加 `pause_seconds`（`selftest_write` 17 项） |
 | `short-drama`（router） | 路由表、`knowhow-index`、`creator-workflow` 改指 `$short-drama-pro` |
 | 其余七件 | 内部引用改指 `$short-drama-pro`（共 55 处） |

@@ -103,6 +103,10 @@ python3 {技能目录}/scripts/project_tool.py set-authority <project> \
 项目未声明语速时，提出起点 **2.0 个可发声字/秒**（中文正常语速；停顿另计，不折进字/秒里）——
 各目标模型方言里更快的实测速率（H3 ≈4.1、Wan 3.0 ≈4.6）是赶词与静默截断的风险线，不作预算。
 按 `$short-drama-pro` 的 [语速基线](../short-drama-pro/references/pacing.md)（PAC-01 / PAC-02）向创作者说明后写入。
+还要向创作者说明一句：**这一项是常速预算基线，不是全片统一的表演速率**。逐句语速、停顿、语气与
+情绪按剧情取值（沉缓 1.2–1.5 / 常速 2.0 / 急切 2.5–3.2 / 崩溃 3.2–4.0）并写成模型能响应的杠杆，
+见 [台词交付规格](../short-drama-pro/references/delivery-spec.md)（PAC-03/PAC-04/PAC-05）；
+`duration_estimate.py` 按声明值出整集粗估，单镜容量仍按本句档位精算。
 `spoken_characters_per_second` 与 `seconds_per_action_paragraph` 两项齐备才算声明；
 只有其中一项时写作阶段仍算不出秒数。
 `--field /format/episode_count`，`accepted_value` 写正整数。没有语速时写作阶段算不出秒数。

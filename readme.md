@@ -29,6 +29,18 @@
 > 2026-10-15 例行 `pi update --extensions`（版本仍不锁）：24 npm 里只动了两条 —— `@ssk_dev/rpiv-todo-lean` 2.12.1 → **2.13.9**、`@xynogen/pix-optimizer` 1.3.2 → **1.3.3**（工具归属未变：前者仍只注册 `todo`，后者仍零工具 + `/optimizer` 面板，`pix.json` 三档 ultra 保留）。两个 git 源 `git fetch` 只多了 tag、无新 commit。§8 体检全绿；`fix-browser-native-compat.mjs` 改判缺失的 `lib/tool-surface.js` 为 `[**2026-10-29 上游吸收 v0.9.2**（`dafe80e` → `91fddb2`，16 commits / 83 files）：上游把八个旧 JSON 检查器移进 `tests/legacy/` 并删掉 assets / image-prompts / review 三个技能的整个 `scripts/`——本仓库**不跟这个删除**，因为这些检查器是 pro 三阶段检查器的活跃依赖、且含自加的 SHT-31 上限，跟着删会让检查能力塌掉；三个技能的 `scripts/` 与 `selftest.py` 全部保留。同期收进 `--partial` 局部核对、`profile_notes` 算术冲突提示、`format.episode_count` 与 `multi_shot_containers` 决策写入。吸收明细见 `skills/UPSTREAM.md`。
 
 **2026-10-30 加语速规则 PAC-01 / PAC-02**（本机实测发现生成出来「说话太快」）：新增 `skills/short-drama-pro/references/pacing.md`，把**正常语速定为 2 个可发声字/秒，停顿另计**（开口 0.3–0.5s、句内每处 0.2–0.4s、句间 0.4–0.8s、收尾 0.5–1s）。要点是**把「模型实测速率」和「预算速率」分开**：方言里记的 H3 ≈4.1 / Wan 3.0 ≈4.6 字/秒是它在短镜里**赶词**出现的速率——按 4.1 排的镜，模型就照着赶出来，尾音与口型更容易丢，所以那两个数降级为「赶词与静默截断的风险线」，不再当预算。落点：pro 的 SKILL 补丁表 + 三个 `stage-*.md` + `storyboard/shot-craft.md` + `video/performance-action-timing.md` + 四个模型方言 + `production-prompt-grammar.md`；生产侧 `$short-drama-produce`（`tts` 语速按项目基线校准样句，不认 `speed: 1.0` 等于自然语速，MiniMax Speech 方言加了「Speech rate」节）；router 提出起点 `spoken_characters_per_second: 2.0` 并支持可选 `pause_seconds_per_punctuation_mark`；剪辑 `$short-drama-edit` 明确「赶上来的台词不靠 `atempo` 变速修」；审查 rubric 两条按正常语速判。`duration_estimate.py` 未声明语速时返回 `proposed_pacing_starting_point`，声明停顿率时累加 `pause_seconds`（`selftest_write` 15 → 17 项）。12 秒硬顶减去开口与收尾，纯发声窗口约 10 秒 ≈ 20 个可发声字，超出的按语义拆镜、语速不变。]`（0.9.6 已把它打进 `index.js`，见 §8 表）
+
+**2026-10-30 加台词交付规格 PAC-03 / PAC-04 / PAC-05 与人物一致规则 CON-08**（用户要求：语速、停顿、语气、情绪要按剧情逐句设置并被视频模型正确理解；人物站位朝向、衣着跨镜一致）。PAC-01/PAC-02 定了「一句话占多少秒」，本轮管**每句该怎么说**与**人不能漂**：
+
+- 新增 [references/delivery-spec.md](skills/short-drama-pro/references/delivery-spec.md)：**PAC-03** 逐句定语速档（沉缓 1.2–1.5 / 常速 2.0 / 急切 2.5–3.2 / 崩溃 3.2–4.0 可发声字/秒）——2.0 是常速预算值、不是全片统一速率，**改档就按该档重算秒数与镜长**，任何档位都不得落进赶词风险线（H3 ≈4.1 / Wan ≈4.6）以内；**PAC-04** 三根发声杠杆（速度档 / 停顿位 / 音色语气）+ 每句交付四件（谁在说 · 怎么说 · 说什么 · 什么时候说），核心认知是**情绪词不是杠杆，而是三根杠杆的组合结果**：只写「她愤怒地说」，模型自选一种愤怒，通常就是吼出来，而这场戏要的是压着的怒；**PAC-05** 删掉杠杆词后句子里还应剩一个秒数或位置，只剩「自然语速」就是未交付。附 10 种常见剧情状态的情绪→杠杆换算表（含可直接抄进正文的句式）与四方言落点表：杠杆写在逐字围栏**旁边**（前置为默认，后置同句也可），H3 在 `<d>` 外、Seedance 在花括号前那句、Wan 在「说道」前那句；`参考音频` / `音频N` 只锁音色，不携带表演。
+- 新增 [references/identity-continuity.md](skills/short-drama-pro/references/identity-continuity.md)：**CON-08** 的根因与模型的行为一致——它不看上一镜、也不读《视觉设定.md》，只看本条正文。四类会漂事实（站位相对锚点 / 胸背朝向 / 衣着主色与形制 / 两手与物件）**逐镜重述**：未变写一句「仍」（「藏青外套仍扣到顶上」），变了写变化 + 落点；按景别筛（手部特写不写全身衣物，`SHT-24` 口径）；图生不重复起始帧已携带的外观，但**只挂 `用途：地理` 时人物外观无人归属，衣着仍得写进正文**；换装/伤情要有可见原因、脱下衣物去哪、`[连续性]` 登记才算批准；多人镜每人一句独立描述，不用「两人」起句，裸写左/右一律指画面左右。与上游 CON-07（逐字锁面）分工明确：锁只盖跨集不变那几件，其余靠逐镜重述，锁面逐字义务高于重述的简洁。
+- 机械检查 `pro_check.py` 新增 7 个 warning 码（不新增 error，退出码不变）：`PAC04_DELIVERY_LEVERS_MISSING`（围栏两侧同一句内不足两根杠杆）、`PAC04_EMOTION_WORD_ONLY`、`PAC05_DELIVERY_NOT_CALIBRATED`（含「走。」这类短到不成逐字段的句子，需有说话动词；摄影机「平稳」不误触）、`CON08_LOOK_ANCHOR_MISSING` / `CON08_END_STANCE_MISSING` / `CON08_WARDROBE_LANDING_MISSING`（穿脱写在哪句、落点就得在那句）/ `CON08_LOOK_DRIFT`（同件衣物整档多色）。中英双语词表（H3 正文是英文），回看窗口 200 字。`--selftest` 3 组 → **4 组**：两条合格镜（中文 / H3 英文）、三条典型缺陷，另加两个反向断言（台词后置交付、无人说话镜）不得报错。
+- 落点：pro 的 SKILL 补丁表 + 三个 `stage-*.md` + `pacing.md` + `storyboard/shot-craft.md` + `script/script-craft.md` §7.2 表演提示 + `video/{performance-action-timing,production-prompt-grammar,action-physics,minimax-h3,seedance-2.0,seedance-2.5,wan-3.0}` + 两份 `stage-contract.md`（CON-08 入表）+ 剧本模板注释 + `handoff.md` 补丁映射；`$short-drama`（router）说明声明值只是常速基线、逐句按档精算；`$short-drama-produce` 把逐句档位映射到 TTS 情绪/语速参数（同角色不同档不共用一个 `speed` 值）；`$short-drama-assets` 一致性锁文档补「锁之外的部分谁兼顾」；`$short-drama-review` 视觉 rubric 加两条（逐句杠杆、镜内外观重述）。
+- 顺带修 5 处断链与一处越界路径：`references/stage-*.md` 把同目录的 `pacing.md` / `delivery-spec.md` / `identity-continuity.md` 写成 `../`，`stage-video-prompts.md` 的方言目录链接也多了一层——链接解析不到文件时模型就读不到该读的参考。
+- **能力边界**（不吹）：同轨音画的语速与语气提示词是**生成指导，不是秒级执行保证**；H3 无 `speech_rate` 参数，档位只能靠自然语言靠近，急档仍可能被赶成含混。文本检查只证明「该写的写了」，不证明模型听了。验收在生成后四查：逐字是否完整、语速听着是不是常人说话、停顿在不在写的位置、衣服颜色与站位跟上一镜对不对得上——任一项靠猜就把缺陷回报到写它的那个阶段，不在下游静默修正（已写进 pro 的「完成」节与 rubric）。
+
+**验证**：`node sync-drama-skills.mjs install` 后 `check` 无漂移；pro 四组 `4+17+17+10`、router 17、其余七件（9+5+10+5+8+8+1）全通过；样例剧本 `pro_check` 0 error / 0 warning；`readme.md` 表格列数校验通过。
+
 重建的是中文版（见下两条）
 **两处待对齐已按远端基准收口（见下一条）**。
 > 2026-10-18 按远端基准对齐执行：① 卸 `pi-smart-reader`——远端 10-14 的动作今天才落本机，本机 **28 → 27（25 npm + 2 git）**；`overrides` 整块删（`web-tree-sitter@0.24.7` 钉版无对象，`pi-impact-analyzer` 条目同样无对象），lock、`pi list`、`node_modules` 零残留，`pi --no-session -p` 冒烟干净。远端当时那两行计数自相矛盾（卸前 26 npm，卸 1 应余 25，却写 24），本机以 `package.json` 实数为准。② `AGENTS.md` 恢复 10-16 **英文 canonical**（1263B，`config/agent/AGENTS.md` 入库 → `install-project-config.mjs` 拷盘），本机今早重建的 590B 中文版作废。
@@ -103,7 +115,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 |---|---|---|
 | `cangjie-skill`（仓颉） | `git clone github.com/kangarooking/cangjie-skill` | 把书 / 长视频 / 播客 / 课程蒸馏成可执行 skills |
 | `goutoujunshi`（狗头军师） | `git clone github.com/shengjidaguai-china/goutoujunshi` | 恋爱军师与情绪支持 |
-剧本/分镜/视频提示词三阶段由 `short-drama-pro` 负责（内置动作物理补丁 + 单镜 ≤12 秒上限 + **正常语速 2 个可发声字/秒、停顿另计的台词预算 PAC-01/PAC-02**）。上游快照 `v0.9.2`（2026-10-29 吸收）。MIT |
+剧本/分镜/视频提示词三阶段由 `short-drama-pro` 负责（内置动作物理补丁 + 单镜 ≤12 秒上限 + **正常语速 2 个可发声字/秒、停顿另计的台词预算 PAC-01/PAC-02** + **按剧情逐句定语速档与发声杠杆的台词交付规格 PAC-03/PAC-04/PAC-05** + **每镜重述站位/朝向/衣物的人物一致规则 CON-08**，后两项含 `pro_check` 机械检查）。上游快照 `v0.9.2`（2026-10-29 吸收）。MIT |
 | `pimeter` | **不用装**：`npm:pi-meter` 自带（`~/.pi/agent/npm/node_modules/pi-meter/skills/pimeter/`） | 花费账单怎么看：本机走本地代理，内置价格表对不上，**数字仅供参考**（见 §1.1 pi-meter 行） |
 
 > skill 不再常驻注入系统提示词（见 §6.2），需要时用 `omnify` 检索。实测本机技能清单 = 上述 3 组自装（`cangjie-skill` / `goutoujunshi` / drama 线 9 条 = 源自上游的 `short-drama-*` 8 条 + 本地自建的 `short-drama-pro`（九条全部由本仓库 `skills/` 镜像安装，均含本地定制，2026-10-18 起））+ `pi-meter` 自带 `pimeter`，共 12 条；新装 skill 要开新会话才加载（本会话内装的，omnify 当轮检索不到，2026-10-18 实验）；2026-10-12 后 **pi-caveman / pi-ponytail 自带的 8 条 skill 随包卸载消失**（`pi list`/agent 技能面板可见）。
@@ -1419,7 +1431,7 @@ Other errors:
 - **策略：不再跑上游安装器。** 本仓库 `skills/` 是九个已装 drama 技能的**唯一更新源**：`node sync-drama-skills.mjs install` 精确镜像到全局（逐文件复制 + 删除全局多余 + 清掉退役三件），`check` 体检、`save` 抢救；上游降级为参考快照，版本与人工吸收流程见 `skills/UPSTREAM.md`；
 - 顺带修掉上游索引器的一处消息缺陷：裸写 `[转场]`（标签后无正文）原报「不支持生产标签 [转场]」，实际它受支持、只是缺正文；现在报 `production_tag_missing_body` 并给出写法（`selftest_write` 增至 15 项）。
 
-**验证**：`node sync-drama-skills.mjs check` 无漂移；`short-drama-pro` 四组自检全绿（`pro_check --selftest` 3 组 + `selftest_write` 17 + `selftest_storyboard` 17 + `selftest_video` 10），router `selftest` 17 项全绿；
+**验证**：`node sync-drama-skills.mjs check` 无漂移；`short-drama-pro` 四组自检全绿（`pro_check --selftest` 4 组 + `selftest_write` 17 + `selftest_storyboard` 17 + `selftest_video` 10），router `selftest` 17 项全绿；
 
 **2026-10-29 上游吸收 v0.9.2**（`dafe80e` → `91fddb2`，16 commits / 83 files）：上游把八个旧 JSON 检查器移进 `tests/legacy/` 并删掉 assets / image-prompts / review 三个技能的整个 `scripts/`——本仓库**不跟这个删除**，因为这些检查器是 pro 三阶段检查器的活跃依赖、且含自加的 SHT-31 上限，跟着删会让检查能力塌掉；三个技能的 `scripts/` 与 `selftest.py` 全部保留。同期收进 `--partial` 局部核对、`profile_notes` 算术冲突提示、`format.episode_count` 与 `multi_shot_containers` 决策写入。吸收明细见 `skills/UPSTREAM.md`。
 

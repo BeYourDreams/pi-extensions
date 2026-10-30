@@ -55,6 +55,7 @@
 | CON-05 | taste_option | Declared montage, ellipsis, dream, or subjective imagery may intentionally break ordinary continuity. |
 | CON-06 | structural_invariant | A continuity change names every existing downstream document it affects; future work is described, not pre-created. |
 | CON-07 | structural_invariant | A continuity lock declared in `视觉设定.md` fixes one verbatim surface plus its shot and image scope; every in-scope frozen keyframe, motion prompt, and named image prompt carries that surface unchanged. |
+| CON-08 | craft_default | Each shot's own prose re-declares the drift-prone facts it puts on screen — position against a named scene anchor, chest/back orientation, wardrobe colour and form within the framed range, and what each hand holds — so the next shot never has to remember an earlier one. Facts that did not change get one 「仍」 clause; a wardrobe or injury change needs a visible cause, a stated landing for what was removed, and a continuity record. Framing decides granularity: a hand close-up does not describe a coat. See `references/identity-continuity.md`. |
 
 规则分级由高到低：`structural_invariant`（结构缺陷，阻断）、
 `reviewed_invariant`（需证据判断）、`craft_default`（常用做法，可覆盖）、

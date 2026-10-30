@@ -226,6 +226,13 @@ H3 中文小样本的约 4.1 字/秒是它在短镜里赶词出现的实测速�
 分镜镜长够长但开口太晚，一样会赶词；生成后核对台词完整性。
 口语语言、声线与语速描述放在 `<d>` 外；`<d>` 内只放语言标签和逐字台词，不放秒数或表演指令。
 要在 `<d>` 外交代「常速、不赶」以及句内换气与句间停顿的位置，别只写一句「自然语速」。
+
+**按剧情变速写在 `<d>` 外**（[台词交付规格](../delivery-spec.md)，PAC-03/PAC-04）：沉缓档写
+`low and slow, each word pressed out`，急切档写 `quick and clipped, only pausing after the name`，
+哽咽写 `her voice tightens, the last syllables tremble and trail off`；H3 没有 `speech_rate` 参数，
+`<d>` 外那句自然语言就是它唯一的速率与音色入口。**情绪词可以留着定调，但它旁边要至少两根杠杆**
+（只写 `angrily` 会得到喊出来的愤怒，而本场可能要的是压着的）；音色靠 `reference_audio`，
+快慢顿靠这句，两者互不顶替。
 稳定说话人用 `(S1)`、`(S2)`；full-reference 中说话人物同时写 `<Subject N> (Sx)`。
 
 无参考音频时，以自然语言交代说话方式、开口 cue、句间停顿和说完后的动作；文本估时区间只留在镜头说明中，
@@ -245,6 +252,10 @@ H3 官方接口未提供独立 `speech_rate` 参数，也没有公布「中文�
 **`craft_default`**：说话人第一次出现时，在 `<d>` 外交代他在画内还是画外、以及音色（年龄、性别、高低），
 台词跟在他的可见动作句后面（仍只出现一次），不集中列在正文末尾：
 `<Subject 1> (S1), the boy on-screen with a clear high voice, opens his mouth and calls out: <d>[Chinese] ...</d>`。
+同样的句式也用来交付这一句怎么说：在动作与冒号之间插入档位、停顿位与音色（
+`<Subject 2> (S2), on-screen, waits half a second before speaking and presses out each word low and slow: <d>[Chinese] …</d>`），
+台词围栏**旁边**的这一句（前置为默认，后置在同一句里也行）才是模型能响应的东西（PAC-04）：
+`<d>` 内塞多少形容词都不会变成声音，只会变成要念出来的字。
 台词期间画里还有别人的正脸时，把那个人明写成不说话：
 `The messenger does not speak; his lips remain completely closed.`——与官方画外音写法
 `while his lips remain completely closed` 是同一句式。

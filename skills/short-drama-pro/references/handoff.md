@@ -40,6 +40,8 @@
 | 位移动作朝向绑定、领先部位、界面开向、终点重述 | SCR-23 / SHT-30 / VID-28 三份 action-physics |
 | 一拍 ≤ 两物理步、中段进入、未完成原因→对应结果 | 同上（剧本/分镜/视频三层共用词汇） |
 | 生就维七问（新增「场景视觉事实」「道具与文字可读」，即 SCR-24A/B/C） | 原 write 阶段 SKILL「生成就绪硬约束」；SCR-24 为本项目补充 |
+| 逐句语速档与发声杠杆（情绪词不单独交付） | PAC-03/PAC-04/PAC-05（`references/delivery-spec.md`），本项目补充 |
+| 每镜重述站位/朝向/衣着/手持以保持人物一致 | CON-08（`references/identity-continuity.md`），承 VID-28 与 CON-01/CON-07，本项目补充 |
 
 `pro_check.py` 是这些纪律的轻量机械版；需要结构终审时用 router 的
 `creator_markdown_check.py`（仍在 `$short-drama` 技能内，口径一致）。
