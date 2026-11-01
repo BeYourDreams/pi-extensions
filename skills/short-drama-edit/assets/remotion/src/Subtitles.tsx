@@ -45,8 +45,27 @@ export const Subtitles: React.FC<{ cues: Cue[] }> = ({ cues }) => {
   const size = Math.min(u * 4.3, (width * 0.9) / (lineEms(cue.text) * 1.04));
   const age = now - cue.start;
   const pop = spring({ frame: Math.round(age * fps), fps, config: { damping: 12, stiffness: 260, mass: 0.5 } });
+  const rim = `${u * 0.42}px ${SUBTITLE.rim}`;
   return (
     <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", paddingBottom: u * 24 }}>
+      {cue.speaker && (
+        <div
+          style={{
+            fontFamily: SANS,
+            fontWeight: 900,
+            // 0.7x the line, same grey as the ASS route, directly above it.
+            fontSize: size * 0.7,
+            color: SUBTITLE.speaker,
+            letterSpacing: size * 0.04,
+            whiteSpace: "nowrap",
+            WebkitTextStroke: rim,
+            paintOrder: "stroke fill",
+            opacity: Math.min(1, age / 0.06),
+          }}
+        >
+          {cue.speaker}
+        </div>
+      )}
       <div
         style={{
           fontFamily: SANS,
@@ -57,7 +76,7 @@ export const Subtitles: React.FC<{ cues: Cue[] }> = ({ cues }) => {
           textAlign: "center",
           lineHeight: 1.2,
           whiteSpace: "nowrap",
-          WebkitTextStroke: `${u * 0.42}px ${SUBTITLE.rim}`,
+          WebkitTextStroke: rim,
           paintOrder: "stroke fill",
           textShadow: `0 ${u * 0.25}px ${u * 0.6}px rgba(0,0,0,0.55)`,
           opacity: Math.min(1, age / 0.06),

@@ -51,8 +51,19 @@ project declared one (see `$short-drama-pro` 语速基线, PAC-01).
 Calibrate before a batch: synthesise one representative line for the chosen `voice_id`, measure its
 actual characters-per-second from the returned audio, and pick the `speed` that lands on the
 project's baseline. Reuse that value for every line of the same character, and re-measure after a
-voice or model change. Pauses are part of the performance the stage documents: confirm from the
-sample that in-line breaths and the gap between sentences survive, rather than assuming a parameter
-default preserves them.
+voice or model change.
+
+## Pauses
+
+`speed` is the only timing control this adapter passes. Whether the endpoint also honours an inline
+pause tag (MiniMax writes them as `<#x#>`) is a per-model claim the adapter does not verify: it
+sends `text` verbatim, so a tag the model does not recognise either becomes sound or disappears with
+no error. Confirm it on a sample before relying on it.
+
+A pause you cannot hear in the sample has to be made outside the text: synthesise the sentence in
+pieces and place the pieces apart in the timeline, where `$short-drama-edit` measures their audible
+spans and reports a gap under the 0.4 s inter-line floor as rushed. Confirm from the sample that
+in-line breaths and the gap between sentences survive at the chosen `speed` rather than assuming a
+parameter default preserves them.
 
 Protocol reference: [MiniMax Text to Speech](https://platform.minimax.io/docs/api-reference/speech-t2a-http).

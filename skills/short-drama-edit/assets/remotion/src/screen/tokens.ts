@@ -31,10 +31,12 @@ export const COLOURS = {
 };
 
 /** Subtitle fill by who speaks; the same values are in edit_tool.py for the ASS route. */
-export const SUBTITLE: { fill: Record<CueKind, string>; keyword: string; rim: string } = {
+export const SUBTITLE: { fill: Record<CueKind, string>; keyword: string; rim: string; speaker: string } = {
   fill: { line: "#FFFFFF", vo: "#9FE8FF", system: "#3FE0FF" },
   keyword: "#FFD400",
   rim: "#0B0D12",
+  // 说话人名字：同一灰度在 edit_tool.py 的 ASS 头里写作 &H009F9F9F&。
+  speaker: "#9F9F9F",
 };
 
 /** Unmarked items read as 稀有. */

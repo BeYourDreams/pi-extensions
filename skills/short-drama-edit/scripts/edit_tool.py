@@ -112,9 +112,19 @@ CAMERA_OPPOSITES = {"推近": "拉远", "拉远": "推近", "左移": "右移", 
 CAMERA_SPEED_NOTICE = 0.30
 # 「环境声：[<起>] <文件>」 lays a room under the film from this cut on, looping the
 # file, until the next 环境声 line (「无」 stops it).
+# 「音乐」 is the same shape for a score cue, except it is pulled down whenever the film
+# has sound of its own; see _sound_effect_command.
 BED_FIELD = "环境声"
+MUSIC_FIELD = "音乐"
 BED = re.compile(r"^\s*(?:(-?[0-9]+(?:\.[0-9]+)?)\s+)?(.+?)\s*$")
 BED_FADE = 0.3
+MUSIC_FADE = 1.0
+# The score's level under everything else, and the sidechain that pulls it down: how loud
+# the film has to be before the music gives way, how hard, and how fast it comes back.
+# `threshold` is a linear amplitude (~-26 dBFS); a 48 kHz stereo layout on both branches,
+# because sidechain filters want the same channel count on both inputs.
+MUSIC_LEVEL = 0.35
+MUSIC_DUCK = "threshold=0.05:ratio=6:attack=100:release=800:level_sc=1"
 # The silent track under a still when there is no video audio to match.
 STILL_AUDIO = (48000, "stereo")
 # 「配音 N：<起> <文件>」 plays a voice file to its end, from its cut's start plus
@@ -124,6 +134,12 @@ STILL_AUDIO = (48000, "stereo")
 VOICE_FIELD = re.compile(r"^配音(?:\s*(\d+))?$")
 VOICE = re.compile(r"^\s*(-?[0-9]+(?:\.[0-9]+)?)\s+(.+?)\s*$")
 VOICE_OVERRUN = 0.05
+# The thinnest gap two spoken lines may have (PAC-02 句间停顿的下限 0.4 秒). Anything tighter
+# reads as 赶词 whether or not the files overlap, and a rate this fast never leaves room for the
+# 尾音. It is a floor, not a target: 换气、情绪顿与句间空档该多长由剧情定，这里只拦「挤成一团」。
+VOICE_GAP_MIN = 0.4
+# 「声音：原声静音」 replaces this cut's own audio with silence instead of mixing over it.
+MUTE_SOURCE = "原声静音"
 # A sound line's trailing 「（起点：<秒>；增益：<dB>）」, either or both, in any order.
 SOUND_OPTIONS = re.compile(r"[（(]\s*((?:起点|增益)[：:][^（）()]*)[）)]\s*$")
 SOUND_OPTION = re.compile(r"^(起点|增益)[：:]\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*(dB)?$", re.I)
@@ -274,7 +290,7 @@ class CameraMove(NamedTuple):
 
 
 class Bed(NamedTuple):
-    """One 「环境声」 line: from `start` seconds into its cut, `path` looping; None is 「无」."""
+    """One 「环境声」/「音乐」 line: from `start` seconds into its cut, `path` looping; None is 「无」."""
 
     start: float
     path: Optional[str]
@@ -293,6 +309,8 @@ class Placed(NamedTuple):
     loop: bool = False
     fade_in: float = 0.0
     fade_out: float = 0.05
+    # Score only: this run yields to the film's own dialogue rather than mixing over it.
+    duck: bool = False
 
 
 class Voice(NamedTuple):
@@ -332,6 +350,9 @@ class Cut(NamedTuple):
     move: Optional[CameraMove] = None
     voices: tuple[Voice, ...] = ()
     bed: Optional[Bed] = None
+    music: Optional[Bed] = None
+    # 「声音：原声静音」: the cut keeps its picture, loses its own soundtrack.
+    mute: bool = False
 
     @property
     def still(self) -> bool:
@@ -347,6 +368,8 @@ class Delivery(NamedTuple):
     grain: Optional[float]
     # 「接镜匹配：无」 turns the automatic within-scene match off.
     shot_match: bool = True
+    # 「字幕：带说话人」 burns who says each line, read from 剧本.md.
+    named_speaker: bool = False
 
 
 class ChannelStats(NamedTuple):
@@ -374,6 +397,7 @@ def _parse_delivery(lines: Sequence[str]) -> Delivery:
     target = None
     loudness = None
     burn = True
+    named = False
     frame_size: Optional[tuple[int, int]] = None
     fps: Optional[float] = None
     grain: Optional[float] = None
@@ -393,6 +417,8 @@ def _parse_delivery(lines: Sequence[str]) -> Delivery:
                 loudness = float(found.group(0))
         elif name == "字幕":
             burn = "无" != value.strip() and "不烧" not in value
+            # 「字幕：带说话人」——名字从 剧本.md 的说话人取，不写进剪辑单。
+            named = "带说话人" in value or "有说话人" in value
         elif name == "颗粒":
             # Grain belongs to the delivery spec rather than to a cut, for the
             # same reason loudness does: applied per cut it would become one
@@ -419,7 +445,7 @@ def _parse_delivery(lines: Sequence[str]) -> Delivery:
             rate = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*fps", value, re.I)
             if rate:
                 fps = float(rate.group(1))
-    return Delivery(target, loudness, burn, frame_size, fps, grain, shot_match)
+    return Delivery(target, loudness, burn, frame_size, fps, grain, shot_match, named)
 
 
 def parse_cut_list(path: Path) -> tuple[Delivery, list[Cut], list[str]]:
@@ -551,22 +577,24 @@ def _finish_cut(pending: dict[str, Any]) -> Cut:
         untouched=untouched,
         move=_parse_move(fields, cut_id=cut_id, still=still),
         voices=_parse_voices(fields, cut_id=cut_id, line=line),
-        bed=_parse_bed(fields, cut_id=cut_id),
+        bed=_parse_bed(fields, cut_id=cut_id, field=BED_FIELD),
+        music=_parse_bed(fields, cut_id=cut_id, field=MUSIC_FIELD),
+        mute=MUTE_SOURCE in fields.get("声音", ("", 0))[0],
     )
 
 
-def _parse_bed(fields: dict[str, tuple[str, int]], *, cut_id: str) -> Optional[Bed]:
-    """Read 「环境声：[<起>] <文件>（起点：<秒>；增益：<dB>）」 or 「环境声：[<起>] 无」."""
+def _parse_bed(fields: dict[str, tuple[str, int]], *, cut_id: str, field: str = BED_FIELD) -> Optional[Bed]:
+    """Read 「环境声/音乐：[<起>] <文件>（起点：<秒>；增益：<dB>）」 or 「[<起>] 无」."""
 
-    raw = fields.get(BED_FIELD)
+    raw = fields.get(field)
     if raw is None:
         return None
-    value, gain, offset = _sound_options(raw[0], BED_FIELD, cut_id=cut_id, where=raw[1])
+    value, gain, offset = _sound_options(raw[0], field, cut_id=cut_id, where=raw[1])
     found = BED.match(value)
-    # A bed has a start, not a window: it runs until the next 环境声 line.
+    # A bed has a start, not a window: it runs until the next line of the same kind.
     if not found or SUBTITLE_CUE.match(value):
         raise EditError(
-            f"{CUT_LIST_NAME}:{raw[1]}: {cut_id} 的「环境声」要写成「[<起>] <项目相对路径>」或「[<起>] 无」"
+            f"{CUT_LIST_NAME}:{raw[1]}: {cut_id} 的「{field}」要写成「[<起>] <项目相对路径>」或「[<起>] 无」"
         )
     path = found.group(2)
     return Bed(float(found.group(1) or 0.0), None if path == "无" else path, gain, offset)
@@ -1096,6 +1124,12 @@ def _voice_findings(
     for span in _voice_spans(cuts, sounds, lengths):
         start, end, cut, voice = span
         where = f"{CUT_LIST_NAME}:{cut.line_number}: {cut.cut_id}"
+        if latest is not None and VOICE_GAP_MIN > start - latest[1] > -TOLERANCE:
+            findings.append(
+                f"{where} 的配音 {voice.path}（成片 {start:.2f} 秒开口）与上一句只隔 "
+                f"{max(0.0, start - latest[1]):.2f} 秒，短于句间停顿下限 {VOICE_GAP_MIN:g} 秒；"
+                "这是赶词——放慢、把后一句推后，或回分镜拆镜（PAC-02）"
+            )
         if end <= start:
             findings.append(f"{where} 的配音 {voice.path} 起点 {voice.offset:g} 秒之后没有声音")
             continue
@@ -1213,6 +1247,16 @@ def check_cuts(
                 f"{CUT_LIST_NAME}:{cut.line_number}: {cut.cut_id} 是静帧，入点必须是 0.00，"
                 "出点等于时长"
             )
+        if cut.mute and cut.still:
+            findings.append(
+                f"{CUT_LIST_NAME}:{cut.line_number}: {cut.cut_id} 是静帧段，本来就没有原声，"
+                f"不写「{MUTE_SOURCE}」"
+            )
+        if cut.mute and not cut.voices:
+            findings.append(
+                f"{CUT_LIST_NAME}:{cut.line_number}: {cut.cut_id} 静音了原声却没有「配音」，"
+                "这一段会一句声音也不剩"
+            )
         if cut.still and cut.declared < STILL_MINIMUM - TOLERANCE:
             findings.append(
                 f"{CUT_LIST_NAME}:{cut.line_number}: {cut.cut_id} 是静帧，时长 "
@@ -1301,14 +1345,16 @@ def check_cuts(
                     f"{where} 的运镜 {cut.move.rate:g}%/秒 走完这一段是 {reach:.0f}%，"
                     f"超过 {CAMERA_MOVE_LIMITS[1]}%；放慢或缩短这一段"
                 )
-        if cut.bed is not None:
+        for bed, label in ((cut.bed, BED_FIELD), (cut.music, MUSIC_FIELD)):
+            if bed is None:
+                continue
             earliest = -lengths[index - 1] if index else 0.0
-            if not earliest - TOLERANCE <= cut.bed.start < cut.end - cut.start:
+            if not earliest - TOLERANCE <= bed.start < cut.end - cut.start:
                 findings.append(
-                    f"{where} 的环境声起点 {cut.bed.start:g} 要在 {earliest:g}（上一段开头）到本段结尾之间"
+                    f"{where} 的{label}起点 {bed.start:g} 要在 {earliest:g}（上一段开头）到本段结尾之间"
                 )
-            if cut.bed.path is not None and _resolve_media(episode, project_root, cut.bed.path) is None:
-                findings.append(f"{where} 的环境声文件不存在或不在项目目录内: {cut.bed.path}")
+            if bed.path is not None and _resolve_media(episode, project_root, bed.path) is None:
+                findings.append(f"{where} 的{label}文件不存在或不在项目目录内: {bed.path}")
         for voice in cut.voices:
             # A J-cut reaches back at most to the previous cut's start.
             earliest = -lengths[index - 1] if index else 0.0
@@ -1501,7 +1547,10 @@ def render(
                 ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
                 "-ss", f"{cut.start:.3f}", "-t", f"{span:.3f}", "-i", str(media),
             ]
-            if probe_audio(media) is None:
+            # 「声音：原声静音」 drops the model's own soundtrack (台词已烧在里面时，配音会叠成双声)
+            # and keeps the picture. Anullsrc in the film's format: the concat below copies streams,
+            # so a cut with no audio track would shift every sound after it.
+            if cut.mute or probe_audio(media) is None:
                 rate, layout = silence
                 command += [
                     "-f", "lavfi", "-t", f"{span:.3f}", "-i", f"anullsrc=r={rate}:cl={layout}",
@@ -1542,12 +1591,12 @@ def render(
         effects: list[Placed] = []
         placed = (
             _placed_sound_effects(cuts, spans) + _placed_voices(cuts, sounds, spans)
-            + _placed_beds(cuts, spans)
+            + _placed_beds(cuts, spans) + _placed_music(cuts, spans)
         )
         for sound in placed:
             resolved = _resolve_media(episode, project_root, sound.path)
             if resolved is None:
-                raise EditError(f"音效、配音或环境声文件不存在或不在项目目录内: {sound.path}")
+                raise EditError(f"音效、配音、环境声或音乐文件不存在或不在项目目录内: {sound.path}")
             effects.append(sound._replace(path=str(resolved)))
         if effects:
             # Mixed into its own file first, so the loudness pass below measures
@@ -1561,7 +1610,10 @@ def render(
         styled_path = None
         overlay_path = None
         cues = (
-            _display_cues(_subtitle_cues(cuts, spans), _screenplay_text(episode))
+            _display_cues(
+                _subtitle_cues(cuts, spans), _screenplay_text(episode),
+                named=delivery.named_speaker,
+            )
             if burn_subtitles and any(cut.subtitles for cut in cuts)
             else []
         )
@@ -1642,6 +1694,8 @@ def render(
         "音效": sum(len(cut.sound_effects) for cut in cuts),
         "配音": sum(len(cut.voices) for cut in cuts),
         "环境声": len(_placed_beds(cuts, spans)),
+        "音乐": len(_placed_music(cuts, spans)),
+        "原声静音段": [cut.cut_id for cut in cuts if cut.mute],
         "静帧段": sum(cut.still for cut in cuts),
         "自动接镜": _shot_match_report(auto, scenes, enabled=delivery.shot_match),
         "段数": len(segments),
@@ -2135,7 +2189,7 @@ def _overlay_props(
     return {
         "cues": [
             {"start": round(cue.start, 3), "end": round(cue.end, 3), "text": cue.text,
-             "kind": cue.kind, "keys": list(cue.keys)}
+             "kind": cue.kind, "keys": list(cue.keys), "speaker": cue.speaker}
             for cue in cues
         ],
         "screenTexts": [
@@ -2325,6 +2379,8 @@ class DisplayCue(NamedTuple):
     text: str
     kind: str = "line"
     keys: tuple[str, ...] = ()
+    # Who says it, read off 剧本.md; only burned when the delivery spec asks for it.
+    speaker: str = ""
 
 
 def _display_line(text: str) -> str:
@@ -2404,33 +2460,38 @@ def _screenplay_text(episode: Path) -> str:
     return path.read_text(encoding="utf-8") if path.is_file() else ""
 
 
-def _line_kind(text: str, screenplay: str) -> str:
-    """`system`, `vo` or `line`, from the 剧本.md line the subtitle quotes."""
+def _line_speaker(text: str, screenplay: str) -> tuple[str, str]:
+    """(`system`, `vo` or `line`) and who says it, from the 剧本.md line the subtitle quotes."""
 
     needle = _normalize(text)
     for raw in screenplay.splitlines():
         spoken = SPOKEN_LINE.match(raw)
         if not spoken or needle not in _normalize(spoken.group(3)):
             continue
+        name = spoken.group(2).strip()
         if spoken.group(1) == "VO":
-            return "system" if SYSTEM_SPEAKER in spoken.group(2) else "vo"
-        return "line"
-    return "line"
+            return ("system" if SYSTEM_SPEAKER in name else "vo"), name
+        return "line", name
+    return "line", ""
 
 
 def _display_cues(
     cues: Sequence[tuple[float, float, str, tuple[str, ...]]],
     screenplay: str = "",
+    *,
+    named: bool = False,
 ) -> list[DisplayCue]:
     """Turn placed lines into what is burned: display text, split, coloured by speaker.
 
     A split line shares its window by character count, so each piece stays up
-    about as long as it takes to read.
+    about as long as it takes to read. With `named`, the 剧本.md speaker rides along
+    and is burned above the line; the text itself is still the screenplay's words.
     """
 
     shown: list[DisplayCue] = []
     for start, end, text, words in cues:
-        kind = _line_kind(text, screenplay)
+        kind, who = _line_speaker(text, screenplay)
+        speaker = who if named and who else ""
         # Highlights are matched in their burned form: 「十万，现金」 shows as 「十万　现金」.
         burned = tuple(_display_line(word) for word in words)
         pieces = _split_display(_display_line(text), keep=burned)
@@ -2444,7 +2505,7 @@ def _display_cues(
         for piece in pieces:
             length = (end - start) * _visible(piece) / total
             keys = tuple(word for word in burned if word in piece)
-            shown.append(DisplayCue(cursor, cursor + length, piece, kind, keys))
+            shown.append(DisplayCue(cursor, cursor + length, piece, kind, keys, speaker))
             cursor += length
     return shown
 
@@ -2516,18 +2577,31 @@ def _placed_sound_effects(cuts: Sequence[Cut], spans: Sequence[float]) -> list[P
 
 
 def _placed_beds(cuts: Sequence[Cut], spans: Sequence[float]) -> list[Placed]:
-    """Each 「环境声」 run, looping its file with no break at the cuts it spans.
+    return _placed_runs(cuts, spans, lambda cut: cut.bed, fade=BED_FADE)
 
-    A run starts at its line's cut plus 起 and lasts until the next 环境声 line:
+
+def _placed_music(cuts: Sequence[Cut], spans: Sequence[float]) -> list[Placed]:
+    """The score: same runs as a bed, but it yields to the film's own dialogue."""
+
+    return [run._replace(duck=True) for run in _placed_runs(cuts, spans, lambda cut: cut.music, fade=MUSIC_FADE)]
+
+
+def _placed_runs(
+    cuts: Sequence[Cut], spans: Sequence[float], pick, *, fade: float
+) -> list[Placed]:
+    """Each 「环境声」/「音乐」 run, looping its file with no break at the cuts it spans.
+
+    A run starts at its line's cut plus 起 and lasts until the next line of the same kind:
     to that line's cut start, or to its 起 when that is later. A negative 起
     therefore overlaps the two rooms across the cut, a sound bridge. It fades
     only at its own two ends.
     """
 
-    lines = [
-        (_at(cut, cursor, length, cut.bed.start), cursor, cut.bed)
-        for cut, cursor, length in _timeline(cuts, spans) if cut.bed is not None
-    ]
+    lines = []
+    for cut, cursor, length in _timeline(cuts, spans):
+        bed = pick(cut)
+        if bed is not None:
+            lines.append((_at(cut, cursor, length, bed.start), cursor, bed))
     total = sum(spans)
     placed: list[Placed] = []
     for index, (start, _, bed) in enumerate(lines):
@@ -2537,7 +2611,7 @@ def _placed_beds(cuts: Sequence[Cut], spans: Sequence[float]) -> list[Placed]:
         start = max(0.0, start)
         if end - start > TOLERANCE:
             placed.append(Placed(start, end - start, bed.path, bed.gain_db, bed.offset,
-                                 loop=True, fade_in=BED_FADE, fade_out=BED_FADE))
+                                 loop=True, fade_in=fade, fade_out=fade))
     return placed
 
 
@@ -2547,21 +2621,31 @@ def _sound_effect_command(
     effects: Sequence[Union[Placed, tuple[Any, ...]]],
     output: Path,
 ) -> list[str]:
-    """Lay each effect, voice and bed into the film's own audio at its output time.
+    """Lay each effect, voice, bed and score cue into the film's own audio at its output time.
 
     `normalize=0` keeps the dialogue at its level: amix's default divides every
     input by the input count, and the film would get quieter each time a chime
     is added. A short fade closes each sound so a trimmed tail does not click;
     a bed loops its file and fades in and out only at its own ends.
+
+    `duck` puts the score on its own branch, squeezed by a copy of the film's own
+    track (`sidechaincompress`), so it gives way to dialogue the moment someone
+    speaks — including lines that came out of the video model already mixed into
+    the picture, which a fixed window drawn from 配音 files could never see. The
+    sidechain filter wants both inputs alike, so both branches are forced to stereo 48 kHz.
     """
 
     command = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(film)]
     # The film's channel layout is left as it is: forcing mono dialogue up to
     # stereo costs it 3 dB, and the effects are converted to match instead.
-    stages = ["[0:a]aformat=sample_rates=48000[a0]"]
+    music = [sound for sound in (Placed(*raw) for raw in effects) if sound.duck]
+    heard = [sound for sound in (Placed(*raw) for raw in effects) if not sound.duck]
+    stages = (
+        ["[0:a]aformat=sample_rates=48000[raw]", "[raw]asplit=2[a0][sc]"]
+        if music else ["[0:a]aformat=sample_rates=48000[a0]"]
+    )
     labels = ["[a0]"]
-    for index, raw in enumerate(effects, start=1):
-        sound = Placed(*raw)
+    for index, sound in enumerate(heard + music, start=1):
         command += (["-stream_loop", "-1"] if sound.loop else []) + ["-i", str(sound.path)]
         fade_in = min(sound.fade_in, sound.duration / 2)
         fade_out = min(sound.fade_out, sound.duration / 2)
@@ -2573,6 +2657,19 @@ def _sound_effect_command(
             f"adelay={round(sound.start * 1000)}:all=1[s{index}]"
         )
         labels.append(f"[s{index}]")
+    if music:
+        cues = [f"[s{index}]" for index in range(len(heard) + 1, len(heard) + len(music) + 1)]
+        bed = (
+            f"{''.join(cues)}amix=inputs={len(cues)}:duration=longest:dropout_transition=0:normalize=0,"
+            "aformat=sample_rates=48000:channel_layouts=stereo[mix]"
+            if len(cues) > 1 else "[s%d]aformat=sample_rates=48000:channel_layouts=stereo[mix]" % (len(heard) + 1)
+        )
+        stages.append(
+            f"{bed};"
+            "[sc]aformat=sample_rates=48000:channel_layouts=stereo[scm];"
+            f"[mix][scm]sidechaincompress={MUSIC_DUCK},volume={MUSIC_LEVEL:g}[score]"
+        )
+        labels[-len(music):] = ["[score]"]
     stages.append(
         f"{''.join(labels)}amix=inputs={len(labels)}:duration=first:"
         "dropout_transition=0:normalize=0[a]"
@@ -2600,11 +2697,21 @@ def _ass_colour(hex_rgb: str) -> str:
     return f"&H00{blue}{green}{red}&".upper()
 
 
-def _ass_line(cue: DisplayCue) -> str:
+def _ass_line(cue: DisplayCue, font_size: int = 0) -> str:
     """Escaped text with the speaker's colour and the highlighted words in yellow."""
 
     base = _ass_colour(SUBTITLE_COLOURS[cue.kind])
     marked = "{\\c" + base + "}" if cue.kind != "line" else ""
+    if cue.speaker:
+        # 谁在说，写在上一行、字号压到 0.7 倍、灰色。只影响压制形式：剪辑单与字幕.srt
+        # 仍是剧本逐字原文，EDT-05 的逐字核对不受影响。
+        small = max(14, round(font_size * 0.7)) if font_size else 0
+        marked += "{\\c&H009F9F9F&" + (f"\\fs{small}" if small else "") + "}"
+        marked += _ass_text(cue.speaker) + "{\\r}"
+        # `{\r}` 回到样式默认（白），所以 VO 与系统音在名字之后把自己的颜色重新挂上。
+        if cue.kind != "line":
+            marked += "{\\c" + base + "}"
+        marked += "\\N"
     rest = cue.text
     while rest:
         hits = [(rest.find(word), word) for word in cue.keys if word in rest]
@@ -2656,7 +2763,7 @@ def _build_ass(cues: Sequence[DisplayCue], width: int, height: int) -> str:
         "Effect, Text\n"
     )
     lines = [
-        f"Dialogue: 0,{_ass_time(cue.start)},{_ass_time(cue.end)},正片,,0,0,0,,{_ass_line(cue)}"
+        f"Dialogue: 0,{_ass_time(cue.start)},{_ass_time(cue.end)},正片,,0,0,0,,{_ass_line(cue, font_size)}"
         for cue in cues
     ]
     return header + "\n".join(lines) + "\n"
@@ -2771,12 +2878,12 @@ def verify(
     spans = _film_spans(cuts, delivery.fps or stream["fps"])
     if any(cut.screen_texts or cut.sound_effects for cut in cuts):
         measurements.update(_placements_for_sampling(cuts, spans))
-    beds = _placed_beds(cuts, spans)
-    if beds:
-        measurements["环境声落点"] = [
-            {"起": round(bed.start, 2), "止": round(bed.start + bed.duration, 2), "文件": bed.path}
-            for bed in beds
-        ]
+    for label, placed in ((BED_FIELD, _placed_beds(cuts, spans)), (MUSIC_FIELD, _placed_music(cuts, spans))):
+        if placed:
+            measurements[f"{label}落点"] = [
+                {"起": round(run.start, 2), "止": round(run.start + run.duration, 2), "文件": run.path}
+                for run in placed
+            ]
     if any(cut.voices for cut in cuts):
         measurements["配音落点"] = _voice_placements(
             episode, project_root or episode, cuts, spans
@@ -3047,7 +3154,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if _which("ffprobe") is None:
                 unmeasured.append("区间是否超过素材实际时长（PATH 上没有 ffprobe）")
             if _which("ffmpeg") is None and any(cut.voices for cut in cuts):
-                unmeasured.append("配音是否越过成片结尾、是否互相重叠（PATH 上没有 ffmpeg）")
+                unmeasured.append(
+                    "配音是否越过成片结尾、是否互相重叠、相邻两句是否隔得够开（PATH 上没有 ffmpeg）"
+                )
             if unmeasured:
                 payload["未测"] = unmeasured
             _emit(payload)

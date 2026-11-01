@@ -10,6 +10,8 @@ export type Cue = {
   kind: CueKind;
   /** Words to highlight, each occurring in `text`. */
   keys: string[];
+  /** Who says it, read from 剧本.md; "" when the delivery spec does not ask for it. */
+  speaker: string;
 };
 
 export type ScreenTextStyle = "card" | "system" | "task" | "corner";

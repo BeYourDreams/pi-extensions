@@ -15,6 +15,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from edit_tool import (  # noqa: E402
+    Placed,
+    _build_ass,
+    _build_srt,
+    _display_cues,
+    _placed_music,
+    _subtitle_cues,
+    _voice_findings,
+    _sound_effect_command,
     _unaccounted_shots,
     DEFAULT_REMOTION_CONCURRENCY,
     DisplayCue,
@@ -75,6 +83,10 @@ CUT_LIST = """# EP001 剪辑单
 """
 
 
+def _graph(arguments: list[str]) -> str:
+    return arguments[arguments.index("-filter_complex") + 1]
+
+
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
@@ -86,7 +98,7 @@ def build(root: Path, cut_list: str) -> Path:
     (episode / "视频提示词.md").write_text(MOTION, encoding="utf-8")
     (episode / "剧本.md").write_text(SCREENPLAY, encoding="utf-8")
     (episode / "剪辑单.md").write_text(cut_list, encoding="utf-8")
-    for name in ("010.mp4", "011.mp4"):
+    for name in ("010.mp4", "011.mp4", "room.wav"):
         (episode / "media" / name).write_bytes(b"")
     return episode
 
@@ -525,6 +537,124 @@ def check_still_cuts() -> None:
             raise AssertionError("运镜写了两遍应当被拒绝")
 
 
+def check_speaker_name() -> None:
+    """「字幕：带说话人」 puts the 剧本.md speaker on screen and nowhere else."""
+
+    with tempfile.TemporaryDirectory() as scratch:
+        root = Path(scratch)
+        episode = build(root, CUT_LIST)
+        (episode / "剪辑单.md").write_text(
+            CUT_LIST.replace("- 成片目标时长", "- 字幕：带说话人\n- 成片目标时长"), encoding="utf-8"
+        )
+        delivery, cuts, _ = parse_cut_list(episode / "剪辑单.md")
+        require(delivery.named_speaker, "字幕：带说话人 没解析出来")
+        require(delivery.burn_subtitles, "带说话人不该被当成不烧字幕")
+        findings = check_cuts(episode, cuts, root, probe=False, listen=False, delivery=delivery)
+        require(not any("字幕在《" in item for item in findings), f"带名字弄坏了逐字核对: {findings}")
+
+        cues = _display_cues(_subtitle_cues(cuts, [3.0, 2.0]), "角色甲：这条路我自己走\n", named=True)
+        require(cues and all(cue.speaker == "角色甲" for cue in cues), f"名字没进 cue: {cues}")
+        ass = _build_ass(cues, 1080, 1920)
+        require("{\\c&H009F9F9F&" in ass and "角色甲" in ass, f"名字没压进 ASS: {ass}")
+        require(_build_srt(cues).count("角色甲") == 0, "名字不该出现在字幕.srt 里")
+        # 逐字核对看的是屏幕上的正文，名字多一行不能弄坏它。
+        require(any(cue.text == "这条路我自己走" for cue in cues), f"正文被动了: {cues}")
+        silent = _display_cues(_subtitle_cues(cuts, [3.0, 2.0]), "角色甲：这条路我自己走\n")
+        require(all(cue.speaker == "" for cue in silent), f"没要求时不该带名字: {silent}")
+
+
+def check_music_cue() -> None:
+    """A 音乐 line runs like a bed but ducks under the film's own dialogue."""
+
+    with tempfile.TemporaryDirectory() as scratch:
+        root = Path(scratch)
+        episode = build(root, CUT_LIST)
+        (episode / "media" / "cue.mp3").write_bytes(b"")
+        (episode / "剪辑单.md").write_text(
+            CUT_LIST.replace(
+                "- 声音：保留原声\n- 字幕：无",
+                "- 声音：保留原声\n- 字幕：无\n- 环境声：media/room.wav\n- 音乐：0.50 media/cue.mp3（增益：-6）",
+            ),
+            encoding="utf-8",
+        )
+        delivery, cuts, unused = parse_cut_list(episode / "剪辑单.md")
+        require(cuts[0].music is not None and cuts[1].music is None, f"音乐只写在第一段: {cuts}")
+        require(cuts[0].bed is not None, "环境声没解析出来")
+        findings = check_cuts(episode, cuts, root, probe=False, listen=False, unused=unused, delivery=delivery)
+        require(
+            any("音乐文件不存在" in item for item in findings) is False,
+            f"存在的音乐文件被报成缺失: {findings}",
+        )
+        runs = _placed_music(cuts, [3.0, 2.0])
+        require(len(runs) == 1 and runs[0].duck and runs[0].start == 0.5, f"音乐区间不对: {runs}")
+        require(abs(runs[0].gain_db + 6) < 1e-9, f"增益没接上: {runs[0]}")
+
+        graph = _graph(_sound_effect_command("ffmpeg", Path("film.mp4"), runs, Path("out.mp4")))
+        # ffmpeg fails the whole render on one dangling label, so the graph is checked
+        # by shape: a split feed, a sidechain branch, and the score mixed back in once.
+        require("sidechaincompress" in graph, f"配乐没有压低支路: {graph}")
+        require(graph.count("asplit=2") == 1 and graph.count("[score]") == 2, f"混音图形状不对: {graph}")
+        require("amix=inputs=2:duration=first" in graph, f"压低后的配乐该并回成片音轨: {graph}")
+        two = _graph(_sound_effect_command(
+            "ffmpeg", Path("film.mp4"), runs + [runs[0]._replace(start=3.5)], Path("out.mp4")))
+        require("amix=inputs=2:duration=longest" in two and two.count("sidechaincompress") == 1,
+                f"两条配乐该先并成一轨再一起压低: {two}")
+        plain = _graph(_sound_effect_command("ffmpeg", Path("film.mp4"), [], Path("out.mp4")))
+        require("sidechaincompress" not in plain and "asplit" not in plain,
+                f"没有配乐时不该多分一条支路: {plain}")
+
+
+def check_source_mute_and_gap_floor() -> None:
+    """「原声静音」 drops a video cut's own soundtrack; two lines too tight read as 赶词."""
+
+    with tempfile.TemporaryDirectory() as scratch:
+        root = Path(scratch)
+        episode = build(root, CUT_LIST)
+        for name in ("one.wav", "two.wav"):
+            (episode / "media" / name).write_bytes(b"")
+        (episode / "剪辑单.md").write_text(
+            CUT_LIST.replace(
+                "- 声音：保留原声\n- 字幕：无",
+                "- 声音：保留原声（原声静音）\n- 字幕：无",
+            ),
+            encoding="utf-8",
+        )
+        delivery, cuts, unused = parse_cut_list(episode / "剪辑单.md")
+        require([cut.mute for cut in cuts] == [True, False], f"原声静音没解析或串段: {cuts}")
+        # 静音了又没配音 = 这一段一句声音也不剩；静帧段本来就没原声。
+        findings = check_cuts(episode, cuts, root, probe=False, listen=False, unused=unused, delivery=delivery)
+        require(any("静音了原声却没有" in item for item in findings), f"没配音的静音段没报: {findings}")
+        still = parse_cut_list(episode / "剪辑单.md")[1]
+        still[0] = still[0]._replace(motion="SHOT-EP001-010")
+        (episode / "剪辑单.md").write_text(
+            CUT_LIST.replace("- 来源：MOTION-EP001-010 · media/010.mp4", "- 来源：SHOT-EP001-010 · media/010.png")
+                  .replace("- 声音：保留原声", "- 声音：保留原声（原声静音）"),
+            encoding="utf-8",
+        )
+        delivery, lines, _ = parse_cut_list(episode / "剪辑单.md")
+        findings = check_cuts(episode, lines, root, probe=False, listen=False, delivery=delivery)
+        require(any("静帧段，本来就没有原声" in item for item in findings), f"静帧静音没报: {findings}")
+
+        # 0.20 秒的句间空档：文件不重叠，但听着就是赶词。
+        def lines_with(second_start: float):
+            episode = build(root / f"b{second_start}", CUT_LIST.replace(
+                "- 声音：保留原声\n- 字幕：这条路我自己走",
+                "- 声音：保留原声\n- 配音 1：0.00 media/one.wav\n"
+                f"- 配音 2：{second_start:.2f} media/two.wav\n- 字幕：这条路我自己走",
+            ))
+            for name in ("one.wav", "two.wav"):
+                (episode / "media" / name).write_bytes(b"")
+            return parse_cut_list(episode / "剪辑单.md")[1]
+
+        # 两句都在第二段：0.50 秒长、有声区间 0.05–0.55。
+        from edit_tool import Audible  # noqa: E402
+        heard = {"media/one.wav": Audible(1.0, 0.05, 0.55), "media/two.wav": Audible(1.0, 0.05, 0.55)}
+        tight = _voice_findings(lines_with(0.70), heard, [3.0, 2.0])
+        require(any("赶词" in item for item in tight), f"0.20 秒句间空档没报赶词: {tight}")
+        loose = _voice_findings(lines_with(0.95), heard, [3.0, 2.0])
+        require(not loose, f"隔 0.45 秒不该再报: {loose}")
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory() as scratch:
         root = Path(scratch)
@@ -595,6 +725,9 @@ def main() -> int:
     check_multi_subtitle()
     check_screen_text_and_effects()
     check_still_cuts()
+    check_music_cue()
+    check_speaker_name()
+    check_source_mute_and_gap_floor()
     check_stale_window()
     check_missing_shots_are_reported()
     check_grain_is_a_delivery_wide_decision()
