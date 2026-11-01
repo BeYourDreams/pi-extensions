@@ -30,6 +30,10 @@
  * 整条命令被 block，而它只是个项目内的相对搜索。搜索纪律改由文字层强制：
  * 查文件名用 `fd`，查内容用 `rg`（pi-fd 的 promptGuidelines），本扩展只管兜底超时。
  *
+ * 规则 E（2026-11-01 恢复，形态不同）：**按命令名拦 `find`/`grep`/`egrep`/`fgrep`**，不再看搜索根。
+ * 与被删的那版不同：它不扫流水线段的实参（`cd ~` 的实参与它无关），只认每段首词，且只认 GNU 那两个
+ * 名字。`fd` 与 `rg` 是替代品本身，不在拦的范围里。
+ *
  * 零 wire 成本：**不注册任何工具、不动 active 集**，只挂一个 `tool_call` 事件（§5 铁律允许的形态）。
  * 判定只做字符串扫描，没有 spawn、没有 I/O；非 bash 工具与非目标命令在第一层就 return。
  *
@@ -43,6 +47,13 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 /** 搜索类命令 basename 集合：命中就用最短的那档。 */
 const SEARCH_BINARIES = new Set(["find", "grep", "egrep", "fgrep", "rg", "ag", "ack", "fd", "fdfind"]);
+/**
+ * 该换成 fd / rg 的那两个名字。只按**首词**判：`./find-helper.sh`、`findings.md`、`git grep`、
+ * `xargs grep` 都不会命中（basename 不等于 find/grep，或者首词另有其人），正是被删的旧规则
+ * 误伤过的写法。Windows 上 `find.exe` 与 `grep` 的实际来源见 readme §4.2：Git 的 GNU 版本，
+ * 所以拦名字就够了。
+ */
+const LEGACY_SEARCH_BINARIES = new Set(["find", "grep", "egrep", "fgrep"]);
 /** 包在命令外面的 wrapper：每条流水线都由它包住时视为「作者自己管了超时」，不再注入。 */
 const TIMEOUT_WRAPPERS = new Set(["timeout", "gtimeout"]);
 /** 首词之前允许出现的修饰词（sudo/env/time/xargs…），与 §4.2 判定规则同思路。 */
@@ -316,6 +327,28 @@ export function judgeBashCommand(command: string): GuardVerdict {
 				`only cap how long this call hangs with zero output. Do the productive part in the foreground (build/test first, ` +
 				`then query the result), or start a genuinely long-lived process explicitly in the background (\`… &\`) and poll ` +
 				`it later with a separate command.`,
+		};
+	}
+
+	// 规则 E：作为**生产者**的 find/grep → fd/rg（文字纪律拦不住时的硬闸；AGENTS.md「Search」同一口径）。
+	// 只看每条流水线的第一段：`ls | grep foo`、`python x.py | grep Traceback` 里的 grep 是消费者，
+	// 读管道不扫盘，不拦。
+	// 只看每段首词：`ls | grep …` 的首段是 ls、`git grep …` 的首词是 git，都不误伤；
+	// `xargs grep …` 单打独斗时 xargs 在 LEADING_NOISE 中，跳过后命到 grep → 拦；但它排在 fd 之后
+	// 做管道下游时本规则不往里看（只判每组首段），那是 fd 的选择，不是 find/grep 扫盘。
+	// `xargs grep …` 里的 xargs 在 LEADING_NOISE 里 → 仍算 grep 当生产者（它拿到的就是文件名），拦。
+	const legacy = groups.map((group) => group[0]).find(
+		(stage) => stage.head !== undefined && LEGACY_SEARCH_BINARIES.has(stage.head),
+	);
+	if (legacy) {
+		return {
+			block:
+				`Blocked \`${legacy.head}\`: use \`fd\` for file/name search and \`rg\` (ripgrep) for content search. `
+				+ `find reads no .gitignore and skips no build dirs, so it is an order of magnitude slower and mostly noise. `
+				+ `Mapping: find . -name *.ts -> fd -e ts (or the fd tool, with timeoutMs); find . -type d -> fd -t d; `
+				+ `grep -rn foo src -> rg -n foo src; a pipe consumer like ls | grep foo is not blocked. `
+				+ `If you truly need a GNU find/grep flag that fd/rg cannot express, run it yourself - this guard opens `
+				+ `no in-band exception, and git grep / ./find-helper.sh / findings.md never match it.`,
 		};
 	}
 

@@ -48,6 +48,12 @@
 > 2026-10-18 晚 全局规则 `~/.pi/agent/AGENTS.md` **删「Download」块**（现三块：Think / Read files / Search，1263B → 991B）：镜像/证书那套规矩仍留在 §3.15 与 §8 排障表里，规则块不再重复一遍。
 > 2026-10-18 晚（同机、清单计数不动）：开机 `[Theme conflicts]`
 
+> 2026-11-01（清单计数不动）**规则 E 以新形态恢复**：`pi-bash-guard` 按**命令名**拦 `find`/`grep`/`egrep`/`fgrep`
+> （只认每条流水线首段首词；管道消费位、`git grep`、`./find-helper.sh` 不拦），替代 2026-10-13 删掉的「按搜索根拦」。
+> 同批：`skills/short-drama-edit` 的 `edit_tool.py` 新增 `音乐` 行（sidechain 自动让对白）、`声音：…（原声静音）`、
+> 配音相邻句 0.4 秒下限、`字幕：带说话人`（两条渲染路线同步）；详见 §4.2/§5 与技能自身文档。回归：
+> `.sc-test/probe-bash-guard.mjs`（重写，不入库）+ `short-drama-edit/scripts/selftest.py`。改完记得 `/reload`。
+
 **不锁版本**：安装命令一律不带 `@版本号`（取 npm 最新），本清单不维护版本矩阵。要查本机实际装的版本：
 
 ```bash
@@ -102,7 +108,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `pi-lean-prompt.ts` | 裁 `payload.tools` 里 `edit`/`read` 的 description 与 schema 样板文字（**只改文字、不动字段结构**，故与 smart-edit / one-ui / undo-redo 兼容） |
 | `pi-lean-sections.ts` | 压 wire 上 system 的 `<docs>` / `<skills>` 两块（见 §6.2） |
 | `pi-fd.ts` | 注册 `fd` 工具（fd 原生接口），**取代 pi-find 那个只认 glob 的 `find`**（见 §4.1） |
-| `pi-bash-guard.ts` | **不注册工具**，只挂 `tool_call`：**所有** bash 命令没传 `timeout` 就按档注入（搜索 30s / 构建 1800s / 其余 300s，硬的 1 小时上限）、永不返回的命令（编辑器/分页器/前台 dev server/常驻容器）与后台化的搜索直接 block、给 `fd` 工具补 `timeoutMs`（见 §5 铁律二） |
+| `pi-bash-guard.ts` | **不注册工具**，只挂 `tool_call`：**所有** bash 命令没传 `timeout` 就按档注入（搜索 30s / 构建 1800s / 其余 300s，硬的 1 小时上限）、永不返回的命令（编辑器/分页器/前台 dev server/常驻容器）与后台化的搜索直接 block、`find`/`grep` 当生产者时 block 并给出 `fd`/`rg` 映射（规则 E，2026-11-01 恢复）、给 `fd` 工具补 `timeoutMs`（见 §5 铁律二） |
 | `pi-pet-autostart.ts` | 让 `pi-dsh-pet` **默认常驻且整机只留一只**：TUI 会话一开就派发 `/pet`，已有宠物窗就复用不新开，跨会话/多开 pi 也只一只。不注册工具，只挂 `session_start` + `/pet-auto` 开关。配置见 §3.6 |
 
 > 曾经的 `pi-plan-tools.ts`（把 lazy-tools 剥掉的 `plan_mode_*` 助手工具捞回来）**已删除**：`@narumitw/pi-plan-mode` 2026-10-13 卸载，`/plan` 在本机用不了，这个补锅扩展就没存在意义了（见 §7.21）。
@@ -704,6 +710,10 @@ npm ls web-tree-sitter   # 应为 0.24.7 deduped，无 invalid
 
 ### 4.2 ~~全局禁用 `find`~~（**已卸载 2026-10-08**：本机恢复 `find`，4 层封锁全撤；卸载记录见 §7.9，以下为历史留档，勿再照着启用）
 
+> **与规则 E 的区别（2026-11-01）**：本节四层封锁（`no-find.ts` + `BASH_ENV` stub + `.bashrc` 函数 + `find.cmd`）**仍然卸着，勿再启用**。
+> 现在拦 `find`/`grep` 的是 `pi-bash-guard` 规则 E：只挂在 pi 的 `tool_call` 上（管模型，不管你自己敲的终端），
+> 只认流水线首段首词，且给 `fd`/`rg` 的映射而不是 exit 127。口径见 §5 第三类。
+
 **为什么要禁**（⚠️ 下方第一条已被 2026-10-10 实测推翻，保留原文以备查）：本机 `find` 有两个不同的东西，症状都是「卡死」：
 - ~~`C:\Windows\System32\find.exe`（cmd/PowerShell 里的 FIND.EXE）：语法与 GNU find 完全不同，`find . -name x` 被当成「pattern + 无文件名」→ **从 stdin 读**，表现就是永远不返回；~~
   > **2026-10-10 实测纠正：本机这条不成立。** PowerShell 的 PATH 顺序是 `C:\Program Files\Git\usr\bin` **排在** `C:\Windows\system32` **前面**，
@@ -715,7 +725,7 @@ npm ls web-tree-sitter   # 应为 0.24.7 deduped，无 invalid
 **`powershell` 工具没有 `timeout` 参数**（§5 表里已记「注入不了」）。裸 `find` = `find .` = 从当前目录
 **递归打印整棵树**，无任何剪枝；放到大仓 / 家目录 / 系统盘就是几小时。bash 侧没这问题——守卫会把
 `find`/`find.exe` 归入搜索档、30s 默认超时（实测 `judgeBashCommand("find.exe . -maxdepth 6") → 30`）。
-**换 fd 也不会自动好**：见 §4.1 尾注——fd 的 ignore 规则在非 git 目录同样失效。**2026-10-13 已撤规则 E**（原按家目录/AppData/系统盘/盘根硬拦搜索根）：误伤远多于收益——`cd C:\Users\me\proj && find . -maxdepth 2` 里 `cd` 的实参被当成搜索根，整条命令被 block。现在只保留 30s 超时兜底，搜索纪律靠文字层：查文件名 `fd`、查内容 `rg`，要治全局扫描就缩 `path`/`cwd`。
+**换 fd 也不会自动好**：见 §4.1 尾注——fd 的 ignore 规则在非 git 目录同样失效。**2026-10-13 已撤「按搜索根硬拦」的规则 E**（误伤远多于收益：`cd <项目> && find .` 里 `cd` 的实参被当成搜索根）；**2026-11-01 换成按命令名拦回来**（只认流水线首段首词，管道消费位与 `git grep` 不拦）——见 §5 第三类。30s 超时兜底照旧。
 
 **四层封锁**（前两层管模型，后两层管你自己）：
 
@@ -763,17 +773,19 @@ pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传
 编辑器（`vim` `nano` `emacs`…）、分页器/监视器（`less` `top` `watch` `tail -f` `journalctl -f`…）、交互客户端（`ssh` `mysql` `psql` `sqlite3`…）、光杆 REPL（`python` / `node` 不带参数）、前台服务（`npm run dev|start|serve|preview`、`python -m http.server`、不带 `-d`/`--rm` 的 `docker run`）。
 替代写法：把有产出的部分放前台跑（先 build/test，再查结果）；真需要常驻进程就显式 `… &` 起来、之后用另一条命令轮询。
 
-**第三类：搜索根选错 → block（2026-10-10 加，`OVERSIZED_ROOTS`）**。比「命令慢」更隐蔽：它不报错、不超时，
-就是不报错地返回一堆无关结果。本机实测量级：
+**第三类：`find`/`grep` 当搜索生产者 → block（`LEGACY_SEARCH_BINARIES`，2026-11-01 恢复）**。
+纯文字纪律（`promptGuidelines` + AGENTS.md）实测拦不住：模型照样写 `find . -name x`。
 
-| 目录 | 文件数 | fd 实测 |
-|---|---|---|
-| `AppData/Local` | 194,968 | — |
-| `AppData/Roaming` | 137,869 | 2.6s |
-| `C:\Windows` | 345,409 | 16.2s |
-| `find ~ -maxdepth 6` | — | **60s 封顶都跑不完** |
+| 点 | 现在的行为 |
+|---|---|
+| 拦什么 | 每条**流水线首段**的首词（跳过 `sudo`/`xargs`/`env` 这类修饰词）是 `find` `grep` `egrep` `fgrep` 之一 |
+| 不拦什么 | 管道消费位（`ls -la` 的输出交给 `grep foo`、`python t.py` 的输出交给 `grep Traceback`）、`git grep`（首词是 git）、`fd ts `\| xargs grep foo`（每组只判**首段**，fd 领头就放行）、`./find-helper.sh`、`findings.md`、`fd` / `fdfind` / `rg` / `ag` / `ack` |
+| 看不看搜索根 | **不看**。2026-10-13 删掉的那版按 `~` / AppData / 系统盘 / 盘根拦，误伤来自把 `cd` 的实参当搜索根；这版只认命令名：项目内的 `cd <这里> && find . -maxdepth 2` 照样拦（find 是生产者），但不再因为 `cd` 的路径牵连别的命令 |
+| 出口 | 没有 in-band 例外（不读配置、不认前缀白名单）。真要 GNU 独占的 flag 就让用户自己跑 |
 
-> **关键：fd 的 ignore 规则在这些目录里同样不生效**——`.gitignore` 只在 git 仓库内认，而家目录 / 系统盘不是仓库（实测用户目录下无任何 `.gitignore`）。所以「换 fd 就快」这个前提在这些目录**不成立**；fd 只是快到能在超时内返回，结果仍是噪声。故此规则拦的是**搜索根**（`~` / `~/AppData` / `C:\Users\me` / `/c/Users/me` / `/home/me` / `C:\Windows` / `Program Files` / 盘根 `/` `/c/`），**不是命令名**。
+> 旧版的**量级证据仍然成立**（AppData/Local 194,968 文件、系统盘 345,409 文件 / fd 16.2s、
+> `find ~ -maxdepth 6` 60s 跑不完；fd 的 `.gitignore` 规则在非仓库目录同样失效），只是**执法点从
+> 「搜索根」挪到了「命令名」**：根选错交给 `fd` 的 `path` 参数与 §4.1 的超时兜底处理，不靠名字之外的判断。
 
 配套实验（§4.1 尾注）证明了另一件事：**`-maxdepth` 不但没加速，还会让 find 答错**。node_modules 嵌 12 层的树上，`find . -maxdepth 6 -name '*.ts'` 返回 **0 条**（深度全花在爬 node_modules），`fd -t f -e ts .` 返回 **50 条**——所以「用 maxdepth 治慢」是饮鸩止渴。
 
@@ -790,7 +802,7 @@ pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传
 
 搜文件的其余三条路（与超时无关，但同一节纪律）：`fd` 工具每次显式传 `timeoutMs`（毫秒，1s–120s，默认 30s，见 §4.1）；`find`/`grep` 工具（pi-find）自带 30s 硬超时但**必须缩范围**（`path`/`glob`）；大目录树先 `-maxdepth`/`-prune`/`-xdev`，或直接换 `fd`（尊重 `.gitignore`，默认跳 `.git`/`node_modules`）。超时提示出现时不要重跑同一条命令：先缩范围，再谈调大预算。
 
-回归用例（54 例：三档默认值与上限、显式值夹取、管道生产者、`sudo`/`&&`/重定向、自带 timeout、永不返回的 block、`docker run --rm` 不误伤、`./find-helper.sh`/`findings.md`/`awk`/`git status` 不误伤）原先在 `.sc-test/probe-bash-guard.mjs`，**该文件已不存在**（`.sc-test/` 不入库，随清理丢了）——改 bash-guard 时按这份清单重写用例。
+回归用例在 `.sc-test/probe-bash-guard.mjs`（**不入库**，`node .sc-test/probe-bash-guard.mjs` 直接跑）：三档默认值与上限、显式值夹取、管道生产者、`sudo`/`&&`/重定向、自带 timeout、永不返回的 block、`docker run --rm` 不误伤，以及规则 E 的正反两组——后台化搜索拦，`git grep` / `./find-helper.sh` / `findings.md` / `awk` / `git status` / 管道消费位的 `grep` 不误伤。
 
 
 0. **新装扩展一律不进常驻集**（硬规则）
@@ -1015,6 +1027,9 @@ sed -i 's/spawn(ZG_BIN, args, { cwd: opts.cwd, stdio: \["ignore", "pipe", "pipe"
 - 备份 `~/.pi/agent/no-find-global.json` 已删（还原完即无用）。
 
 生效无需 `/reload`（没动 pi 的扩展加载）；`find` 回到系统原样（System32 FIND.EXE / GNU find 并存，按 PATH 顺序命中）。
+
+> 2026-11-01：**自己敲的终端仍是原样**（本节拆的东西没往回装）；只是 pi 的 `bash` 工具里 `find`/`grep`
+> 当生产者时被规则 E 拦（只挂 `tool_call`，不碰 shell 环境）。口径见 §5 第三类。
 
 ### 7.10 `pi-cwd-guard` 卸载（2026-10-08）
 
@@ -1451,7 +1466,7 @@ Other errors:
 | `node fix-pi-one-ui-theme.mjs --check` | pi-one-ui 内置主题里是否还有 pi 主题 schema 不认的 `colors` 键（§7.26） | 补过 exit 0；本机走本地源码安装后无 npm 副本 → `[skip]` exit 0；走 npm 包时 `pi update npm:pi-one-ui` 后会报 `[待修补]` exit 1，重跑不带 `--check` 即修 |
 | `node install-project-config.mjs --check` | `config/` 里的配置/小脚本与 pi 实际读取位置是否一致（行尾 CRLF/LF 归一后再比，不算漂移） | 一致 exit 0 |
 | `.sc-test/check-ext-errors.mjs` | 扫会话里的 `extension_error` | 盘上还在，但 `.sc-test/` 是 gitignore、**不入库** → 当一次性探针用，别当长期工具（升级/清理会丢） |
-| ~~`.sc-test/probe-bash-guard.mjs`~~ | bash-guard 回归用例（54 例） | **已不存在**（未入库，随清理丢了）——要回归按 §5 那份清单重写 |
+| `.sc-test/probe-bash-guard.mjs` | bash-guard 回归用例（含规则 E 正反两组） | **不入库**；2026-11-01 按 §5 清单重写并跑通 |
 
 改完 `/reload`，看 TUI 有无 `extension_error`；本地扩展与仓库是否漂移跑 `node install-local-extensions.mjs --check`；readme 表格列数跑 `node check-readme-tables.mjs`（编辑手滑插/漏一个 `|` 时靠它兜住）。
 
