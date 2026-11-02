@@ -2,7 +2,7 @@
 """pro_check.py — short-drama-pro mechanical discipline checker.
 
 Advisory for screenplay prose (SCR-23 / SHT-30 patterns), hard for shot duration
-(SHT-31: <= 12s per shot). Auto-detects document kind:
+(SHT-31: <= 4s per shot, default 4s)
 
 - 分镜.md  : "## SHOT-..." blocks; checks duration cap and orientation binding
 - 视频提示词.md : "## MOTION-..." blocks; checks duration cap, orientation,
@@ -10,7 +10,9 @@ Advisory for screenplay prose (SCR-23 / SHT-30 patterns), hard for shot duration
 - 剧本.md   : action paragraphs; checks bare displacement verbs, chain overload,
               hidden mechanics, leading limb on crossings
 
-Codes: SHT31_SHOT_EXCEEDS_CAP (error), VID28_END_STATE_MISSING (warning),
+Codes: SHT31_SHOT_EXCEEDS_CAP (error), SHT31_SHOT_TIME_UNDERESTIMATED /
+SHT31_SHOT_BELOW_DEFAULT_SECONDS (warnings; 镜长由「动作+对话」算出，默认 4 秒),
+VID28_END_STATE_MISSING (warning),
 VID28_BARE_DISPLACEMENT / SHT30_MISSING_ORIENTATION / SCR23_BARE_DISPLACEMENT /
 SCR23_CHAIN_OVERLOAD / SCR23_HIDDEN_MECHANICS / SCR23_MISSING_LEADING_LIMB (warnings),
 SAF01_HIGH_RISK_TERM (warning, all document kinds; see stage-script.md §9),
@@ -19,8 +21,8 @@ CON08_* (站位朝向与衣着跨镜一致，见 references/identity-continuity.
 
 Shot-level codes only run in 分镜/视频提示词 mode: a 剧本 has no shot prose to check.
 
-`--shot-cap 5` tightens the per-shot cap to an accepted short-cut target (a 5-second
-快切档, for example). It can only tighten, never raise, the 12-second suite cap (SHT-31).
+`--shot-cap 3` tightens the per-shot cap below the 4-second suite cap (SHT-31). It can
+only tighten, never raise it.
 
 Exit 0 when no errors (warnings only), 1 on errors, 2 on usage problems.
 --selftest runs built-in fixtures.
@@ -30,6 +32,7 @@ from __future__ import annotations
 import re
 import sys
 import tempfile
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -40,7 +43,13 @@ if sys.version_info < MIN_PY:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-SHOT_CAP_SECONDS = 12.0
+SHOT_CAP_SECONDS = 4.0
+
+# 单镜默认 4 秒 = 目标模型常有的原生下限：算出来不足 4 秒按 4 秒算，写了更短按默认算。
+DEFAULT_SHOT_SECONDS = 4.0
+VOICED_CHARS_PER_SECOND = 2.0  # PAC-01 常速预算值；停顿另计，这里不补（宁可低估，不虚报）
+# ponytail: 一拍动作的秒数只有一个常数，项目动作更慢就改它；声明了 format.pacing 时再谈旋钮。
+SECONDS_PER_ACTION_STEP = 1.0
 
 DISPLACEMENT_RE = re.compile(
     r"(走向|走进|走到|进入|进入房|踏入|穿过|冲出|跑出|跑去|奔|离开|撤离|"
@@ -60,6 +69,9 @@ GRAB_RE = re.compile(r"(拿起|抓起|取下|接过|掏出|握住|抓起)")
 HIDDEN_RE = re.compile(r"(突然|随即|随后|紧接着)[^。！？\n]{0,24}?(走进|进入|出现在|推到|拉开|跨上|坐上|站到)")
 
 DURATION_RE = re.compile(r"时长[:：]?\s*(\d+(?:\.\d+)?)\s*秒")
+# 动作拍只数动作行的分句：起点/终点是状态不是动作，算进去会把每镜都撑爆。
+ACTION_LINE_RE = re.compile(r"^\s*[-*]?\s*(?:唯一动作|状态链|动作)[:：]?(.*)$", re.M)
+STEP_SPLIT_RE = re.compile(r"[。；;→，,]")
 
 # SAF-01: advisory content-safety scan. Only hard, unambiguous terms — real-name/
 # brand/euphemistic risk cannot be regexed; the stage-script.md §9 table is the human net.
@@ -309,14 +321,63 @@ def _blocks(text: str, prefix: str) -> list[tuple[str, str]]:
     return out
 
 
+def _voiced_chars(text: str) -> int:
+    """可发声字：去空白、去标点（标点对应的是停顿，不占 2 字/秒的预算）。"""
+    return sum(1 for c in text
+               if not c.isspace() and not unicodedata.category(c).startswith("P"))
+
+
+def _shot_time(body: str) -> tuple[float | None, float]:
+    """Return (声明的时长或 None, 动作 + 对话算出来的秒数)."""
+    spans = _dialogue_spans(body)
+    speech = sum(_voiced_chars(body[s:e]) for s, e in spans) / VOICED_CHARS_PER_SECOND
+    action_prose = _strip_dialogue(body)
+    steps = sum(
+        sum(1 for part in STEP_SPLIT_RE.split(m.group(1)) if len(part.strip()) >= 2)
+        for m in ACTION_LINE_RE.finditer(action_prose)
+    )
+    declared = None
+    m = DURATION_RE.search(body)
+    if m:
+        declared = float(m.group(1))
+    return declared, round(speech + steps * SECONDS_PER_ACTION_STEP, 1)
+
+
+def _check_shot_time(block_id: str, body: str, shot_cap: float) -> list[dict[str, Any]]:
+    """SHT-31: 本镜真正要占的秒数 = max(声明, 默认 4 秒, 动作 + 对话)，不得超过硬顶。"""
+    declared, computed = _shot_time(body)
+    claimed = DEFAULT_SHOT_SECONDS if declared is None else declared
+    effective = max(claimed, DEFAULT_SHOT_SECONDS, computed)
+    findings: list[dict[str, Any]] = []
+    if effective > shot_cap:
+        findings.append({"code": "SHT31_SHOT_EXCEEDS_CAP", "severity": "error",
+                         "shot": block_id, "duration_seconds": effective, "cap": shot_cap,
+                         "declared_seconds": claimed, "computed_seconds": computed,
+                         "message": "动作+对话算出来超顶：在可见状态闭合点拆镜、删动作步或回剧本减词"})
+    if computed > claimed + 1e-6:
+        findings.append({"code": "SHT31_SHOT_TIME_UNDERESTIMATED", "severity": "warning",
+                         "shot": block_id, "declared_seconds": claimed,
+                         "computed_seconds": computed,
+                         "message": "声明的时长装不下本镜的动作+对话：按算出来的秒数重排或拆镜"})
+    if declared is not None and declared < DEFAULT_SHOT_SECONDS:
+        findings.append({"code": "SHT31_SHOT_BELOW_DEFAULT_SECONDS", "severity": "warning",
+                         "shot": block_id, "declared_seconds": declared,
+                         "default_seconds": DEFAULT_SHOT_SECONDS,
+                         "message": "默认单镜 4 秒：短于此值按 4 秒算，动作到终点后 hold"})
+    return findings
+
+
 def _check_block(block_id: str, body: str, kind: str,
                  shot_cap: float = SHOT_CAP_SECONDS) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
-    for m in DURATION_RE.finditer(body):
-        seconds = float(m.group(1))
-        if seconds > shot_cap:
-            findings.append({"code": "SHT31_SHOT_EXCEEDS_CAP", "severity": "error",
-                             "shot": block_id, "duration_seconds": seconds, "cap": shot_cap})
+    if kind == "shot":
+        findings += _check_shot_time(block_id, body, shot_cap)
+    else:
+        for m in DURATION_RE.finditer(body):
+            seconds = float(m.group(1))
+            if seconds > shot_cap:
+                findings.append({"code": "SHT31_SHOT_EXCEEDS_CAP", "severity": "error",
+                                 "shot": block_id, "duration_seconds": seconds, "cap": shot_cap})
     disp = bool(DISPLACEMENT_RE.search(body))
     if disp and not ORIENTATION_RE.search(body):
         findings.append({"code": "SHT30_MISSING_ORIENTATION" if kind == "shot" else "VID28_BARE_DISPLACEMENT",
@@ -416,7 +477,7 @@ SCREENPLAY_FIXTURE = """# EP001 测试
 
 MOTION_FIXTURE = """## MOTION-001 · 合格的发声与锁定
 - 分镜：SHOT-EP001-001
-- 时长：9 秒
+- 时长：4 秒
 - 生成方式：图生视频
 - 输入参考图：REF-XIAOYU-SHEET（顺序：1）· 输入/参考图/小雨定妆.png《小雨定妆》（用途：身份）
 - 起始帧：她面朝窗站在桌左侧，藏青外套扣到顶上，右手搭在椅背
@@ -426,7 +487,7 @@ MOTION_FIXTURE = """## MOTION-001 · 合格的发声与锁定
 
 ## MOTION-002 · 只给了情绪词与坏颜色
 - 分镜：SHOT-EP001-002
-- 时长：8 秒
+- 时长：4 秒
 - 生成方式：文生视频
 - 静态视觉锚点：一间夜里的办公室，一个人站在窗前
 - 起始帧：她站在窗前
@@ -436,7 +497,7 @@ MOTION_FIXTURE = """## MOTION-001 · 合格的发声与锁定
 
 ## MOTION-003 · 文生却没有造型与落位
 - 分镜：SHOT-EP001-003
-- 时长：6 秒
+- 时长：4 秒
 - 生成方式：文生视频
 - 静态视觉锚点：夜里的走廊，一盏声控灯
 - 起始帧：她从画面深处走来，胸部朝向镜头
@@ -445,7 +506,7 @@ MOTION_FIXTURE = """## MOTION-001 · 合格的发声与锁定
 
 ## MOTION-004 · H3 英文正文（台风格栏外已给全三根杠杆）
 - 分镜：SHOT-EP001-004
-- 时长：9 秒
+- 时长：4 秒
 - 生成方式：图生视频
 - 输入参考图：REF-XIAOYU-SHEET（顺序：1）· 输入/参考图/小雨定妆.png《小雨定妆》（用途：身份；控制：脸型、短发剪影；不得控制：构图）
 
@@ -459,7 +520,7 @@ Her lips stop moving only after the last syllable has trailed off.
 
 ## MOTION-005 · 说话方式写在台词之后（同一句里也算交付）
 - 分镜：SHOT-EP001-005
-- 时长：7 秒
+- 时长：4 秒
 - 生成方式：图生视频
 - 输入参考图：REF-B（顺序：1）· images/b.png《起始帧》（用途：起始帧）
 - 起始帧：她面朝窗站在桌左侧，米白针织衫
@@ -498,17 +559,37 @@ def selftest() -> int:
         assert not check_safety("他掏出白色小袋递过去，手一直抖。"), "clean line flagged?"
 
         p4 = Path(td) / "fastcut.md"
-        p4.write_text("## SHOT-010\n- 时长：8 秒\n- 起点：她面朝窗站在桌前\n"
+        p4.write_text("## SHOT-010\n- 时长：4 秒\n- 起点：她面朝窗站在桌前\n"
                       "- 唯一动作：她把杯子推过桌面\n- 终点：杯子停在桌沿，她胸朝窗\n",
                       encoding="utf-8")
         text4 = p4.read_text(encoding="utf-8")
-        assert check_storyboard(text4) == [], "8s must pass at the 12s suite cap"
-        tight = check_storyboard(text4, shot_cap=5.0)
+        assert check_storyboard(text4) == [], "a 4s shot must pass at the 4s suite cap"
+        tight = check_storyboard(text4, shot_cap=2.0)
         assert {f["code"] for f in tight} == {"SHT31_SHOT_EXCEEDS_CAP"}, tight
-        assert tight[0]["cap"] == 5.0, tight
+        assert tight[0]["cap"] == 2.0, tight
+
+        # SHT-31 补丁
+        over = ("## SHOT-020 · 台词超时\n- 时长：4 秒\n- 起点：她面朝窗站在桌前\n"
+                "- 唯一动作：她把杯子推过桌面\n"
+                "- 状态链：她开口：“这件事我从来就没有答应过，你别再提了。”，声音压低\n"
+                "- 终点：杯子停在桌沿，她胸朝窗\n")
+        over_codes = {f["code"] for f in check_storyboard(over)}
+        assert "SHT31_SHOT_TIME_UNDERESTIMATED" in over_codes, over_codes
+        # 没写时长 → 默认 4 秒；算出来还是超就报，不因为“没写”就跳过。
+        undeclared = ("## SHOT-021 · 没写时长\n- 起点：她面朝窗站在桌前\n"
+                      "- 状态链：她说：“这件事我从来就没有答应过，你别再提了。”\n"
+                      "- 终点：她胸朝窗\n")
+        under = [f for f in check_storyboard(undeclared)
+                 if f["code"] == "SHT31_SHOT_TIME_UNDERESTIMATED"]
+        assert under and under[0]["declared_seconds"] == 4.0, under
+        # 纯动作短镜：按默认 4 秒，不到 4 秒的声明被点名。
+        tiny = ("## SHOT-022 · 太短\n- 时长：2 秒\n- 起点：她面朝窗\n"
+                "- 唯一动作：她转身\n- 终点：她胸朝门\n")
+        assert "SHT31_SHOT_BELOW_DEFAULT_SECONDS" in {f["code"] for f in check_storyboard(tiny)}
+
         assert main(["--shot-cap", "0", str(p4)]) == 2, "zero cap accepted"
         assert main(["--shot-cap", "abc", str(p4)]) == 2, "non-numeric cap accepted"
-        assert main(["--shot-cap=5", str(p4)]) == 1, "--shot-cap=5 did not tighten"
+        assert main(["--shot-cap=2", str(p4)]) == 1, "--shot-cap=2 did not tighten"
 
         p6 = Path(td) / "视频提示词.md"
         p6.write_text(MOTION_FIXTURE, encoding="utf-8")

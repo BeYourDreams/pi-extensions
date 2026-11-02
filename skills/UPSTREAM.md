@@ -33,7 +33,7 @@ node sync-drama-skills.mjs save      # 抢救：把全局侧的手改回收进�
 | `duration_estimate.py`（pro） | 本仓库定制：未声明语速时返回 `proposed_pacing_starting_point`（2.0 字/秒）；声明 `format.pacing.pause_seconds_per_punctuation_mark` 时按标点个数累加 `pause_seconds`（`selftest_write` 17 项） |
 | `short-drama`（router） | 路由表、`knowhow-index`、`creator-workflow` 改指 `$short-drama-pro` |
 | 其余七件 | 内部引用改指 `$short-drama-pro`（共 55 处） |
-| `storyboard_check.py` | 自维护。上游 v0.9.2 把旧 JSON 检查器移出技能（改存 `tests/legacy/`，只服务历史回归），本仓库保留并继续用，含 SHT-31 单镜 ≤12 秒上限 |
+含 SHT-31 单镜 ≤4 秒硬顶
 | `container_check` / `motion_timing_check` / `music_spec_check` / `voice_sheet_check` | 同上：上游已移出技能，本仓库保留在 pro 供三阶段检查器调用 |
 | `screenplay_index.py` | 修上游消息缺陷：裸写 `[转场]`（标签无正文）原报「不支持生产标签」，现报 `production_tag_missing_body`（`selftest_write` 15 项） |
 | 已卸载 | `short-drama-write` / `-storyboard` / `-video-prompts`（内容并入 pro；备份在 `~/.pi/agent/skills-backup/*.uninstalled-20261018-204641`） |
@@ -46,7 +46,7 @@ node sync-drama-skills.mjs save      # 抢救：把全局侧的手改回收进�
    - 上游若改了老名字的 write / storyboard / video-prompts，改动要落到 `short-drama-pro` 对应阶段
      （`references/stage-*.md` 或 `references/{script,storyboard,video}/`）；
    - 上游若动了 `storyboard_check.py`、`screenplay_index.py` 等脚本，先 diff 出上游那几行，
-     再在本仓库副本上重放（本仓库副本已含 12 秒上限与 bare-tag 修复，别整文件覆盖）；
+本仓库副本已含 4 秒上限与 bare-tag 修复
 4. 自检：`short-drama-pro/scripts` 四组（`pro_check` / `selftest_write` / `selftest_storyboard` /
    `selftest_video`）+ router `selftest.py`，再 `node sync-drama-skills.mjs check`；
 5. `node sync-drama-skills.mjs install` 应用到全局，`git commit` + `git push`。
@@ -84,7 +84,7 @@ node sync-drama-skills.mjs save      # 抢救：把全局侧的手改回收进�
 review 三个技能的 `scripts/` 与 `selftest.py` 整个删掉。
 
 理由：本仓库的检查器不是"历史回归件"，而是 pro 三阶段检查器（`pro_check.py`）的活跃依赖，
-且含本仓库自加的 SHT-31 单镜 ≤12 秒上限。**跟着删会让 pro 的检查能力塌掉**，因此三个技能的
+且含本仓库自加的 SHT-31 单镜 ≤4 秒硬顶。
 `scripts/` 与 `selftest.py` 全部保留，自检照跑。
 
 **D. 文档：覆盖后重放引用改名**

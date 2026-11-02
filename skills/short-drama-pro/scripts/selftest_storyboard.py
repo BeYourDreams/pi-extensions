@@ -33,13 +33,13 @@ def codes(findings: list[dict[str, Any]]) -> set[Any]:
 
 SHOT: dict[str, Any] = {
     "shot_id": "SHOT-001",
-    "duration_seconds": 5,
+    "duration_seconds": 4,
     "start_boundary": "closed door",
     "end_boundary": "open door",
 }
 BOUNDED_SHOT: dict[str, Any] = {
     "shot_id": "SHOT-002",
-    "duration_seconds": 5,
+    "duration_seconds": 4,
     "start_boundary": {
         "positions": ["站在柜台东侧（与上一镜相同）"],
         "facing": ["面向门口"],
@@ -57,7 +57,7 @@ COVERAGE: dict[str, Any] = {
     "episode_duration": {
         "counted_shot_ids": ["SHOT-001"],
         "unresolved_durations": [],
-        "shot_seconds_total": 5,
+        "shot_seconds_total": 4,
         "delta_seconds": 0,
         "disposition": "within_creator_tolerance",
     },
@@ -124,21 +124,21 @@ def test_screenplay_coverage_is_skipped_when_not_supplied() -> None:
 
 
 def main() -> int:
-    require(check_episode_duration(COVERAGE, [SHOT], 5) == [], "valid duration")
+    require(check_episode_duration(COVERAGE, [SHOT], 4) == [], "valid duration")
     require(
         check_keyframe_boundaries([KEYFRAME], [SHOT], KEYFRAME_SOURCES) == [],
         "valid boundary",
     )
-    require(check_episode_duration(EXPANDED_COVERAGE, [SHOT], 5) == [], "expanded duration")
+    require(check_episode_duration(EXPANDED_COVERAGE, [SHOT], 4) == [], "expanded duration")
     require(
         check_keyframe_boundaries([EXPANDED_KEYFRAME], [SHOT], {}) == [],
         "expanded boundary",
     )
 
     wrong_total = copy.deepcopy(COVERAGE)
-    wrong_total["episode_duration"]["shot_seconds_total"] = 4
+    wrong_total["episode_duration"]["shot_seconds_total"] = 3.5
     require(
-        "SHT16_TOTAL_IS_NOT_THE_SUM" in codes(check_episode_duration(wrong_total, [SHOT], 5)),
+        "SHT16_TOTAL_IS_NOT_THE_SUM" in codes(check_episode_duration(wrong_total, [SHOT], 4)),
         "wrong duration total was not detected",
     )
 
@@ -153,7 +153,7 @@ def main() -> int:
     undeclared = copy.deepcopy(COVERAGE)
     undeclared["sources"] = {}
     require(
-        "REF_SRC_IS_NOT_DECLARED" in codes(check_episode_duration(undeclared, [SHOT], 5)),
+        "REF_SRC_IS_NOT_DECLARED" in codes(check_episode_duration(undeclared, [SHOT], 4)),
         "a src without a sources entry was not detected",
     )
     require(
@@ -165,7 +165,7 @@ def main() -> int:
     unbound = copy.deepcopy(COVERAGE)
     unbound["dispositions"][0]["shot_refs"] = [{"record_id": "SHOT-001"}]
     require(
-        "REF_HAS_NO_UPSTREAM_BINDING" in codes(check_episode_duration(unbound, [SHOT], 5)),
+        "REF_HAS_NO_UPSTREAM_BINDING" in codes(check_episode_duration(unbound, [SHOT], 4)),
         "a reference binding no snapshot was not detected",
     )
 
@@ -184,15 +184,15 @@ def main() -> int:
     test_screenplay_coverage_flags_gaps_and_double_claims()
     test_screenplay_coverage_is_skipped_when_not_supplied()
 
-    # SHT-31: the suite caps a single shot at 12s. The 10s design target stays
-    # with review; only the cap is mechanical, and an accepted creator decision
+    # SHT-31: the suite caps a single shot at 4s — the same number as the default
+    # shot length. Only the cap is mechanical, and an accepted creator decision
     # moves it through --shot-duration-cap rather than silently.
-    require(check_shot_duration_cap([SHOT]) == [], "a 5s shot is inside the cap")
+    require(check_shot_duration_cap([SHOT]) == [], "a 4s shot is inside the cap")
     over = copy.deepcopy(SHOT)
-    over["duration_seconds"] = 12.5
+    over["duration_seconds"] = 4.5
     require(
         "SHT31_SHOT_EXCEEDS_DURATION_CAP" in codes(check_shot_duration_cap([over])),
-        "a shot past the 12s cap was not detected",
+        "a shot past the 4s cap was not detected",
     )
     require(
         "SHT31_SHOT_EXCEEDS_DURATION_CAP"

@@ -197,7 +197,7 @@ def _duration_of(shot: dict[str, Any]) -> float | None:
 # SHT-31: suite-level shot cap. Total episode length is unbounded; each shot
 # stays within the cap (10s is the design target, reviewed, not enforced here).
 # An accepted creator decision may move the cap via --shot-duration-cap.
-SHOT_DURATION_CAP_SECONDS = 12.0
+SHOT_DURATION_CAP_SECONDS = 4.0
 
 
 def check_shot_duration_cap(
@@ -841,7 +841,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--shot-duration-cap",
         type=float,
         default=SHOT_DURATION_CAP_SECONDS,
-        help="SHT-31 per-shot cap in seconds (suite default 12; a creator-accepted "
+        help="SHT-31 per-shot cap in seconds (suite default 4; a creator-accepted "
         "model dialect may declare a tighter native bound, which the native check "
         "already carries)",
     )
