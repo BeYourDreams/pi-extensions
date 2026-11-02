@@ -69,7 +69,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 |---|---|---|
 | `npm:pi-tps` | 底部 token/speed 状态栏 | 装后跑 `fix-tps-theme.ps1` 让配色跟随系统主题 |
 | `npm:@injaneity/pi-computer-use` | 桌面截图 / 点击 / 输入 | **唯一需批准 install 脚本的包**，见 §3.1 |
-| `npm:pi-one-ui` | TUI 统一美化（Header/Context/WorkingLine/Editor/Footer） | 取代旧 `alps-pi`；要求 Node ≥22.19、Pi ≥0.84。**装完必配** `~/.pi/agent/pi-one-ui.json` 的 `colors.cwd`，否则浅色终端里文件夹名发白，见 §7.22。**本机已改为本地源码安装**（`D:\AI\pi-one-ui`，见 §7.26）：源码里的主题已删掉撞严格 schema 的三键，故不用再跑 `fix-pi-one-ui-theme.mjs`；走 npm 包的用户 pi ≥1.0 仍需跑一次 |
+| `git:github.com/BeYourDreams/pi-one-ui` | TUI 统一美化（Header/Context/WorkingLine/Editor/Footer） | 取代旧 `alps-pi`；要求 Node ≥22.19、Pi ≥0.84。**装完必配** `~/.pi/agent/pi-one-ui.json` 的 `colors.cwd`，否则浅色终端里文件夹名发白，见 §7.22。**本机 2026-11-02 从「本地源码 `D:\AI\pi-one-ui`」换成 git 源**（§7.26）：主题在源码层已合规，`fix-pi-one-ui-theme.mjs` 现在 npm 与 git 两份副本都扫，跑一次即体检；只有还在吃 `npm:pi-one-ui@0.9.1` 的人才需要它真去补三键 |
 | `npm:pi-cache-guardian` | 缓存命中巡检 + 前缀漂移告警 | 与 §6 的 prefix-stabilizer 是同一根因的两端，一并用 |
 | `npm:@tian.zuo/pi-find` | `grep` / `find` 工具 | **覆盖内建同名工具**（替换，不是并列）。本机只用它的 `grep`；`find` 已降为懒加载兜底（见 §4.1） |
 | `npm:@trycedar/pi-mdiff` | `md_inspect` / `md_diff` / `md_edit` | Markdown 结构化编辑，`.md` 改动优先用它 |
@@ -135,7 +135,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 **`pi install` 一次只写一条注册，绝不能并行**（并行会竞写 `settings.json` 丢包）。照序跑：
 
 ```bash
-for p in pi-tps @injaneity/pi-computer-use pi-one-ui pi-cache-guardian \
+for p in pi-tps @injaneity/pi-computer-use pi-cache-guardian \
          @tian.zuo/pi-find @trycedar/pi-mdiff \
          pi-mcp-adapter pi-agent-browser-native @agenticup/pi-loop; do
   pi install "npm:$p" || echo "[失败] $p"
@@ -148,9 +148,11 @@ for p in pi-prefix-stabilizer pi-cache-compact \
   pi install "npm:$p" || echo "[失败] $p"
 done
 
-# git 源单独装（两个都要串行；宠物从 npm 换 git 时先 remove，见 §3.6）
+# git 源单独装（三个都要串行；宠物从 npm 换 git 时先 remove，见 §3.6）
 pi install git:github.com/BeYourDreams/pi-lazy-tools
 pi install git:github.com/BeYourDreams/pi-dsh-pet
+# pi-one-ui 走 git 不走 npm：npm 包 0.9.1 的内置主题过不了 pi 严格 schema（§7.26）
+pi install git:github.com/BeYourDreams/pi-one-ui
 pi install "npm:pi-web-access"
 pi install "npm:@bacnh85/pi-checkpoint"
 pi install "npm:pi-notify"
@@ -220,7 +222,14 @@ pi list                                # 升完核一遍实际版本
 > **`pi update npm:<包>` / 重装那个包会连它目录里的补丁一起冲掉**：`fix-pi-one-ui-theme.mjs` 打在 `npm/node_modules/pi-one-ui/themes/*.json` 上的补丁同理（§7.26），升完按 §8 表重跑。
 
 > `pi-dsh-pet` 换成 git 源后**不再有「反复重下 48MB 动画」的问题**——clone 就带 `assets/thumb`（91 个 WebM，整仓 202M），`pi update` 只拉增量；只有第一次 `/pet` 要下 Electron ≈100MB。
-> **`pi-one-ui` 已改为本地源码安装**（本机 2026-10-27）：跳过上面循环里的 `pi-one-ui`，改在源码目录装 —— `cd D:\AI\pi-one-ui && pi install ./`（写入 `~/.pi/agent/settings.json` 的绝对路径，`pi list` 里显示 `D:\AI\pi-one-ui`）。这样 `settings.json` 里不再有 `npm:pi-one-ui`，`~/.pi/agent/npm/node_modules/pi-one-ui` 也随之卸掉；源码层的主题已经合规（§7.26），不用再跑补丁脚本。
+> **`pi-one-ui` 走 git 源，别再从 `D:\AI\pi-one-ui` 本地装**（本机 2026-11-02；2026-10-27 ~ 11-02 之间曾是 `pi install ./` 本地源码）：上面第一个循环里的 `pi-one-ui` 要跳过（那是 `npm:`，0.9.1 的主题不合规），改装：
+>
+> ```bash
+> pi remove "D:\AI\pi-one-ui"                 # 先摘本地源码那条，否则两份并存各加载一次
+> pi install git:github.com/BeYourDreams/pi-one-ui
+> ```
+>
+> 落在 `~/.pi/agent/git/github.com/BeYourDreams/pi-one-ui`，`settings.json` 里不再有 `npm:pi-one-ui` 也不再有绝对路径，`pi update --extensions` 会连它一起拉。源码里主题已合规（§7.26），`fix-pi-one-ui-theme.mjs` 现在是「两份副本都体检」的守门脚本，不是必跑的补丁。
 
 **处理办法见 §3.4；升完必跑一次 bench 确认 wire 工具集没变**（本次实测未变：升完是 8 个工具 / 8317B，`extension_error` 0；随后按「只保留默认工具」收敛为 6 个 / 6010B，2026-09-30 卸 `pi-web-access` 后为 **5 个 / 5664B**）。
 
@@ -388,7 +397,9 @@ npm rebuild better-sqlite3  # 批完必须重编，批准本身不建原生 bind
 > | `"git:github.com/BeYourDreams/pi-dsh-pet"` | **照旧加载**（本机踩了一个月才发现） | 重复注册 `/pet` `/pet-stop` `/pet-say` `/pet-status`（本地薄客户端也注册同名 + `/pet-auto`）；多一条 `session_start → ensureHost()` 走 `state.json` 单一来源；终端刷 `[pi-dsh-pet] /feed 连接断开，2s 后重连`，headless 跑不完（§7.13 的 exit 124 噪音一半来自它） |
 > | `{"source": "git:...", "extensions": []}` | **不加载** ✅ | 干净：`pi list` 该行显示 `git:github.com/BeYourDreams/pi-dsh-pet (filtered)`，终端只剩本地客户端的 `[pi-pet-autostart]` |
 >
-> 验证法（改完 `/reload` 后跑）：`timeout 70 pi --no-session -p "reply with: ok"` → 输出里应**不出现** `[pi-dsh-pet]` 前缀的行；`pi list` 应出现 `(filtered)` 且条目数不变（29）。上游源码留着做参考（`~/.pi/agent/git/github.com/BeYourDreams/pi-dsh-pet/pi/extensions/index.ts`），本机跑的是本地薄客户端。
+> 验证法（改完 `/reload` 后跑）：`timeout 70 pi --no-session -p "reply with: ok"` → 输出里应**不出现** `[pi-dsh-pet]` 前缀的行；`pi list` 应出现 `(filtered)` 且条目数不变（本机 2026-11-02 为 **27**）。上游源码留着做参考（`~/.pi/agent/git/github.com/BeYourDreams/pi-dsh-pet/pi/extensions/index.ts`），本机跑的是本地薄客户端。
+>
+> **2026-11-02 换 owner（`qq458249269` → `BeYourDreams`）的一个坑**：重 clone 237M 直连撞 `fetch-pack: invalid index-pack output`；两 owner 的 `main` 同一个 HEAD（`git ls-remote` 一致），于是把旧 clone `git/github.com/qq458249269/pi-dsh-pet` 用 **NTFS junction** 指到 `git/github.com/BeYourDreams/pi-dsh-pet`，再在那个 clone 里 `git remote set-url` 到新 URL，避开重下（正在跑的宠物 Electron 占旧目录，`mv` 报 `Device or resource busy`）。`settings.json` 的 object form source 同步改成新 owner，`pi list` 仍是 `(filtered)`。**收尾（下次 `/pet-auto off` 或宠物窗关掉后做）**：删 junction → 真 `mv` 目录到新 owner 路径 → 无需再动 remote。
 
 **首次开窗要下 Electron ≈100MB**（上游在 Windows 自动设 `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`）；包里 91 个透明 WebM，`assets/thumb` 解包 48MB。
 
@@ -1423,6 +1434,10 @@ Other errors:
 
 **验证**：ajv + `D:\agent\pi\theme\theme-schema.json`（required / 色值格式一起校）：未补两份各 4 条错 → 补后两份 `VALID`；`node fix-pi-one-ui-theme.mjs --check` exit 0。
 
+**2026-11-02 本机改吃 git 源**：`pi remove "D:\AI\pi-one-ui"` + `pi install git:github.com/BeYourDreams/pi-one-ui`（同 HEAD `7f394f3`，与 npm 0.9.2 / 本地源码一致），落在 `~/.pi/agent/git/github.com/BeYourDreams/pi-one-ui`。好处：`settings.json` 里不再有绝对路径条目，`pi update --extensions` 能升它（本地源码安装升不到）。`D:\AI\pi-one-ui` 目录留着做开发，pi 不再加载它。补丁脚本同时改为 **npm + git 两份副本都扫**（实测：往 git 副本注入一个 `colors.cwd` → `--check` exit 1；不带 `--check` 跑一次后与原文件逐字节一致）。还吃 `npm:pi-one-ui@0.9.1` 的人照旧必跑该脚本。
+
+**代理**（同日）：`~/.gitconfig` 的全局 `http.proxy`/`https.proxy = http://127.0.0.1:7890` 已 `git config --global --unset` 删掉（该端口无监听，`git fetch` 必挂）；只留 `gitlab.oa.sci99.com` 的空 proxy 例外。git 拉 GitHub 现走直连，**时通时断**：237M 的 `pi-dsh-pet` 重 clone 撞 `fetch-pack: invalid index-pack output`，本机改用 junction 复用旧 clone（见 §3.6 注）；真要重下按 §2.2 走 `gh-proxy.com` 改写或重试。
+
 **2026-10-27 上游源码层已修（本机改吃本地源码）**：`D:\AI\pi-one-ui`（`git:github.com/BeYourDreams/pi-one-ui`，与 npm 0.9.2 同源）里把那两个主题的 `cwd` / `editorModel` / `editorBorder` 直接删了，并补了回归用例 `tests/themes/builtin-themes-schema.test.ts`：拿 `@earendil-works/pi-coding-agent` 自带的 `dist/modes/interactive/theme/theme-schema.json` 校顶层键与 `colors`/`export` 的额外键（修前必红、修后绿）。文档一并改口：这三个键**只能写在 `~/.pi/agent/pi-one-ui.json`**，写进任何主题文件（包括 `~/.pi/agent/themes/`）都会把整份主题判非法。本机安装随之改成 `pi install ./`（见 §2.1 注），`settings.json` 里不再有 `npm:pi-one-ui`，所以补丁脚本现在直接 `[skip]`（npm 副本已不存在，脚本对“目录不在”改为 exit 0）。
 
 **别走的两条路**：
@@ -1463,7 +1478,7 @@ Other errors:
 | `node fix-proper-lockfile-proxy.mjs --check` | proper-lockfile 补丁在位 | 一致 exit 0 |
 | `node fix-subagent-check.mjs --check` | 子代理可用（agent 定义目录 / modelPolicy / 插件在位） | 全绿 exit 0；缺 agent 定义 exit 1 |
 | `node fix-browser-native-compat.mjs` | 双路回退兼容（新形态报 `[skip]`）。0.9.6 起上游把 `lib/tool-surface.js` 打进 `dist/extensions/agent-browser/index.js`，老路径不在 ≠ 没装；脚本改按 `package.json` 的 `pi.extensions` 入口判形态（2026-10-18） | `[skip]`（打包形态，宿主自带 `buildSessionProjection`） |
-| `node fix-pi-one-ui-theme.mjs --check` | pi-one-ui 内置主题里是否还有 pi 主题 schema 不认的 `colors` 键（§7.26） | 补过 exit 0；本机走本地源码安装后无 npm 副本 → `[skip]` exit 0；走 npm 包时 `pi update npm:pi-one-ui` 后会报 `[待修补]` exit 1，重跑不带 `--check` 即修 |
+| `node fix-pi-one-ui-theme.mjs --check` | pi-one-ui 内置主题里是否还有 pi 主题 schema 不认的 `colors` 键；npm 与 git 两份副本一起扫（§7.26） | 本机 2 份 git 副本合规 → `[skip]`/exit 0；`[待修补]` exit 1 时重跑不带 `--check` 即修；两份副本都不存在也 `[skip]` exit 0 |
 | `node install-project-config.mjs --check` | `config/` 里的配置/小脚本与 pi 实际读取位置是否一致（行尾 CRLF/LF 归一后再比，不算漂移） | 一致 exit 0 |
 | `.sc-test/check-ext-errors.mjs` | 扫会话里的 `extension_error` | 盘上还在，但 `.sc-test/` 是 gitignore、**不入库** → 当一次性探针用，别当长期工具（升级/清理会丢） |
 | `.sc-test/probe-bash-guard.mjs` | bash-guard 回归用例（含规则 E 正反两组） | **不入库**；2026-11-01 按 §5 清单重写并跑通 |

@@ -37,8 +37,13 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
-const PKG_DIR = path.join(os.homedir(), ".pi", "agent", "npm", "node_modules", "pi-one-ui");
-const THEME_DIR = path.join(PKG_DIR, "themes");
+// ponytail: 扫描所有已安装的 pi-one-ui 副本（npm + git），上限：同名多副本时全部校一遍。
+const AGENT = path.join(os.homedir(), ".pi", "agent");
+const THEME_DIR_LIST = [
+	path.join(AGENT, "npm", "node_modules", "pi-one-ui", "themes"),
+	path.join(AGENT, "git", "github.com", "BeYourDreams", "pi-one-ui", "themes"),
+	path.join(AGENT, "git", "github.com", "qq458249269", "pi-one-ui", "themes"),
+].filter((d) => fs.existsSync(d));
 // 找不到 pi 的 schema 时用的兜底名单（pi 1.0.0 ~ 1.3.0 就是这 3 个键越界）。
 const FALLBACK_EXTRA = ["cwd", "editorModel", "editorBorder"];
 const checkOnly = process.argv.includes("--check");
@@ -83,25 +88,28 @@ function allowedColorKeys(schemaFile) {
 	}
 }
 
-if (!fs.existsSync(THEME_DIR)) {
-	console.log(
-		`[skip] 未找到 pi-one-ui 主题目录（未装 npm 副本，本机改用本地源码安装）: ${THEME_DIR}`,
-	);
+if (THEME_DIR_LIST.length === 0) {
+	console.log("[skip] 未找到任何 pi-one-ui 主题目录（npm/git 副本都不存在）");
 	process.exit(0);
 }
 
 const schemaFile = detectSchemaFile();
 const allowed = allowedColorKeys(schemaFile);
-const themeFiles = fs.readdirSync(THEME_DIR).filter((f) => f.endsWith(".json"));
+let todo = 0;
+let clean = 0;
+const themeFiles = THEME_DIR_LIST.flatMap((dir) =>
+	fs
+		.readdirSync(dir)
+		.filter((f) => f.endsWith(".json"))
+		.map((f) => path.join(dir, f)),
+);
 if (themeFiles.length === 0) {
-	console.error(`[fail] ${THEME_DIR} 里没有 .json 主题，请手工核对`);
+	console.error(`[fail] ${THEME_DIR_LIST.join(", ")} 里没有 .json 主题，请手工核对`);
 	process.exit(1);
 }
 
-let todo = 0;
-let clean = 0;
-for (const file of themeFiles) {
-	const full = path.join(THEME_DIR, file);
+for (const full of themeFiles) {
+	const file = path.basename(full);
 	let theme;
 	try {
 		theme = JSON.parse(fs.readFileSync(full, "utf8"));
