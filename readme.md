@@ -11,9 +11,9 @@
 
 ---
 
-## 1. 清单（在用 28 个扩展 = 26 npm + 2 git）
+## 1. 清单（在用 27 个扩展 = 24 npm + 3 git）
 
-**实际在用 28 个**。
+**实际在用 27 个**（2026-11-02 实核：§1.1–§1.3 表行 = `settings.json` 的 `packages` = `pi list`，27 条一一对齐，表内无多无漏）。
 > 2026-10-06 增补 3 个：联网（`pi-web-access`）、会话级撤销（`@bacnh85/pi-checkpoint`）、完成通知（`pi-notify`）。PR 插件（`@henryqw/pi-pr`）装后即卸，见 §7.7。
 > 2026-10-08 精简：卸 `pi-budget-guard`（与 `pi-meter` 功能三层全重叠，见 §7.12）与 `pi-warm-cache`（本机不生效的死安装，见 §7.12）；补装 `@arhen/pi-core-subagent`、`pi-ocr`（此前清单漂移：列了但实际未装）；新增 `pi-deepseek-cache`（DeepSeek 后端专用，与 §5.5 原判相悳 —— **2026-10-09 已验实并卸载，见 §7.13**）。
 > 2026-10-09 压缩侧换血（见 §7.13）：装 `pi-cache-compact`（provider 无关的压缩调用缓存，本机实测命中 68.6%）；卸 `pi-deepseek-cache`（绑定 DeepSeek）与 `pi-compaction-cache`（被 cache-compact 取代，且同抢 `session_before_compact`）。29 → 28。
@@ -48,7 +48,9 @@
 > 2026-10-18 晚 全局规则 `~/.pi/agent/AGENTS.md` **删「Download」块**（现三块：Think / Read files / Search，1263B → 991B）：镜像/证书那套规矩仍留在 §3.15 与 §8 排障表里，规则块不再重复一遍。
 > 2026-10-18 晚（同机、清单计数不动）：开机 `[Theme conflicts]`
 
-> 2026-11-01（清单计数不动）**规则 E 以新形态恢复**：`pi-bash-guard` 按**命令名**拦 `find`/`grep`/`egrep`/`fgrep`
+> 2026-11-02（**28 → 27**：卸 `D:\AI\pi-one-ui` 本地源码条目，改装 `git:github.com/BeYourDreams/pi-one-ui`；计数不变的那次拉齐在 11-01）：本仓 `master` 拉到 `f315550`（6 个 incoming，纯 fast-forward）；`pi-one-ui` / `pi-lazy-tools` / `pi-dsh-pet` 三个 git 源的 owner 从 `qq458249269` 统一成 `BeYourDreams`；`~/.gitconfig` 的全局 7890 代理删掉，git 改走 SSH（详 §7.26 同日两段）。
+
+> 2026-11-01（清单计数不动）**规则 E 以新形态恢复**
 > （只认每条流水线首段首词；管道消费位、`git grep`、`./find-helper.sh` 不拦），替代 2026-10-13 删掉的「按搜索根拦」。
 > 同批：`skills/short-drama-edit` 的 `edit_tool.py` 新增 `音乐` 行（sidechain 自动让对白）、`声音：…（原声静音）`、
 > 配音相邻句 0.4 秒下限、`字幕：带说话人`（两条渲染路线同步）；详见 §4.2/§5 与技能自身文档。回归：
@@ -192,7 +194,7 @@ node install-project-config.mjs
 >
 > 若 `pi update --extensions` 也超时，同一改写继续生效（git 源的 update 就是 git pull）；装完即可 `/reload`。
 
-装完自查：`pi list` 应见 **28 个扩展**（26 npm + 2 git）
+装完自查：`pi list` 应见 **27 个扩展**（24 npm + 3 git；2026-11-02 把 `pi-one-ui` 从 npm 换到 git 所以是 3 git）
 
 ### 2.2 硬顺序约束
 
@@ -1436,7 +1438,9 @@ Other errors:
 
 **2026-11-02 本机改吃 git 源**：`pi remove "D:\AI\pi-one-ui"` + `pi install git:github.com/BeYourDreams/pi-one-ui`（同 HEAD `7f394f3`，与 npm 0.9.2 / 本地源码一致），落在 `~/.pi/agent/git/github.com/BeYourDreams/pi-one-ui`。好处：`settings.json` 里不再有绝对路径条目，`pi update --extensions` 能升它（本地源码安装升不到）。`D:\AI\pi-one-ui` 目录留着做开发，pi 不再加载它。补丁脚本同时改为 **npm + git 两份副本都扫**（实测：往 git 副本注入一个 `colors.cwd` → `--check` exit 1；不带 `--check` 跑一次后与原文件逐字节一致）。还吃 `npm:pi-one-ui@0.9.1` 的人照旧必跑该脚本。
 
-**代理**（同日）：`~/.gitconfig` 的全局 `http.proxy`/`https.proxy = http://127.0.0.1:7890` 已 `git config --global --unset` 删掉（该端口无监听，`git fetch` 必挂）；只留 `gitlab.oa.sci99.com` 的空 proxy 例外。git 拉 GitHub 现走直连，**时通时断**：237M 的 `pi-dsh-pet` 重 clone 撞 `fetch-pack: invalid index-pack output`，本机改用 junction 复用旧 clone（见 §3.6 注）；真要重下按 §2.2 走 `gh-proxy.com` 改写或重试。
+**走 SSH**（同日，直连 443 时通时断之后的常规通道）：本仓与三个 git 源插件的 `origin` 都改成 `git@github.com:<owner>/<repo>.git`（`ssh -T git@github.com` 认到 `BeYourDreams`，密钥 `~/.ssh/id_ed25519`）。`pi install git:github.com/...` 新装仍走 https（会 `invalid index-pack output`），**已存在 clone 直接改 remote 就绕开了**：`git remote set-url origin git@github.com:BeYourDreams/pi-dsh-pet.git`（三个插件同法）；`pi update --extensions` 用的是 clone 自己的 remote，改完就吃 SSH。本仓 push：`git remote set-url origin git@github.com:BeYourDreams/pi-extensions.git`。
+
+**代理**（同日）：`~/.gitconfig` 的全局 `http.proxy`/`https.proxy = http://127.0.0.1:7890` 已
 
 **2026-10-27 上游源码层已修（本机改吃本地源码）**：`D:\AI\pi-one-ui`（`git:github.com/BeYourDreams/pi-one-ui`，与 npm 0.9.2 同源）里把那两个主题的 `cwd` / `editorModel` / `editorBorder` 直接删了，并补了回归用例 `tests/themes/builtin-themes-schema.test.ts`：拿 `@earendil-works/pi-coding-agent` 自带的 `dist/modes/interactive/theme/theme-schema.json` 校顶层键与 `colors`/`export` 的额外键（修前必红、修后绿）。文档一并改口：这三个键**只能写在 `~/.pi/agent/pi-one-ui.json`**，写进任何主题文件（包括 `~/.pi/agent/themes/`）都会把整份主题判非法。本机安装随之改成 `pi install ./`（见 §2.1 注），`settings.json` 里不再有 `npm:pi-one-ui`，所以补丁脚本现在直接 `[skip]`（npm 副本已不存在，脚本对“目录不在”改为 exit 0）。
 
