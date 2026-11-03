@@ -13,3 +13,7 @@ Minimal sufficient reasoning: goal → constraints → key intermediates → dec
 - Don't re-read files already read this session
 - Exceptions: source about to edit, configs ≤200 lines, scouting unfamiliar structure
 
+## Search
+Filename/path search via `fd`, content search via `rg`; `find`/`grep` fallback only with narrowed path.
+- `fd` excludes build dirs by default; on big trees use `fd --type` or scope path first
+- `fd` tool: always pass `timeoutMs` explicitly; all commands carry a `timeout`

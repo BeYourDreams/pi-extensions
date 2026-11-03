@@ -58,7 +58,7 @@
 > 配音相邻句 0.4 秒下限、`字幕：带说话人`（两条渲染路线同步）；详见 §4.2/§5 与技能自身文档。回归：
 > `.sc-test/probe-bash-guard.mjs`（重写，不入库）+ `short-drama-edit/scripts/selftest.py`。改完记得 `/reload`。
 
-> 2026-11-03（清单计数不动）**取消拦截 find/grep，改为全局指向 fd/rg**：`pi-bash-guard` 移除规则 E；`bash-prelude.sh` / `.bashrc` 新增 `find→fd`、`grep→rg`（含 egrep/fgrep）函数/alias；`AGENTS.md` 移除 fd/rg 规则描述。GNU 风格参数不自动翻译，需按 fd/rg 语法调用。改完记得 `/reload`。
+> 2026-11-03（清单计数不动）**取消拦截/全局指向 find/grep，仅提示词限制优先 fd/rg**：`pi-bash-guard` 移除规则 E；`bash-prelude.sh` 不再把 find/grep 指向 fd/rg；`AGENTS.md` 恢复 fd/rg 提示词限制。改完记得 `/reload`。
 
 **不锁版本**：安装命令一律不带 `@版本号`（取 npm 最新），本清单不维护版本矩阵。要查本机实际装的版本：
 
@@ -114,7 +114,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `pi-lean-prompt.ts` | 裁 `payload.tools` 里 `edit`/`read` 的 description 与 schema 样板文字（**只改文字、不动字段结构**，故与 smart-edit / one-ui / undo-redo 兼容） |
 | `pi-lean-sections.ts` | 压 wire 上 system 的 `<docs>` / `<skills>` 两块（见 §6.2） |
 | `pi-fd.ts` | 注册 `fd` 工具（fd 原生接口），**取代 pi-find 那个只认 glob 的 `find`**（见 §4.1） |
-| `pi-bash-guard.ts` | **不注册工具**，只挂 `tool_call`：**所有** bash 命令没传 `timeout` 就按档注入（搜索 30s / 构建 1800s / 其余 300s，硬的 1 小时上限）、永不返回的命令（编辑器/分页器/前台 dev server/常驻容器）与后台化的搜索直接 block、`find`/`grep` 全局指向 `fd`/`rg`（shell 函数/alias，2026-11-03 取消拦截）、给 `fd` 工具补 `timeoutMs`（见 §5 铁律二） |
+| `pi-bash-guard.ts` | **不注册工具**，只挂 `tool_call`：**所有** bash 命令没传 `timeout` 就按档注入（搜索 30s / 构建 1800s / 其余 300s，硬的 1 小时上限）、永不返回的命令（编辑器/分页器/前台 dev server/常驻容器）与后台化的搜索直接 block、`find`/`grep` 不拦截/不全局指向，仅提示词限制优先 fd/rg、给 `fd` 工具补 `timeoutMs`（见 §5 铁律二） |
 | `pi-pet-autostart.ts` | 让 `pi-dsh-pet` **默认常驻且整机只留一只**：TUI 会话一开就派发 `/pet`，已有宠物窗就复用不新开，跨会话/多开 pi 也只一只。不注册工具，只挂 `session_start` + `/pet-auto` 开关。配置见 §3.6 |
 
 > 曾经的 `pi-plan-tools.ts`（把 lazy-tools 剥掉的 `plan_mode_*` 助手工具捞回来）**已删除**：`@narumitw/pi-plan-mode` 2026-10-13 卸载，`/plan` 在本机用不了，这个补锅扩展就没存在意义了（见 §7.21）。
@@ -727,7 +727,7 @@ npm ls web-tree-sitter   # 应为 0.24.7 deduped，无 invalid
 
 ### 4.2 ~~全局禁用 `find`~~（**已卸载 2026-10-08**：本机恢复 `find`，4 层封锁全撤；卸载记录见 §7.9，以下为历史留档，勿再照着启用）
 
-> **2026-11-03 更新**：本节四层封锁仍卸着；`find`/`grep` 不再拦截，改为全局指向 `fd`/`rg`（shell 函数/alias，`bash-prelude.sh` + `.bashrc`），模型与终端统一走 fd/rg。口径见 §5 第三类。
+> **2026-11-03 更新**：本节四层封锁仍卸着；`find`/`grep` 不再拦截/不全局指向，仅提示词限制优先 fd/rg。口径见 §5 第三类。
 
 **为什么要禁**（⚠️ 下方第一条已被 2026-10-10 实测推翻，保留原文以备查）：本机 `find` 有两个不同的东西，症状都是「卡死」：
 - ~~`C:\Windows\System32\find.exe`（cmd/PowerShell 里的 FIND.EXE）：语法与 GNU find 完全不同，`find . -name x` 被当成「pattern + 无文件名」→ **从 stdin 读**，表现就是永远不返回；~~
@@ -740,7 +740,7 @@ npm ls web-tree-sitter   # 应为 0.24.7 deduped，无 invalid
 **`powershell` 工具没有 `timeout` 参数**（§5 表里已记「注入不了」）。裸 `find` = `find .` = 从当前目录
 **递归打印整棵树**，无任何剪枝；放到大仓 / 家目录 / 系统盘就是几小时。bash 侧没这问题——守卫会把
 `find`/`find.exe` 归入搜索档、30s 默认超时（实测 `judgeBashCommand("find.exe . -maxdepth 6") → 30`）。
-**换 fd 也不会自动好**：见 §4.1 尾注——fd 的 ignore 规则在非 git 目录同样失效。**2026-10-13 已撤「按搜索根硬拦」的规则 E**（误伤远多于收益：`cd <项目> && find .` 里 `cd` 的实参被当成搜索根）；**2026-11-01 换成按命令名拦回来**（只认流水线首段首词，管道消费位与 `git grep` 不拦）；**2026-11-03 取消拦截**，改为 `find`/`grep` 全局指向 `fd`/`rg`——见 §5 第三类。30s 超时兜底照旧。
+**换 fd 也不会自动好**：见 §4.1 尾注——fd 的 ignore 规则在非 git 目录同样失效。**2026-10-13 已撤「按搜索根硬拦」的规则 E**（误伤远多于收益：`cd <项目> && find .` 里 `cd` 的实参被当成搜索根）；**2026-11-01 换成按命令名拦回来**（只认流水线首段首词，管道消费位与 `git grep` 不拦）；**2026-11-03 取消拦截/全局指向**，仅提示词限制优先 fd/rg——见 §5 第三类。30s 超时兜底照旧。
 
 **四层封锁**（前两层管模型，后两层管你自己）：
 
@@ -1043,7 +1043,7 @@ sed -i 's/spawn(ZG_BIN, args, { cwd: opts.cwd, stdio: \["ignore", "pipe", "pipe"
 
 生效无需 `/reload`（没动 pi 的扩展加载）；`find` 回到系统原样（System32 FIND.EXE / GNU find 并存，按 PATH 顺序命中）。
 
-> 2026-11-03：`find`/`grep` 不再拦截，全局指向 `fd`/`rg`（shell 函数/alias，`bash-prelude.sh` + `.bashrc`）；终端与 pi 的 `bash` 工具统一走 fd/rg。口径见 §5 第三类。
+> 2026-11-03：`find`/`grep` 不再拦截/不全局指向，仅提示词限制优先 fd/rg。口径见 §5 第三类。
 
 ### 7.10 `pi-cwd-guard` 卸载（2026-10-08）
 

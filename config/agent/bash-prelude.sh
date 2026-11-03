@@ -8,8 +8,4 @@ cd() {
 	builtin cd "$@"
 }
 
-# find/grep 全局指向 fd/rg（不再拦截，直接跑替代品）
-find() { fd "$@"; }
-grep() { rg "$@"; }
-egrep() { rg -E "$@"; }
-fgrep() { rg -F "$@"; }
+# fd/rg 仅提示词限制：不改写/不拦截 find/grep，保留系统原生命令。
