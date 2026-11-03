@@ -1,5 +1,8 @@
 # Global Rules
 
+## 语言要求
+最终结论输出中文。
+
 ## Think
 Minimal sufficient reasoning: goal → constraints → key intermediates → decision → verify. No restatement, repetition, pleasantries, divergence. Simple → answer directly; complex → budget flexible, correctness first.
 
@@ -10,7 +13,3 @@ Minimal sufficient reasoning: goal → constraints → key intermediates → dec
 - Don't re-read files already read this session
 - Exceptions: source about to edit, configs ≤200 lines, scouting unfamiliar structure
 
-## Search
-Filename/path search via `fd`, content search via `rg`. bash 的 `find`/`grep`（含 egrep/fgrep）当生产者时被硬拦（pi-bash-guard 规则 E）：没有 fd/rg 等价写法的少数场合，让用户自己跑；管道消费位的 grep（`ls | grep foo`）不受影响。
-- `fd` excludes build dirs by default; on big trees use `fd --type` or scope path first
-- `fd` tool: always pass `timeoutMs` explicitly; all commands carry a `timeout`
