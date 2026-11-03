@@ -9,10 +9,13 @@ Advisory for screenplay prose (SCR-23 / SHT-30 patterns), hard for shot duration
               end-state re-declaration
 - 剧本.md   : action paragraphs; checks bare displacement verbs, chain overload,
               hidden mechanics, leading limb on crossings
+- 分镜视频剧本.md : "## SEG-..." blocks; checks the 10-second segment cap
 
 Codes: SHT31_SHOT_EXCEEDS_CAP (error), SHT31_SHOT_TIME_UNDERESTIMATED /
 SHT31_SHOT_BELOW_DEFAULT_SECONDS (warnings; 镜长由「动作+对话」算出，默认 4 秒),
 VID28_END_STATE_MISSING (warning),
+VID29_SCENE_AS_GEN_UNIT / VID29_GEN_UNIT_NOT_ONE_SHOT (errors; 生成单元是一镜不是一场),
+SEG10_EXCEEDS_CAP / SEG10_NO_SHOTS / SEG10_CROSSES_SCENE (errors; 生成段 ≤10 秒、不跨场),
 VID28_BARE_DISPLACEMENT / SHT30_MISSING_ORIENTATION / SCR23_BARE_DISPLACEMENT /
 SCR23_CHAIN_OVERLOAD / SCR23_HIDDEN_MECHANICS / SCR23_MISSING_LEADING_LIMB (warnings),
 SAF01_HIGH_RISK_TERM (warning, all document kinds; see stage-script.md §9),
@@ -69,6 +72,12 @@ GRAB_RE = re.compile(r"(拿起|抓起|取下|接过|掏出|握住|抓起)")
 HIDDEN_RE = re.compile(r"(突然|随即|随后|紧接着)[^。！？\n]{0,24}?(走进|进入|出现在|推到|拉开|跨上|坐上|站到)")
 
 DURATION_RE = re.compile(r"时长[:：]?\s*(\d+(?:\.\d+)?)\s*秒")
+SCENE_HEADING_RE = re.compile(r"^##\s+EP[^\s]*-SC\d+", re.M)
+SHOT_REF_RE = re.compile(r"分镜[:：]\s*(SHOT-[^\s，,、]*)")
+# 生成段（SEG）: 一场拆成若干 ≤10 秒的段，段内逐镜 ≤4 秒。
+SEGMENT_CAP_SECONDS = 10.0
+SEG_SHOT_LINE_RE = re.compile(r"SHOT-[^\s，,、]*[^\n]*?(\d+(?:\.\d+)?)\s*秒")
+SCENE_ID_RE = re.compile(r"SC\d+")
 # 动作拍只数动作行的分句：起点/终点是状态不是动作，算进去会把每镜都撑爆。
 ACTION_LINE_RE = re.compile(r"^\s*[-*]?\s*(?:唯一动作|状态链|动作)[:：]?(.*)$", re.M)
 STEP_SPLIT_RE = re.compile(r"[。；;→，,]")
@@ -401,10 +410,30 @@ def check_storyboard(text: str, shot_cap: float = SHOT_CAP_SECONDS) -> list[dict
         + _check_look_drift(blocks)
 
 
+def _check_gen_unit(blocks: list[tuple[str, str]]) -> list[dict[str, Any]]:
+    """VID-29: 一条提示词 = 一镜。按场次整段喂模型会换来一条十几秒长片。"""
+    findings: list[dict[str, Any]] = []
+    for bid, body in blocks:
+        refs = set(SHOT_REF_RE.findall(body))
+        if len(refs) != 1:
+            findings.append({
+                "code": "VID29_GEN_UNIT_NOT_ONE_SHOT", "severity": "error", "shot": bid,
+                "shots": sorted(refs),
+                "message": "一条提示词必须挂且只挂一个 SHOT-（≤4 秒）：整场一条会生成十几秒的长片"})
+    return findings
+
+
 def check_motion(text: str, shot_cap: float = SHOT_CAP_SECONDS) -> list[dict[str, Any]]:
     blocks = _blocks(text, "MOTION-")
-    return [f for bid, body in blocks for f in _check_block(bid, body, "motion", shot_cap)] \
-        + _check_look_drift(blocks)
+    findings: list[dict[str, Any]] = []
+    if SCENE_HEADING_RE.search(text):
+        findings.append({
+            "code": "VID29_SCENE_AS_GEN_UNIT", "severity": "error",
+            "message": "视频提示词里出现场次标题：模型照 ## EP…-SC… 自行切段，一场切成一条长片；"
+                       "按镜拆成多个 MOTION- 块"})
+    return findings + [f for bid, body in blocks
+                       for f in _check_block(bid, body, "motion", shot_cap)] \
+        + _check_gen_unit(blocks) + _check_look_drift(blocks)
 
 
 def check_safety(text: str) -> list[dict[str, Any]]:
@@ -416,9 +445,43 @@ def check_safety(text: str) -> list[dict[str, Any]]:
     return findings
 
 
+def check_segments(text: str) -> list[dict[str, Any]]:
+    """SEG-10: 「分镜视频剧本」的生成段不跨场、不超过 10 秒，段内逐镜仍 ≤4 秒。"""
+    findings: list[dict[str, Any]] = []
+    for bid, body in _blocks(text, "SEG-"):
+        shot_seconds = [float(s) for s in SEG_SHOT_LINE_RE.findall(body)]
+        m = DURATION_RE.search(body)
+        declared = float(m.group(1)) if m else 0.0
+        total = round(sum(shot_seconds), 1)
+        effective = max(declared, total)
+        if not shot_seconds:
+            findings.append({"code": "SEG10_NO_SHOTS", "severity": "error", "segment": bid,
+                             "message": "段里没有逐镜行（SHOT-… · N 秒）：段必须由已命名的镜头组成"})
+        if effective > SEGMENT_CAP_SECONDS:
+            findings.append({"code": "SEG10_EXCEEDS_CAP", "severity": "error", "segment": bid,
+                             "duration_seconds": effective, "cap": SEGMENT_CAP_SECONDS,
+                             "declared_seconds": declared, "shots_seconds": shot_seconds,
+                             "message": "段超过 10 秒：在可见状态闭合点拆下一段，不抬上限、不砍镜内动作"})
+        scenes = set(SCENE_ID_RE.findall(body))
+        if len(scenes) > 1:
+            findings.append({"code": "SEG10_CROSSES_SCENE", "severity": "error", "segment": bid,
+                             "scenes": sorted(scenes),
+                             "message": "一段只能属于一场：跨场拆段（空间/光线变了就不再是同一段）"})
+        for seconds in shot_seconds:
+            if seconds > SHOT_CAP_SECONDS:
+                findings.append({"code": "SHT31_SHOT_EXCEEDS_CAP", "severity": "error",
+                                 "segment": bid, "duration_seconds": seconds,
+                                 "cap": SHOT_CAP_SECONDS,
+                                 "message": "段内单镜仍受 4 秒硬顶"})
+                break
+    return findings
+
+
 def detect_and_check(path: Path, shot_cap: float = SHOT_CAP_SECONDS) -> list[dict[str, Any]]:
     text = path.read_text(encoding="utf-8")
     safety = check_safety(text)
+    if "## SEG-" in text:
+        return safety + check_segments(text)
     if "## SHOT-" in text:
         return safety + check_storyboard(text, shot_cap)
     if "## MOTION-" in text:
@@ -439,7 +502,7 @@ def _report(findings: list[dict[str, Any]]) -> int:
 
 def _fmt(item: dict[str, Any]) -> str:
     parts = [item["code"]]
-    for key in ("shot", "duration_seconds", "step_classes", "term", "snippet"):
+    for key in ("segment", "shot", "duration_seconds", "step_classes", "term", "snippet"):
         if key in item and item[key] is not None:
             parts.append(f"{key}={item[key]}")
     if "message" in item:
@@ -609,13 +672,37 @@ def selftest() -> int:
         assert check_motion("## MOTION-005" + tail) == [], \
             f"post-quoted delivery clause flagged: {check_motion('## MOTION-005' + tail)}"
         # A line too short to be a verbatim span still owes its pacing plan (「走。」).
-        short = ("## MOTION-006 · x\n- 时长：4 秒\n- 起始帧：她面朝窗，米白外套\n"
+        short = ("## MOTION-006 · x\n- 分镜：SHOT-EP001-006\n- 时长：4 秒\n- 起始帧：她面朝窗，米白外套\n"
                  "- 状态链：她低声说道：“走。”用自然语速。\n- 终点：她仍面朝窗\n")
         assert {f["code"] for f in check_motion(short)} == {"PAC05_DELIVERY_NOT_CALIBRATED"}, check_motion(short)
         # 摄影机被写成「平稳」且全程无人说话，不是交付缺失。
-        silent = ("## MOTION-007 · x\n- 时长：4 秒\n- 起始帧：她面朝窗，米白外套\n"
+        silent = ("## MOTION-007 · x\n- 分镜：SHOT-EP001-007\n- 时长：4 秒\n- 起始帧：她面朝窗，米白外套\n"
                   "- 状态链：摄影机平稳跟随，她没有说话，嘴唇保持闭合。\n- 终点：她仍面朝窗\n")
         assert check_motion(silent) == [], check_motion(silent)
+
+        # VID-29：整场当一条提示词 → 模型按 ## EP…-SC… 切出一条十几秒的长片。
+        scene = ("## EP001-SC001 内 · 渡口售票室 · 雨夜\n\n"
+                 "## MOTION-008 · 整场一条\n- 时长：12 秒\n- 状态链：两人隔着窗口对话。\n- 终点：她站在窗前\n")
+        scene_codes = {f["code"] for f in check_motion(scene)}
+        assert "VID29_SCENE_AS_GEN_UNIT" in scene_codes, scene_codes
+        assert "VID29_GEN_UNIT_NOT_ONE_SHOT" in scene_codes, scene_codes
+        # 一场多镜：块头挂一个 SHOT- 就过，包住整场就报。
+        two = ("## MOTION-009 · 一镜\n- 分镜：SHOT-EP001-009\n- 时长：4 秒\n"
+               "- 起始帧：她面朝窗\n- 状态链：她抬手推开窗。\n- 终点：她仍面朝窗，窗已被推开\n")
+        assert not {f["code"] for f in check_motion(two)} & {"VID29_GEN_UNIT_NOT_ONE_SHOT",
+                                                         "VID29_SCENE_AS_GEN_UNIT"}, check_motion(two)
+
+        # SEG-10：分镜视频剧本的生成段 ≤10 秒、不跨场。
+        seg_ok = ("## SEG-EP001-SC001-01 · 8 秒 / 2 镜\n- 场景：EP001-SC001\n- 段时长：8 秒\n"
+                  "- 镜：\n  - SHOT-EP001-001 · 4 秒 · 她把湿票压进退票口，胸口朝窗口\n"
+                  "  - SHOT-EP001-002 · 4 秒 · 葛晴的手指停在票面日期上\n")
+        assert check_segments(seg_ok) == [], check_segments(seg_ok)
+        seg_fat = seg_ok.replace("8 秒 / 2 镜", "12 秒 / 3 镜").replace("段时长：8 秒", "段时长：12 秒") \
+            .replace("票面日期上\n", "票面日期上\n  - SHOT-EP001-003 · 4 秒 · 汽笛响\n")
+        assert "SEG10_EXCEEDS_CAP" in {f["code"] for f in check_segments(seg_fat)}
+        seg_cross = seg_ok.replace("EP001-SC001\n", "EP001-SC001 / EP001-SC002\n")
+        assert "SEG10_CROSSES_SCENE" in {f["code"] for f in check_segments(seg_cross)}
+        assert "SEG10_NO_SHOTS" in {f["code"] for f in check_segments("## SEG-X · 4 秒\n- 段时长：4 秒\n")}
 
         print("4 self-test groups passed")
     return 0
