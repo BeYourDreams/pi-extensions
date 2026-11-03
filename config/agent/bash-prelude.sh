@@ -7,3 +7,9 @@ cd() {
 	fi
 	builtin cd "$@"
 }
+
+# find/grep 全局指向 fd/rg（不再拦截，直接跑替代品）
+find() { fd "$@"; }
+grep() { rg "$@"; }
+egrep() { rg -E "$@"; }
+fgrep() { rg -F "$@"; }
