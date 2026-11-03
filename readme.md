@@ -1596,7 +1596,7 @@ Search fd/rg，见 §5「全局规则」
 
 | 项 | 动作 |
 |---|---|
-| 本地扩展 | 4 个全量重同步（`pi-lean-prompt` / `pi-lean-sections` / `pi-fd` / `pi-pet-autostart`；`no-find.ts` 已卸，见 §7.9），`--check` 复跑全 `[ok]` |
+| 本地扩展 | 用 `--prune` 全量重同步（3 个：`pi-lean-prompt` / `pi-lean-sections` / `pi-pet-autostart`）——仓库删掉的副本（如 2026-11-03 的 `pi-fd.ts` / `pi-bash-guard.ts`）会自动清掉，否则残留仍被加载；`--check` 把孤儿报 `[orphan]` 并 exit 1，复跑全 `[ok]` |
 | `extensions/pi-shell.ts` | **删**。仓库已删；留在用户目录里会 `setActiveTools` 无条件隐藏 `bash`/`powershell`，与 §3.4 直接冲突 |
 | `~/.pi/lazy-tools.json` | **删**（0.4.0 死配置，只触发迁移告警） |
 | 用户级 `defaultTools` | 补 `bash`：`["read","edit","write"]` → `["read","edit","write","bash"]`，与项目级对齐（§3.5 两处必须一致） |

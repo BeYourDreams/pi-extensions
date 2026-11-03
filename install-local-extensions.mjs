@@ -8,6 +8,7 @@
  *
  * 用法：
  *   node install-local-extensions.mjs           # 同步
+ *   node install-local-extensions.mjs --prune   # 同步 + 删掉仓库已移除的扩展副本
  *   node install-local-extensions.mjs --check   # 只体检，有漂移则 exit 1（CI/自查用）
  */
 import fs from "node:fs";
@@ -44,6 +45,19 @@ for (const f of files) {
 	}
 	fs.writeFileSync(to, a);
 	console.log(`[chg ] ${f} → ${to}（${a.length}B）`);
+}
+
+/** 仓库删掉的扩展不会自己从 ~/.pi/agent/extensions/ 消失，残留副本仍会被加载
+ *  （2026-11-03 pi-fd / pi-bash-guard 就属于这种）。默认只报告，`--prune` 才删。 */
+const prune = process.argv.includes("--prune");
+for (const f of fs.readdirSync(dest).filter((f) => f.endsWith(".ts") && !files.includes(f)).sort()) {
+	drift++;
+	if (prune && !checkOnly) {
+		fs.rmSync(path.join(dest, f));
+		console.log(`[del ] ${f}（仓库已无，已删）`);
+	} else {
+		console.log(`[orphan] ${f}（仓库已无，--prune 可删）`);
+	}
 }
 
 /** 配置一致性提醒：内建 shell 在两道闸里缺位时，agent 就没有可用的 shell。
