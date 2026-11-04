@@ -11,9 +11,9 @@
 
 ---
 
-## 1. 清单（在用 17 个扩展 = 14 npm + 3 git）
+## 1. 清单（在用 11 个扩展 = 8 npm + 3 git）
 
-**实际在用 17 个**（2026-11-04 二次实核：§1.1 表行 = `settings.json` 的 `packages` = `pi list`，17 条一一对齐，表内无多无漏。同日先核 26 条、再 9 连卸，见下方 changelog 与 §7.29）。
+**实际在用 11 个**（2026-11-04 晚二次实核：§1.1 表行 = `settings.json` 的 `packages` = `pi list`，11 条一一对齐，表内无多无漏。同日先核 26 条、再 9 连卸（§7.29）、再 6 连卸（§7.32），见下方 changelog）。
 > 2026-10-06 增补 3 个：联网（`pi-web-access`）、会话级撤销（`@bacnh85/pi-checkpoint`）、完成通知（`pi-notify`）。PR 插件（`@henryqw/pi-pr`）装后即卸，见 §7.7。
 > 2026-10-08 精简：卸 `pi-budget-guard`（与 `pi-meter` 功能三层全重叠，见 §7.12）与 `pi-warm-cache`（本机不生效的死安装，见 §7.12）；补装 `@arhen/pi-core-subagent`、`pi-ocr`（此前清单漂移：列了但实际未装）；新增 `pi-deepseek-cache`（DeepSeek 后端专用，与 §5.5 原判相悳 —— **2026-10-09 已验实并卸载，见 §7.13**）。
 > 2026-10-09 压缩侧换血（见 §7.13）：装 `pi-cache-compact`（provider 无关的压缩调用缓存，本机实测命中 68.6%）；卸 `pi-deepseek-cache`（绑定 DeepSeek）与 `pi-compaction-cache`（被 cache-compact 取代，且同抢 `session_before_compact`）。29 → 28。
@@ -55,6 +55,8 @@
 > 2026-11-04（**27 → 26**：卸 `npm:pi-mono-context-guard`，23 npm + 3 git）
 
 > 2026-11-04 晚（**26 → 17**：9 连卸，14 npm + 3 git）一次清掉九个「自己会多发请求」的包：`@chendpoc/pi-memory` / `@agenticup/pi-loop` / `@arhen/pi-core-subagent` / `pi-cache-compact` / `pi-ocr` / `pi-web-access` / `pi-agent-browser-native` / `@injaneity/pi-computer-use` / `pi-test-runner`。判据、代价与残留清理见 §7.29。
+> 2026-11-04 晚（**17 → 11**：6 连卸，8 npm + 3 git）用户要求的「工具卸载」：清掉 `@tian.zuo/pi-find`（`grep`/`find`）/ `@trycedar/pi-mdiff`（`md_inspect`/`md_diff`/`md_edit`）/ `pi-mcp-adapter`（`mcp`）/ `@henryqw/pi-ask-question`（`ask_question`）/ `@ssk_dev/rpiv-todo-lean`（`todo`）/ `@narumitw/pi-lsp`（`lsp_diagnostics`/`lsp_fix`）。`@aboutlo/pi-smart-edit` **保留**（它注册的是 `edit`，不在本次清单）。判据、代价与残留见 §7.32。
+
 
 > 2026-11-01（清单计数不动）**规则 E 以新形态恢复**
 > （只认每条流水线首段首词；管道消费位、`git grep`、`./find-helper.sh` 不拦），替代 2026-10-13 删掉的「按搜索根拦」。
@@ -81,21 +83,10 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `npm:pi-tps` | 底部 token/speed 状态栏 | 装后跑 `fix-tps-theme.ps1` 让配色跟随系统主题 |
 
 | `npm:pi-cache-guardian` | 缓存命中巡检 + 前缀漂移告警 | 与 §6 的 prefix-stabilizer 是同一根因的两端，一并用 |
-| `npm:@tian.zuo/pi-find` | `grep` / `find` 工具 | **覆盖内建同名工具**（替换，不是并列）。本机只用它的 `grep`；`find` 已降为懒加载兜底（见 §4.1） |
-| `npm:@trycedar/pi-mdiff` | `md_inspect` / `md_diff` / `md_edit` | Markdown 结构化编辑，`.md` 改动优先用它 |
-| `npm:pi-mcp-adapter` | 一个 `mcp` 代理工具替代成百上千个 MCP 工具定义 | 装完重启自动读 `.mcp.json` |
 
 | `npm:pi-prefix-stabilizer` | 系统提示词前缀稳定 + 漂移检测 | cache-compact 卸掉后**无顺序约束**了，见 §2.2 |
-| `npm:@henryqw/pi-ask-question` | `ask_question` 交互式提问（单题，1–3 选项 + 自定义答案，首项为推荐） | 歧义时问用户，比猜省事 |
-| `npm:@ssk_dev/rpiv-todo-lean` | `todo` 任务清单工具 + TUI overlay | `ctrl+shift+t` 折叠；`/todos` 看全量 |
 | `npm:@aboutlo/pi-smart-edit` | 覆盖内建 `edit`，容忍引号/空白不匹配 | **已生效**；`edit` 归它，匹配走「精确 → NFKC 归一化行」 |
 | `git:github.com/BeYourDreams/pi-dsh-pet` | 桌面宠物：Electron 透明浮窗 + 91 个 WebM 动画，随 agent 状态（思考/写代码/空闲）切换 | **纯命令扩展**（`/pet` `/pet-stop`），零工具、零 wire 开销。**必须 `pi install`**，光 `npm i -g` pi 不加载（见 §3.6）。**2026-09-30 从 `npm:pi-dsh-pet` 换成 git 源**（自己 fork 的仓库，改完 `git pull` 就生效；`pi update --extensions` 也认它）。常驻与「整机只留一只」由本仓库的 `pi-pet-autostart.ts` 接管 |
-
-
-
-
-
-| `npm:@narumitw/pi-lsp` | LSP 工具（语言无关，共享 runner，可配置） | 2026-10-07 装（此前只在增补注里提过，本行 2026-10-08 补录）；懒加载 |
 
 | ~~`npm:pi-smart-reader`~~ | AST 骨架视图 / 单符号抽取：`smart_read`（`skeleton` 只留签名、`symbol` 抽函数体） | **已卸载 2026-10-14**（同日装同日判断为无用，见 §3.16 / §7.23）。原记录：passive mode 是死代码；wasm 只带 TS/JS 一份语法；还要钉 `web-tree-sitter@0.24.7` 才不半残 |
 | `npm:@xynogen/pix-optimizer` | **压缩三合一**：caveman（输出，ASD-STE100 四档）+ ponytail（做法，YAGNI 三档）+ RTK（输入，bash 命令改写） | 2026-10-12 装。**取代**当天先装后卸的 `@izhimu/pi-caveman` / `pi-ponytail` / `pi-rtk`（三者功能被本包重写合并，3 → 1）。不注册任何工具；唯一入口是 `/optimizer`（**只有交互面板，无文本参数形**），状态存 `~/.pi/agent/pix.json` 的 `optimizer` 段。本机全开 **`caveman: ultra` / `rtk: on` / `ponytail: ultra`**，配置见 §3.15。RTK 首次加载时自动下 `rtk` 二进制到 `~/.pi/agent/bin`（带 checksum 校验） |
@@ -135,15 +126,12 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 **`pi install` 一次只写一条注册，绝不能并行**（并行会竞写 `settings.json` 丢包）。照序跑：
 
 ```bash
-for p in pi-tps pi-cache-guardian \
-         @tian.zuo/pi-find @trycedar/pi-mdiff \
-         pi-mcp-adapter; do
+for p in pi-tps pi-cache-guardian; do
   pi install "npm:$p" || echo "[失败] $p"
 done
 
 # 前缀稳定器（cache-compact 2026-11-04 已卸，原来的硬顺序约束随之作废，见 §2.2）
 for p in pi-prefix-stabilizer \
-         @henryqw/pi-ask-question @ssk_dev/rpiv-todo-lean \
          @aboutlo/pi-smart-edit; do
   pi install "npm:$p" || echo "[失败] $p"
 done
@@ -156,13 +144,10 @@ pi install git:github.com/BeYourDreams/pi-one-ui
 pi install "npm:@bacnh85/pi-checkpoint"
 pi install "npm:pi-notify"
 
-# 2026-10-07 增补，只剩 lsp（test-runner / ocr / memory / core-subagent 2026-11-04 已卸，见 §7.29；
-# PR / ask-permission / no-find / cwd-guard / zvec / budget-guard / warm-cache / deepseek-cache / compaction-cache 均勿再装）
-# ⚠ pi-lsp 与上面钩子层里剩下的 pi-meter 必须成对出现，漏一个清单就漂
-# 14 个 npm 一个都不能漏。
-for p in @narumitw/pi-lsp; do
-  pi install "npm:$p" || echo "[失败] $p"
-done
+# 2026-10-07 增补的 lsp 已于 2026-11-04 晚卸（见 §7.32）；test-runner / ocr / memory / core-subagent
+# 2026-11-04 已卸（见 §7.29）。
+# PR / ask-permission / no-find / cwd-guard / zvec / budget-guard / warm-cache / deepseek-cache / compaction-cache / pi-find / pi-mdiff / pi-mcp-adapter / pi-ask-question / rpiv-todo-lean / pi-lsp 均勿再装
+# ⚠ 8 个 npm 一个都不能漏（见 §1）。
 
 # 钩子层（不注册常驻工具：预算与花费；上下文截断 pi-mono-context-guard 已于 2026-11-04 卸，见 §7.28；
 #        凭据拦截 pi-secret-guard 已于 2026-10-12 卸，见 §7.19；
@@ -199,7 +184,7 @@ node install-project-config.mjs
 
 - **当前无顺序约束**（2026-11-04）：唯一的硬要求是「`pi-cache-compact` 必须装在 `pi-prefix-stabilizer` 之后」，而 cache-compact 已随九连卸下线（§7.29），现在没有任何两个扩展抢 `session_before_compact`。日后重装压缩缓存类扩展时，回到历史教训那条来排顺序。
 - **历史教训**：`pi-deepseek-cache` / `pi-compaction-cache` / `pi-warm-cache` / `pi-cache-compact` 都抢过（或试图抢）同一个压缩钩子，同场时接管权按装卸顺序互相覆盖 —— 压缩侧只能留一个，且必须排在 `pi-prefix-stabilizer` 之后（§7.13）。
-- 其余顺序不限（`pi-ask` / `rpiv-todo-lean` 都不抢 `session_before_compact`）。
+- 其余顺序不限（注：`pi-ask` / `rpiv-todo-lean` 本身已于 2026-11-04 晚卸，§7.32）。
 它的 `tool_call` 钩子只 `broadcast` 不 block（实测 `extension_error` 0）
 
 ### 2.3 升级
@@ -516,15 +501,12 @@ cd() {
 - ~~**别删**~~ —— **已删且不恢复**。现状：bash 里写 `cd /d D:/x` 报 `bash: cd: too many arguments`，**改用 `cd D:/x` 或 `cd /d/AI/...`**（正斜杠路径一直正常）。原文「必须跟本机 bash-guard 扩展的路径约定配套」的前提也已消失——bash-guard 2026-11-03 一并卸了。
 - 写新前缀时的纪律：**保持快、无交互、不输出**（它在**每一条**命令前执行；`cd` 别加 echo）。
 
-### 3.10 关闭内建 MCP：`"extensions": ["-builtin:mcp"]`（**必做**）
+### 3.10 关闭内建 MCP：`"extensions": ["-builtin:mcp"]`（**2026-11-04 晚已作废**）
 
-```json
-"extensions": ["-builtin:mcp"]
-```
-
-- 本机**没有** `.mcp.json`（也没有任何 MCP server 配置），但内建 `mcp` 工具默认注册；`pi-mcp-adapter`（5.1.0）会接管它并接管 MCP 生命周期，**不需要**内建那份，两份共存会重复注册。
-- 删掉这一行 → `mcp` 工具由 `pi-mcp-adapter` 正常提供，只是当前 0 个 server（`/mcp` 可查）。
-- 留档：`~/.pi/agent/mcp-onboarding.json` = `{"version": 1, "sharedConfigHintShown": false, "setupCompleted": false, "piBuiltinMcpHandledVersion": "5.1.0"}` —— 内建 MCP 引导向导的完成标记；`setupCompleted: false` + `sharedConfigHintShown: false` 是**刻意保持**（不弹共享配置提示）。**不要手写这个文件**，它是向导自己维护的。
+- 历史做法：`"extensions": ["-builtin:mcp"]` 关掉内建 `mcp` 工具，让 `pi-mcp-adapter` 独占 MCP 生命周期。
+- **2026-11-04 晚 `pi-mcp-adapter` 已卸（见 §7.32）**，本机不再有任何 MCP 工具，这条禁用也就没有对象了：`settings.json` 已**删除** `extensions` 键（清空后整个键移除）。
+- 如果将来重装某个 MCP 适配器，再按原样写回这条；单纯用内建 `mcp` 就不需要它。
+- 留档：`~/.pi/agent/mcp-onboarding.json`（内建 MCP 引导向导的完成标记）仍在盘上，**勿手改**，由向导自己维护。
 
 ### 3.11 用户级 `settings.json` 备忘（非默认项，2026-10-09 实况）
 
@@ -534,7 +516,7 @@ cd() {
 |---|---|---|
 | `defaultThinkingLevel` | `"high"` | 默认思考强度 |
 | ~~`shellCommandPrefix`~~ | ~~`"source ~/.pi/agent/bash-prelude.sh"`~~ | **本机从未写过此键**（§3.9 已作废）：脚本 2026-11-03 已 `git rm`，2026-11-04 定为不恢复 |
-| `extensions` | `["-builtin:mcp"]` | §3.10 |
+| ~~`extensions`~~ | ~~`["-builtin:mcp"]`~~ | **2026-11-04 晚已删**：`pi-mcp-adapter` 卸载后无对象（§3.10 / §7.32） |
 | `defaultTools` | `["read","edit","write","bash"]` | §3.4 / §3.5（项目级同值） |
 | ~~`cacheWarming`~~ | ~~`"streaming"`~~ | **2026-11-04 已删**：它会在每轮之后自己追加一次 warmup 请求（§7.30）。删后首 token 略慢、少一发请求 |
 | `compaction` | `{"enabled": true, "reserveTokens": 32768, "keepRecentTokens": 8000}` | 自动压缩开；预留 32K + 保留最近 8K（128K 窗下偏保守，且让 `pi-cache-compact` 有足够摘要空间） |
@@ -639,15 +621,10 @@ npm ls web-tree-sitter   # 应为 0.24.7 deduped，无 invalid
 | 扩展 | 工具 |
 |---|---|
 | 内建 pi | `read` `write` `bash` `powershell` `edit` `grep` `find` `ls`（受 `defaultTools` 闸门控制） |
-| `@tian.zuo/pi-find` | `grep` `find`（覆盖内建） |
 | `pi-fd`（本地 `extensions/pi-fd.ts`） | `fd`（能力上取代 pi-find 的 `find`，见 §4.1；本机懒加载） |
 | `@aboutlo/pi-smart-edit` | `edit`（覆盖内建），匹配走「精确 → NFKC 归一化行」，容忍引号/空白差异 |
-| `@trycedar/pi-mdiff` | `md_inspect` `md_diff` `md_edit` |
 | `pi-dsh-pet` | 无工具（`/pet` `/pet-stop`；HTTP+WS 服务只把 agent 事件转发给 Electron） |
 | `pi-pet-autostart`（本地 `extensions/pi-pet-autostart.ts`） | 无工具（`session_start` 钩子 + `/pet-auto` 命令） |
-| `@henryqw/pi-ask-question` | `ask_question` |
-| `@ssk_dev/rpiv-todo-lean` | `todo` |
-| `pi-mcp-adapter` | `mcp` |
 | `@bacnh85/pi-checkpoint` | 无工具（`/undo` `/redo` `/checkpoint` 命令） |
 | `pi-notify` | 无工具（`agent_end` 钩子 → Windows toast / OSC） |
 
@@ -666,11 +643,10 @@ npm ls web-tree-sitter   # 应为 0.24.7 deduped，无 invalid
 | 工具 | 在 `defaultTools` 里？ | 后果 |
 |---|---|---|
 | `read` `write` `edit` `bash` | ✅ 在列 | 纯内建：不在列就不注册；本机就到这四个为止 |
-| `grep` | ❌ 未列 → 懒加载 | pi-find 注册（扩展不占注册闸）；`omnify` 可搜出并执行 |
+| `grep` `find` | ❌ 未列 → 懒加载 | 2026-11-04 晚 `pi-find` 卸后**回到内建实现**；`omnify` 可搜出并执行 |
 | `fd` | ❌ 未列 → 懒加载 | 本地 `pi-fd` 注册，同上 |
-| `find` | ❌ 未列 → 懒加载 | 同一底层（fd）但只认 glob，作为 `fd` 的兜底 |
 | `ls` `powershell` | ❌ 未列 → 懒加载 | 需要时 `omnify` 按名 load 回来（或用 `bash ls`） |
-| `todo` / `md_*` / `ask_question` / `mcp` | ❌ 未列 | 全部默认懒加载，用 `omnify` 按需检索 / 代理执行 |
+| （原 `todo` / `md_*` / `ask_question` / `mcp`） | ❌ | **2026-11-04 晚起这四个工具的扩展均已卸**（§7.32），本机不再有它们 |
 | `omnify` | ❌ 写不写都一样 | pi 核心无条件注册，**不需进名单**，写进去只是读起来清楚 |
 
 漏了的后果（实测）：`defaultTools` 是内建工具的**注册闸**（不在列 → 根本注册），对扩展工具则是**常驻名单**（不在列 → 注册了但被 lazy 隐藏，wire 上看不到；要它时 `omnify` 一步拾回）。
@@ -687,7 +663,7 @@ npm ls web-tree-sitter   # 应为 0.24.7 deduped，无 invalid
 | 正则匹配路径 | 做不到（只有 glob） | pattern 即正则，且 smart case |
 | 限深度 | 做不到 | `{maxDepth:2}` |
 
-**接线**：`fd` 不写进 `defaultTools`（与 `grep` 一样走懒加载，需要时 `omnify` 一步激活）；项目级与用户级两处都只保留内建默认 4 个。`pi-find` 仍在装（提供 `grep`），它的 `find` 作为 `fd` 的 glob 版兜底。
+**接线**：`fd` 不写进 `defaultTools`（与 `grep` 一样走懒加载，需要时 `omnify` 一步激活）；项目级与用户级两处都只保留内建默认 4 个。~~`pi-find` 仍在装（提供 `grep`），它的 `find` 作为 `fd` 的 glob 版兜底~~ —— **2026-11-04 晚 `pi-find` 已卸（§7.32）**，`grep`/`find` 回到内建，`fd` 只与本机扩展共存。
 
 **超时参数（2026-10-09 加，§5 铁律二）**：`fd` 多一个 `timeoutMs`，默认 30s、硬上限 120s（`resolveTimeoutMs()` 夹取，非法值回落默认）；schema 的 `minimum`/`maximum`、参数描述、`promptGuidelines` 三处都写了「必须显式传」。超时按部分结果处理（kill + 附 `[Search timed out …]` 提示），不静默截断。上游 pi-find 的 `find`/`grep` 是写死 30s，所以三家口径一致。
 
@@ -808,7 +784,7 @@ pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传
 | `fd` 工具超时？ | 自己的 `execFile({timeout})`，无子进程所以 kill 即干净；漏传 `timeoutMs` 时守卫会补 30_000 |
 | `powershell` 工具超时？ | **无此参数**，注入不了。里面的 `find` 实测是 Git 的 GNU find（§4.2 纠正），不是 System32 那个读 stdin 的 → **唯一的治法是别裸跑 `find`**，硬约束只能靠文字纪律 |
 
-搜文件的其余三条路（与超时无关，但同一节纪律）：`fd` 工具每次显式传 `timeoutMs`（毫秒，1s–120s，默认 30s，见 §4.1）；`find`/`grep` 工具（pi-find）自带 30s 硬超时但**必须缩范围**（`path`/`glob`）；大目录树先 `-maxdepth`/`-prune`/`-xdev`，或直接换 `fd`（尊重 `.gitignore`，默认跳 `.git`/`node_modules`）。超时提示出现时不要重跑同一条命令：先缩范围，再谈调大预算。
+搜文件的其余三条路（与超时无关，但同一节纪律）：`fd` 工具每次显式传 `timeoutMs`（毫秒，1s–120s，默认 30s，见 §4.1）；`find`/`grep` **2026-11-04 晚起回到内建实现**（`pi-find` 已卸，§7.32），没有 30s 硬超时，**必须自己缩范围**（`path`/`glob`，必要时 `-maxdepth`）；大目录树先 `-maxdepth`/`-prune`/`-xdev`，别裸跑整盘。
 
 回归用例在 `.sc-test/probe-bash-guard.mjs`（**不入库**，`node .sc-test/probe-bash-guard.mjs` 直接跑）：三档默认值与上限、显式值夹取、管道生产者、`sudo`/`&&`/重定向、自带 timeout、永不返回的 block、`docker run --rm` 不误伤，以及规则 E 的正反两组——后台化搜索拦，`git grep` / `./find-helper.sh` / `findings.md` / `awk` / `git status` / 管道消费位的 `grep` 不误伤。
 
@@ -820,8 +796,8 @@ pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传
 - 验证新装扩展是否真的零开销：看首请求的工具字节是否与基线一致（口径见 §6）。
 1. **首字成本**：常驻集每轮都进 prompt；不在名单的工具靠 `omnify` 检索命中后**代理执行**（不把 schema 注入 active 集，见上面铁律）。
 2. **激活往返**：0.86+ 流程是 `omnify`/`load_tools` → `call_tool` → 执行，多 1–2 个模型轮次。搜索类工具建议常驻（见 §6.3）。
-3. **大输出工具**（`agent_browser*` / `mcp`，或 bash 直接抓页面）原始 HTML/JSON 全量进历史，会把前缀命中率打崩；用前先想清楚要不要落历史。
-4. **改 `.md` 优先 `md_edit`**：散文/列表用 `md_edit`（锚定标题+块序号，不受换行重排影响），代码块用 `edit`，`.mdx` 一律用 `edit`。
+3. **大输出工具**（`agent_browser*`，或 bash 直接抓页面）原始 HTML/JSON 全量进历史，会把前缀命中率打崩；用前先想清楚要不要落历史。`mcp` 工具已于 2026-11-04 晚随 `pi-mcp-adapter` 卸载（§7.32）。
+4. **改 `.md` 优先用 `edit` 精确替换**：`md_edit` 已于 2026-11-04 晚随 `pi-mdiff` 卸载（§7.32）。现状是散文/列表/代码块一律用 `pi-smart-edit` 的 `edit`（容忍引号/空白差异），改动尽量带足上下文行以锚定位置。
 ~~`pi-deepseek-cache`（绑定 DeepSeek）~~ **2026-10-09 已卸**（§7.13）：实测遥测半边可用、压缩半边必败（接管条件 `ctx.modelRegistry.find("deepseek", …)` 在本机注册表里根本没有 deepseek provider，代理也拒 `deepseek-flash` 这个模型 ID），按 DeepSeek 价格表换算的「省钱估算」属虚构。**要压缩缓存就装 `pi-cache-compact`**（provider 无关，§7.13 实测命中 68.6%）。
 6. **纯 UI 类扩展可以放心装**：`pi-tps` / `pi-one-ui` / `pi-dsh-pet` / `pi-pet-autostart` 这类只挂事件钩子、只注册命令的扩展，**不注册任何工具**，不进 `defaultTools`，wire 字节不变（§3.6 有 bench 实测：装宠物前后都是 5664B）。反过来，任何**注册工具**的扩展都要重新算 §6.3 那笔账。
 **全局规则：本机不发任何提示词层规则（2026-11-04 定案）**
@@ -893,7 +869,7 @@ pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传
 - **懒加载**：0 upfront；要用时多 1–2 个模型轮次，并把同样的字节永久注入历史。
 - **本机取舍（最终：只留内建默认 4 个）**：`defaultTools` 就是 `read edit write bash`，`grep` / `fd` / `ls` / `find` 全部懒加载，搜文件先 `omnify` 一步代理执行。**省 2653B ≈ 689 tok/请求**，代价是每次搜索多 1–2 个往返轮次（本机本地端点，这些轮次几乎不花钱，只花时间）。
   - 曾经选过方案 B（`grep` + `fd` 都常驻，8317B）：那时判断「搜索是编码高频操作，省轮次比省字节值」；现按「只保留默认」收敛，**要回退就把 `"grep"` / `"fd"` 加回两处 `defaultTools` 即可**（+2653B）。
-  - 无论常驻与否，`fd` 的能力都远胜 pi-find 的 `find`（§4.1 五项），常驻与否只影响字节与往返，不影响能力。
+  - `fd` 的能力远胜内建 `find`（§4.1 五项），常驻与否只影响字节与往返，不影响能力。（`pi-find` 已于 2026-11-04 晚卸，§7.32。）
 
 ### 6.4 优化后的静态前缀总账
 
@@ -1542,6 +1518,27 @@ Other errors:
 - 同一件事的**机器可判形态**已经在跑：`pi-find-grep-rewrite.ts` 只转译「`find`/`grep` 当搜索生产者」这种**有确定等价物**的命令；`cd /d` 没有等价物（要么丢掉 `/d`，要么当路径），猜错比报错贵——所以它是**故意不转的**。
 - 想加回来（不推荐）：`git show e9c4132^:config/agent/bash-prelude.sh > config/agent/bash-prelude.sh` + `node install-project-config.mjs` + `settings.json` 写 `"shellCommandPrefix": "source ~/.pi/agent/bash-prelude.sh"`。
 
+### 7.32 六连卸：按工具清单卸载（2026-11-04 晚，17 → 11）
+
+用户按「工具名清单」要求卸载：`grep` `find` `md_inspect` `md_diff` `md_edit` `mcp` `todo` `ask_question` `lsp_diagnostics` `lsp_fix` 全不要。逐条反查归属（`grep -n 'name: "'` 各包源码）后，落到 6 个包：
+
+| 包 | 注册的工具 | 备注 |
+|---|---|---|
+| `npm:@tian.zuo/pi-find` | `grep` `find` | 覆盖内建；卸后回到内建实现 |
+| `npm:@trycedar/pi-mdiff` | `md_inspect` `md_diff` `md_edit` | 卸后 `.md` 改用 `edit` |
+| `npm:pi-mcp-adapter` | `mcp` | **代价最大**：MCP 服务器接入/认证/面板整个下线；本机本就没有 `.mcp.json`，0 server，故无实际损失 |
+| `npm:@henryqw/pi-ask-question` | `ask_question` | 歧义时改为直接问用户（文本） |
+| `npm:@ssk_dev/rpiv-todo-lean` | `todo` | 任务清单回到模型自带 todo 习惯 |
+| `npm:@narumitw/pi-lsp` | `lsp_diagnostics` `lsp_fix` | 诊断需另跑 `tsc`/`eslint` 等 |
+
+**保留 `@aboutlo/pi-smart-edit`**：它注册的是 `edit`（覆盖内建），不在本次工具清单里，且 `defaultTools` 明确要 `edit`，故不动。
+
+**连带清理**：① `settings.json` 的 `extensions: ["-builtin:mcp"]` 清空后整个键删除（§3.10 作废）；② `extensionChangelogVersions` 里 `pi-find` / `pi-mcp-adapter` / `pi-lsp` 三条删除。
+
+**验证**：`pi list` = 11 条（8 npm + 3 git），与 `settings.json` 的 `packages` 逐条一致；`settings.json` JSON 合法。
+
+**不受影响**：`extensions/pi-find-grep-rewrite.ts`（把 **bash 命令**里的 `find`/`grep` 改写成 `fd`/`rg`）与 `pi-find` 包无关，仍生效。
+
 ## 8. 体检与排障
 
 本机的体检脚本**没有自动化的**，但有几个手跑的（都在仓库根或 `.sc-test/`，`.sc-test/` 属 gitignore、不入库）：
@@ -1646,7 +1643,6 @@ Search fd/rg，见 §5「全局规则」
 | 卸 | `pi-edit-guard` | 0.1.5 | §7.1，与 smart-edit 争 `edit` 槽 |
 | 卸 | `pi-undo-redo` | 0.1.2 | 已弃用，连带清 `state/pi-undo-redo/`（22M 影子 worktree） |
 | 卸 | `@nguyenquangthai/pi-ask` | 0.2.0 | 换包（`ask_user_question` → `ask_question`） |
-| 装 | `@henryqw/pi-ask-question` | 2.0.3 | §1.1 |
 | 装 | `@aboutlo/pi-smart-edit` | 0.4.0 | §7.1 独占 `edit` |
 | 装 | `pi-dsh-pet` | 0.0.2 | §3.6 桌面宠物 |
 
