@@ -44,10 +44,29 @@ export function splitSegments(s: string): string[] {
 			i++;
 			continue;
 		}
+		if (c === "|" && s[i + 1] === "&") {
+			out.push(cur, "|&");
+			cur = "";
+			i++;
+			continue;
+		}
 		if (c === "&" && s[i + 1] === "&") {
 			out.push(cur, "&&");
 			cur = "";
 			i++;
+			continue;
+		}
+		if (c === "&" && s[i + 1] === ">") {
+			cur += c;
+			continue;
+		}
+		if (c === "&") {
+			if (cur.length > 0 && cur[cur.length - 1] === ">") {
+				cur += c;
+				continue;
+			}
+			out.push(cur, "&");
+			cur = "";
 			continue;
 		}
 		if (c === "|" || c === ";" || c === "\n") {
@@ -185,6 +204,92 @@ export function translateGrepArgs(args: string[]): string[] {
 	return out;
 }
 
+/**
+ * 单个 find 段是否有显式 path 参数。
+ */
+export function findHasPath(tokens: string[]): boolean {
+	let i = 1;
+	let hasPath = false;
+	while (i < tokens.length) {
+		const t = tokens[i];
+		if (t === "-name" || t === "-iname" || t === "-type" || t === "-maxdepth" || t === "-mindepth" || t === "-newer") {
+			i += 2;
+			continue;
+		}
+		if (t === "-print" || t === "-print0") {
+			i++;
+			continue;
+		}
+		if (t === "-exec" || t === "-execdir") {
+			let j = i + 1;
+			while (j < tokens.length && tokens[j] !== ";" && tokens[j] !== "\\;" && tokens[j] !== "+") j++;
+			i = j + 1;
+			continue;
+		}
+		if (!t.startsWith("-")) hasPath = true;
+		i++;
+	}
+	return hasPath;
+}
+
+/**
+ * 单个 grep 段信息。
+ */
+export function grepInfo(tokens: string[]): { recursive: boolean; hasFile: boolean } {
+	let recursive = false;
+	const files: string[] = [];
+	let i = 1;
+	while (i < tokens.length) {
+		const t = tokens[i];
+		if (t === "-r" || t === "-R" || t === "--recursive") {
+			recursive = true;
+			i++;
+			continue;
+		}
+		if (t === "-e" || t === "-f" || t === "-m") {
+			i += 2;
+			continue;
+		}
+		if (/^-[a-zA-Z]+$/.test(t)) {
+			if (/[rR]/.test(t)) recursive = true;
+			i++;
+			continue;
+		}
+		if (t.startsWith("--")) {
+			i++;
+			continue;
+		}
+		files.push(t);
+		i++;
+	}
+	// 第一个非选项参数是 pattern，其余是 file/path
+	return { recursive, hasFile: files.length >= 2 };
+}
+
+/**
+ * 是否是「无 path 的整盘/整树扫描」命令（find 无 path，或递归 grep 无 file）。
+ * 管道消费位不算。
+ */
+export function isBroadScan(command: string): boolean {
+	const parts = splitSegments(command);
+	for (let i = 0; i < parts.length; i += 2) {
+		if (parts[i - 1] === "|" || parts[i - 1] === "|&") continue;
+		const tokens = tokenize(parts[i].trim());
+		const head = tokens[0];
+		if (head === "find") {
+			if (!findHasPath(tokens)) return true;
+		} else if (head === "grep" || head === "egrep" || head === "fgrep") {
+			const info = grepInfo(tokens);
+			if (info.recursive && !info.hasFile) return true;
+		}
+	}
+	return false;
+}
+
+export const isBroadScanCommand = isBroadScan;
+export const isUnscopedSearch = isBroadScan;
+export const isUnscopedScan = isBroadScan;
+
 /** 单段改写：首词是 find/grep 才动；翻不了就原样返回。前后空白保留。 */
 export function rewriteSegment(seg: string): string {
 	const leading = seg.match(/^\s*/)?.[0] ?? "";
@@ -207,7 +312,7 @@ export function rewriteSegment(seg: string): string {
 export function rewriteCommand(command: string): string {
 	const parts = splitSegments(command);
 	for (let i = 0; i < parts.length; i += 2) {
-		if (parts[i - 1] === "|") continue; // 管道消费位
+		if (parts[i - 1] === "|" || parts[i - 1] === "|&") continue; // 管道消费位
 		parts[i] = rewriteSegment(parts[i]);
 	}
 	return parts.join("");
@@ -219,6 +324,9 @@ export default function (pi: ExtensionAPI): void {
 		const e = event as BashToolCallEvent;
 		const command = e.input?.command;
 		if (typeof command !== "string" || !command) return;
+		if (isBroadScan(command)) {
+			return { block: true, reason: "find/grep 无 path 参数会整树/整盘扫描，请显式给出 path/glob 范围" };
+		}
 		const next = rewriteCommand(command);
 		if (next !== command) e.input.command = next;
 	});

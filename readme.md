@@ -800,8 +800,9 @@ pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传
 | 不改什么 | 管道消费位（`ls -la` 的输出交给 `grep foo`）、`git grep`（首词是 git）、`./find-helper.sh`、`findings.md`、`fd` / `fdfind` / `rg` / `ag` / `ack` |
 | 看不看搜索根 | **不看**，只认命令名。根选错交给 `fd` 的 `path` 参数与 §4.1 的超时兜底处理 |
 | 出口 | 翻译不了的 find flag 原样保留（不再 block），要 GNU 独占 flag 就自己用 `/usr/bin/find` |
+| 拦截 | 无 path 的 `find`，或递归 `grep` 无 file → block（避免整盘/整树扫描）；切段额外处理 `&` / `|&` |
 
-回归：`.sc-test/probe-find-grep-rewrite.mjs`（`node --experimental-strip-types`，23 例）。回退：删 `extensions/pi-find-grep-rewrite.ts` + 删 `~/.pi/agent/extensions/` 同名副本 + `/reload`。
+回归：`.sc-test/probe-find-grep-rewrite.mjs`（`node --experimental-strip-types`，25 例 + 7 条 broad-scan）。回退：删 `extensions/pi-find-grep-rewrite.ts` + 删 `~/.pi/agent/extensions/` 同名副本 + `/reload`。
 
 > 旧版的**量级证据仍然成立**（AppData/Local 194,968 文件、系统盘 345,409 文件 / fd 16.2s、
 > `find ~ -maxdepth 6` 60s 跑不完；fd 的 `.gitignore` 规则在非仓库目录同样失效），只是**执法点从
