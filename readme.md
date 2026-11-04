@@ -19,7 +19,7 @@
 > 2026-10-09 压缩侧换血（见 §7.13）：装 `pi-cache-compact`（provider 无关的压缩调用缓存，本机实测命中 68.6%）；卸 `pi-deepseek-cache`（绑定 DeepSeek）与 `pi-compaction-cache`（被 cache-compact 取代，且同抢 `session_before_compact`）。29 → 28。
 > 2026-10-10 增补 `@izhimu/pi-caveman`（caveman 输出压缩层，默认 `ultracave`，见 §3.12）：28 → 29。
 > 2026-10-12 三层压缩补齐（29 → 30）：装 `pi-ponytail`（懒扩展打法层，默认 `ultra`，见 §3.13）与 `pi-rtk`（输入侧 token 削减，见 §3.14）；卸 `pi-secret-guard`（凭据拦截，已无提交侧闸，见 §7.19）。
-> 2026-10-12 压缩层三合一（30 → **28**）：装 `npm:@xynogen/pix-optimizer`（caveman + rtk + ponytail 合成一个扩展，一个 `/optimizer` 面板，见 §3.15），卸当天刚装的 `@izhimu/pi-caveman` / `pi-ponytail` / `pi-rtk`（3 → 1，26 npm + 2 git）。同日新增全局规则文件 `~/.pi/agent/AGENTS.md`（见 §5「全局规则」）。
+> 2026-10-12 压缩层三合一（30 → **28**）：装 `npm:@xynogen/pix-optimizer`（caveman + rtk + ponytail 合成一个扩展，一个 `/optimizer` 面板，见 §3.15），卸当天刚装的 `@izhimu/pi-caveman` / `pi-ponytail` / `pi-rtk`（3 → 1，26 npm + 2 git）。同日新增全局规则文件 `~/.pi/agent/AGENTS.md`（见 §5「全局规则」）—— **该文件 2026-11-04 已清空为 0B 并定案不恢复**。
 > 2026-10-12 rtk 二进制修复：`winget install rtk-ai.rtk` 报 `unable to verify the first certificate`（本机 TLS 链被自定义根 CA/代理劫持，winget 的 schannel 不信）。**绕开 winget**，直接 curl release zip 装到查找路径 `~/.pi/agent/bin/rtk.exe`（`--ssl-no-revoke` 破证书问题），checksum 与 release 的 `checksums.txt` 逐位对上，`rtk --version` → 0.51.0 可跑。命令见 §3.15「二进制手动兜底」，排障见 §8。
 完整卸装理由与原始记录仍在对应 §3 / §7 小节。
 > 2026-10-13 装 `pi-smart-reader`（AST 骨架/符号抽取，27 → **28**：26 npm + 2 git）：**上游「零配置自动优化」是死的**，实测只有 `smart_read` 工具真能用，且 `web-tree-sitter` 必须钉死 0.24.7 才不半残。见 §3.16（必做配置）与 §7.23。
@@ -824,19 +824,19 @@ pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传
 4. **改 `.md` 优先 `md_edit`**：散文/列表用 `md_edit`（锚定标题+块序号，不受换行重排影响），代码块用 `edit`，`.mdx` 一律用 `edit`。
 ~~`pi-deepseek-cache`（绑定 DeepSeek）~~ **2026-10-09 已卸**（§7.13）：实测遥测半边可用、压缩半边必败（接管条件 `ctx.modelRegistry.find("deepseek", …)` 在本机注册表里根本没有 deepseek provider，代理也拒 `deepseek-flash` 这个模型 ID），按 DeepSeek 价格表换算的「省钱估算」属虚构。**要压缩缓存就装 `pi-cache-compact`**（provider 无关，§7.13 实测命中 68.6%）。
 6. **纯 UI 类扩展可以放心装**：`pi-tps` / `pi-one-ui` / `pi-dsh-pet` / `pi-pet-autostart` 这类只挂事件钩子、只注册命令的扩展，**不注册任何工具**，不进 `defaultTools`，wire 字节不变（§3.6 有 bench 实测：装宠物前后都是 5664B）。反过来，任何**注册工具**的扩展都要重新算 §6.3 那笔账。
-**全局规则：`~/.pi/agent/AGENTS.md` 现在是空文件（2026-11-04 `07f27cf` 清空，0B）—— 下面整节是历史文案，仅供想恢复时抄**
+**全局规则：本机不发任何提示词层规则（2026-11-04 定案）**
 
-清空前本机**全英文**、分三块（Think / Read files / Search），短且稳。`07f27cf` 的卸载理由：那条「Don't read whole files by default」属于硬性纪律，与其用提示词求模型照做，不如换成插件强制（§5 的 `pi-find-grep-rewrite.ts` 与 §3.4 的常驻集收缩）。**恢复办法**：把下面两块表格的原文写回 `config/agent/AGENTS.md` 再 `node install-project-config.mjs`，`--check` 会认。
+`~/.pi/agent/AGENTS.md` 与仓库 `config/agent/AGENTS.md` **都是 0B**（`07f27cf` 2026-11-04 11:33 清空）。**定案：不再恢复**——命令怎么写、文件怎么读，交给模型自己按当下的报错与上下文判断，不靠一段常驻 system 前缀去求它照做。
 
-| 规则 | 用意 |
+| 曾经的规则块 | 现在的替代 |
 |---|---|
-| Think: minimal sufficient reasoning (goal → constraints → key intermediates → decision → verify), no restatement/repetition/pleasantries/divergence; simple → answer directly | 思考照走但不铺草稿。与 §3.15 的 caveman 是两层：那管「说给用户听的话」，这条管内部 think |
-| Read files: no full reads by default (only if <400 lines or truly needed); `rg -n` locate → `read` with `offset`/`limit`; `.md` via `md_inspect`; don't re-read | 长文件整读是本机最大的一笔 token 浪费（本仓库 readme 就 152KB）。例外：即将编辑的源码、200 行内配置、陌生结构的探路文件 |
+| Think: minimal sufficient reasoning… | 交给模型自己；pix-optimizer 的 caveman 管输出形状（§3.15） |
+| Read files: no full reads by default… | 交给模型自己；常驻工具只留 `read edit write bash`（§3.4），长文件整读的代价由上下文窗口自己反馈 |
+| Search: 优先 fd/rg | 已经**机器强制**：`extensions/pi-find-grep-rewrite.ts` 在 `tool_call` 上把 `find`/`grep` 转成 `fd`/`rg`（§5），比求模型有效 |
 
-
-- **canonical 源在本仓库 `config/agent/AGENTS.md`**（2026-10-18 外迁，**2026-11-04 起内容是 0B**）：`node install-project-config.mjs` 拷进 `~/.pi/agent/AGENTS.md`，`--check` 体检。此前它只在下面表格里留了文案、盘上无正本，换机 / 清理就整份丢失（本机 2026-10-18 体检即命中）。
-- 它进的是**每轮 system 前缀**，所以改它等于改前缀（原理同 §2.2 / §7.17）：别拿它当 scratchpad，也别塞会变的文本。
-- 与扩展注入的规则是叠加关系、互不覆盖：清空前是 AGENTS.md 这些条 + pix-optimizer 的 caveman/ponytail 档位规则（§3.15）；现在只剩后者。
+- **canonical 是本仓库 `config/agent/AGENTS.md`，内容 0B**：`node install-project-config.mjs` 仍会把它拷进 `~/.pi/agent/AGENTS.md`，`--check` 比对 0B ↔ 0B。想重新加规则就写这个文件，别手改盘上那份。
+- 它进的是**每轮 system 前缀**，所以**空文件本身就是收益**：system 少一段 = 每轮省 token，且少一个会漂的前缀源（原理同 §2.2 / §7.17）。
+- 与扩展注入的规则是叠加关系、互不覆盖：现在 system 里只剩 pix-optimizer 的 caveman/ponytail 档位规则（§3.15）。
 
 
 ---
@@ -1199,7 +1199,7 @@ const AGENT_DIRS = [".agents/agents", ".claude/agents", ".pi/agents"] as const;
 |---|---|---|---|
 | 项目级 | `config/pi-project/settings.json` | `<仓库>/.pi/settings.json` | `node install-project-config.mjs` |
 | 项目级留档 | `config/pi-project/zvec.json` | 不落（`pi-zvec` 已卸，§7.11） | 手动（重装 zvec 时） |
-| 用户级规则 | `config/agent/AGENTS.md` | `~/.pi/agent/AGENTS.md`（§5 全局规则全文） | 同上 |
+| 用户级规则 | `config/agent/AGENTS.md` | `~/.pi/agent/AGENTS.md`（**两边都是 0B**，2026-11-04 定案不发规则，§5） | 同上 |
 
 | 用户级快照 | `config/agent/settings.snapshot-2025-09-15.json` | 不落（脚本对 `settings.snapshot-*` 一律跳过） | — |
 
@@ -1279,7 +1279,7 @@ rm extensions/pi-plan-tools.ts ~/.pi/agent/extensions/pi-plan-tools.ts
 
 **为什么连带删 `pi-plan-tools.ts`**：那个本地扩展的**全部**作用就是 `session_start` 里把 lazy-tools 剥掉的 `plan_mode_question` / `plan_mode_complete` 捞回 active 集——包没了，`pi.getAllTools()` 里根本没有这两个工具，扩展变成空转（只会刷一行无意义的 notify）。
 
-**代价（明说）**：没有只读规划模式了。想装回来：`pi install npm:@narumitw/pi-plan-mode` + 把 `extensions/pi-plan-tools.ts` 加回本仓库（git 历史里有，§7.21 前一版）。规划纪律回到 AGENTS.md 的 Think 段落（思考用最小充分推理），不靠工具。
+**代价（明说）**：没有只读规划模式了。想装回来：`pi install npm:@narumitw/pi-plan-mode` + 把 `extensions/pi-plan-tools.ts` 加回本仓库（git 历史里有，§7.21 前一版）。规划纪律交给模型自己（`AGENTS.md` 2026-11-04 起已清空为 0B，那条 Think 段落的提示词不再存在，§5），不靠工具。
 
 ### 7.22 浅色终端里 footer 的文件夹名发白：`cwd` 是唯一用裸 ANSI 色的字段（2026-10-13）
 
@@ -1492,7 +1492,7 @@ Other errors:
 |---|---|---|
 | `@agenticup/pi-loop` | 每次深潜 = 一轮全新请求，收敛全靠模型自觉 | `bash` 手工分步做同样的事 |
 | `@arhen/pi-core-subagent` | 每次 spawn 一个独立上下文（模型继承 `1/1`），`steer`/`reply`/`await` 再叠 | 主会话自己做；顺带丢掉 §7.14 的 proper-lockfile 崩溃面与 §7.16 的 agent 定义依赖 |
-| `@chendpoc/pi-memory` | 记忆检索钩子 + `better-sqlite3` 原生依赖（§3.1 那两条 `allowScripts` 的一半） | 跨会话记忆改由本 readme + 全局 `AGENTS.md` 承担 |
+| `@chendpoc/pi-memory` | 记忆检索钩子 + `better-sqlite3` 原生依赖（§3.1 那两条 `allowScripts` 的一半） | 跨会话记忆改由本 readme 承担（`AGENTS.md` 0B 且不恢复，§5） |
 | `pi-cache-compact` | 冷前缀时「发一轮续写 → 拒绝接管 → 让位默认压缩」，压缩期多一发冷 prefill，15 分钟内连让位 | Pi 内置压缩（实测必 `cacheRead: 0`，§7.13）——本来就没赚到的那份命中，现在连试都不试 |
 | `pi-ocr` | OCR 走 Ollama / MinerU 另一个模型 | 图里文字人读 |
 | `pi-web-access` | 只有配错时才贵：`web_enable` 中途切 active 工具集，前缀从第 0 个 token 作废（§7.4 实测 86016 → 1152） | 不联网；真要搜再 `pi install npm:pi-web-access`，**第一件事写 `toolActivation: "eager"`（§3.7）** |
@@ -1538,7 +1538,7 @@ Other errors:
 | 本地扩展挂 `tool_call` 改写 `cd /d` → `cd` | 比 `pi-find-grep-rewrite.ts` 多一个文件、多一份回归用例 | **不选**（收益比太低：只在人自己写错时省掉一次报错） |
 | **纪律：不写 `/d`** | 0 | ✅ 选这个 |
 
-- 生效方式只靠**提示词层**：`config/agent/AGENTS.md` 是空的（§5），所以这条纪律落在**本 readme + 模型自己看报错改正**上。实测一次报错就够：`bash: cd: too many arguments` 指向明确，模型下一轮自动改写成 `cd D:/x`。
+- 生效方式是**模型自己看报错改正**，不设提示词层：`AGENTS.md` 0B 且定案不恢复（§5），这条纪律只活在本 readme 里。实测一次报错就够：`bash: cd: too many arguments` 指向明确，下一轮自动写成 `cd D:/x`。
 - 同一件事的**机器可判形态**已经在跑：`pi-find-grep-rewrite.ts` 只转译「`find`/`grep` 当搜索生产者」这种**有确定等价物**的命令；`cd /d` 没有等价物（要么丢掉 `/d`，要么当路径），猜错比报错贵——所以它是**故意不转的**。
 - 想加回来（不推荐）：`git show e9c4132^:config/agent/bash-prelude.sh > config/agent/bash-prelude.sh` + `node install-project-config.mjs` + `settings.json` 写 `"shellCommandPrefix": "source ~/.pi/agent/bash-prelude.sh"`。
 
@@ -1614,7 +1614,7 @@ Search fd/rg，见 §5「全局规则」
 | `~/.pi/agent/config/` | **已空**（smart-context 包卸载后配置已删，新装带 `startupConfig` 的包才会写） |
 本目录名写死在 `dist/config.js:403`。本仓库这份是**生成物**：canonical 在 `config/pi-project/settings.json`，跑 `node install-project-config.mjs` 拷入 |
 | `<仓库>/config/pi-project/*` | **项目级配置的 canonical 源**：`settings.json`（→ 拷进 `<仓库>/.pi/`）、`zvec.json`（留档件，不参与同步，见 §7.11） |
-| `<仓库>/config/agent/*` | **用户级配置的 canonical 源**：`AGENTS.md`（§5 全局规则全文 → 拷进 `~/.pi/agent/`）、`settings.snapshot-2025-09-15.json`（历史快照，只留档不拷）。~~`bash-prelude.sh`~~ 已于 2026-11-03 `git rm`（§3.9 作废）。`rtk-config.json` 已于 2026-10-12 `git rm`（§3.14 / §7.20） |
+| `<仓库>/config/agent/*` | **用户级配置的 canonical 源**：`AGENTS.md`（0B，§5 定案不发规则）、`settings.snapshot-2025-09-15.json`（历史快照，只留档不拷）。~~`bash-prelude.sh`~~ 已于 2026-11-03 `git rm`（§3.9 作废）。`rtk-config.json` 已于 2026-10-12 `git rm`（§3.14 / §7.20） |
 | `~/.pi/agent/sessions/**/*.jsonl` | 会话历史，算命中率的原始数据 |
 
 **生效方式**：改配置或扩展后 `/reload`（不重启会话、不丢历史）。
