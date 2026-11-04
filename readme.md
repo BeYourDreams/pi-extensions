@@ -63,6 +63,7 @@
 > `.sc-test/probe-bash-guard.mjs`（重写，不入库）+ `short-drama-edit/scripts/selftest.py`。改完记得 `/reload`。
 
 > 2026-11-03（清单计数不动）**取消拦截/全局指向 find/grep，仅提示词限制优先 fd/rg**：`pi-bash-guard` 移除规则 E；`bash-prelude.sh` 不再把 find/grep 指向 fd/rg；`AGENTS.md` 恢复 fd/rg 提示词限制。改完记得 `/reload`。
+> 同日 `e9c4132` 把 `pi-fd` / `pi-bash-guard` / `bash-prelude.sh` 一起删了（2026-11-04 起确认不恢复，§3.9 作废）。
 
 **不锁版本**：安装命令一律不带 `@版本号`（取 npm 最新），本清单不维护版本矩阵。要查本机实际装的版本：
 
@@ -488,7 +489,7 @@ pi-pet stop → 宿主自己退出，state.json 清掉；整机无 pi.exe 野进
 
 非 git 仓库里三个命令静默 no-op + 一条通知。另外它会写 `refs/pi-checkpoints/*`，不碰你的分支、tag、stash —— `git for-each-ref refs/pi-checkpoints` 可见。
 
-### 3.9 `bash-prelude.sh`：每条 bash 命令前的兼容层（**必做，原文档漏记**）
+### 3.9 ~~`bash-prelude.sh`~~（**已作废**：脚本随 `e9c4132` 于 2026-11-03 `git rm`，`shellCommandPrefix` 本机从未写过；2026-11-04 确认「用不到」后定为**不恢复**。以下为历史留档，勿再照着补）
 
 `~/.pi/agent/settings.json` 里：
 
@@ -496,7 +497,7 @@ pi-pet stop → 宿主自己退出，state.json 清掉；整机无 pi.exe 野进
 "shellCommandPrefix": "source ~/.pi/agent/bash-prelude.sh"
 ```
 
-`~/.pi/agent/bash-prelude.sh`（canonical 在仓库 `config/agent/bash-prelude.sh`，393B，由 `node install-project-config.mjs` 拷入；下为全文）：
+~~`~/.pi/agent/bash-prelude.sh`（canonical 在仓库 `config/agent/bash-prelude.sh`，393B）~~ —— **该文件已随 `e9c4132` 从仓库删除、本机也不存在**；下面只是原文留档，不再拷入：
 
 ```bash
 # pi 的 Bash 工具用 `bash -c` 跑，不加载任何交互式启动文件；cmd.exe 习惯写的
@@ -512,7 +513,7 @@ cd() {
 
 - 只处理**独立**的 `/d` token：`cd /d/AI`（真路径）原样不动。
 - **双向兼容 cmd 习惯**：既让 `cd /d D:/path` 能用，也不碰 bash 自己的 `cd` 语义（`builtin cd` 转发）。
-- **别删**。删了以后每次 bash 里手写 `cd /d ...` 就报 `too many arguments`；而这个函数还会覆盖 bash 函数定义，必须跟本机 bash-guard 扩展的路径约定（正斜杠）配套。
+- ~~**别删**~~ —— **已删且不恢复**。现状：bash 里写 `cd /d D:/x` 报 `bash: cd: too many arguments`，**改用 `cd D:/x` 或 `cd /d/AI/...`**（正斜杠路径一直正常）。原文「必须跟本机 bash-guard 扩展的路径约定配套」的前提也已消失——bash-guard 2026-11-03 一并卸了。
 - 写新前缀时的纪律：**保持快、无交互、不输出**（它在**每一条**命令前执行；`cd` 别加 echo）。
 
 ### 3.10 关闭内建 MCP：`"extensions": ["-builtin:mcp"]`（**必做**）
@@ -532,7 +533,7 @@ cd() {
 | 键 | 值 | 作用 / 备注 |
 |---|---|---|
 | `defaultThinkingLevel` | `"high"` | 默认思考强度 |
-| `shellCommandPrefix` | `"source ~/.pi/agent/bash-prelude.sh"` | §3.9 |
+| ~~`shellCommandPrefix`~~ | ~~`"source ~/.pi/agent/bash-prelude.sh"`~~ | **本机从未写过此键**（§3.9 已作废）：脚本 2026-11-03 已 `git rm`，2026-11-04 定为不恢复 |
 | `extensions` | `["-builtin:mcp"]` | §3.10 |
 | `defaultTools` | `["read","edit","write","bash"]` | §3.4 / §3.5（项目级同值） |
 | ~~`cacheWarming`~~ | ~~`"streaming"`~~ | **2026-11-04 已删**：它会在每轮之后自己追加一次 warmup 请求（§7.30）。删后首 token 略慢、少一发请求 |
@@ -1115,7 +1116,7 @@ property should be the same value as the target's property
 | 3 | 一批死数据/死配置 | 旧架构 + 已卸包的遗留 | 列在 §7.2 表格，一律删 | `config/` 空、`state/` 只剩 `pi-pet-autostart.json` |
 | 4 | **better-sqlite3 binding 丢了**（pi-memory 的 vec 索引用不了，报 `Could not locate the bindings file. Tried:`） | `npm uninstall` 触发整棵树重解析：`allowScripts` 里钉的 `better-sqlite3@13.0.3` 与树内实际的 `12.11.1`（pi-memory 的 `^12.10.0`）对不上 → npm 当「未覆盖」→ `node-gyp rebuild` 被挡 | `npm install-scripts approve better-sqlite3`（**不带版本号**）+ `npm rebuild better-sqlite3`（§3.1） | `node -e "require('better-sqlite3')(':memory:')"` OK；`npm install-scripts ls` 只剩 pi-memory 的 postinstall（有意不批） |
 | 5 | `fix-lazy-tools-notes.mjs` 补的 DOCS_NOTE 路径**大小写错了半角** | 脚本做**精确字符串替换**，`D:\agent\pi\docs` 与实机 `D:\Agent\pi` 不符就不匹配 | 重跑脚本（幂等），并同步到已装副本 | `--check` exit 0；已装副本 `git status` 显示 ` M lazy-tools.ts` |
-| 6 | readme 的必做配置层漏了 3 样东西 | 一边改一边没补文档 | §3.9 `bash-prelude.sh`（`shellCommandPrefix`）、§3.10 `-builtin:mcp`、§3.11 用户级 settings 备忘 | 照这三条即可从零复现 |
+| 6 | readme 的必做配置层漏了 3 样东西 | 一边改一边没补文档 | §3.9 `bash-prelude.sh`（`shellCommandPrefix`，**2026-11-04 已作废，不恢复**）、§3.10 `-builtin:mcp`、§3.11 用户级 settings 备忘 | 照另两条即可从零复现 |
 | 7 | readme 安装循环漏了 4 个包 | 清单加了但循环没加（§7.12 同一类错） | §2.1 补 `pi-secret-guard` / `pi-mono-context-guard` / `pi-meter` / `@narumitw/pi-plan-mode` | 循环数 = 26 npm + 2 git |
 
 **顺序纪律（本次最贵的经验）**：先备份 → 改 `settings.json` → 验证 → 清死数据 → 补文档，**不要**在会话开着的时候边走边改（§9.6）。本轮全程用 headless `pi -p` 做验证，不碰自己这条交互会话。
@@ -1198,15 +1199,14 @@ const AGENT_DIRS = [".agents/agents", ".claude/agents", ".pi/agents"] as const;
 |---|---|---|---|
 | 项目级 | `config/pi-project/settings.json` | `<仓库>/.pi/settings.json` | `node install-project-config.mjs` |
 | 项目级留档 | `config/pi-project/zvec.json` | 不落（`pi-zvec` 已卸，§7.11） | 手动（重装 zvec 时） |
-| 用户级脚本 | `config/agent/bash-prelude.sh` | `~/.pi/agent/bash-prelude.sh`（§3.9 的 `shellCommandPrefix` 指它） | 同上 |
 | 用户级规则 | `config/agent/AGENTS.md` | `~/.pi/agent/AGENTS.md`（§5 全局规则全文） | 同上 |
 
 | 用户级快照 | `config/agent/settings.snapshot-2025-09-15.json` | 不落（脚本对 `settings.snapshot-*` 一律跳过） | — |
 
-- **恢复来源**：`.pi/settings.json`、`.pi/zvec.json` 取自 git 历史（`15c714b` 删除前）；`bash-prelude.sh` 取自 §3.9 全文；用户级快照取自 `.backup-20250915/settings.json`（`51e457d` 删除前，含 §3.11 多个键的取值）。
+- **恢复来源**：`.pi/settings.json`、`.pi/zvec.json` 取自 git 历史（`15c714b` 删除前）；~~`bash-prelude.sh` 取自 §3.9 全文~~（2026-11-04 起不再恢复，§3.9 已作废）；用户级快照取自 `.backup-20250915/settings.json`（`51e457d` 删除前，含 §3.11 多个键的取值）。
 - `.pi/` 重新**整体忽略**（不再放行 `settings.json`）：配置是生成物，clone 后跑一次同步脚本即可；索引/churn 照样不入仓。
 - **根目录放 `settings.json` 无效**（pi 不读它）→ 是「源放 `config/` + 脚本拷进 `.pi/`」，不是「把文件挪到仓库根」。
-- 机器侧同时补回：`~/.pi/agent/settings.json` 的 §3.11 十三键（备份留 `settings.json.bak.2026-10-10-pre-config-restore`）、`bash-prelude.sh`、`~/.pi/agents/default.md`（§7.16）与 proper-lockfile 补丁 ×2（§7.14）。两个 fix 脚本 `--check` 全绿。
+- 机器侧同时补回：`~/.pi/agent/settings.json` 的 §3.11 十三键（备份留 `settings.json.bak.2026-10-10-pre-config-restore`）、`bash-prelude.sh`（2026-11-04 起不再补，§3.9）、`~/.pi/agents/default.md`（§7.16）与 proper-lockfile 补丁 ×2（§7.14）。两个 fix 脚本 `--check` 全绿。
 - 顺手修的两处 readme 失真：§5 与 §8 表引用的 `.sc-test/probe-bash-guard.mjs`（从未入库、现不存在）。
 
 ### 7.19 `pi-secret-guard` 卸载 + 压缩层补齐（2026-10-12）
@@ -1523,8 +1523,8 @@ Other errors:
 
 **同批发现的两处漂移（未修，留档）**：
 
-- `settings.json` 里**没有** `shellCommandPrefix`，`~/.pi/agent/bash-prelude.sh` 也不在盘上 —— 但 §3.9 把它写成「必做」。说明这台机器上 §3.9 那一层**从来没生效**（find/grep 的 `cd /d` 兼容层现在靠 `pi-find-grep-rewrite.ts` 与 `rg` 顶）。要补就跑 `node install-project-config.mjs` 再照 §3.9 写键，别以为它一直在。
-- `~/.pi/agent/cache-compact-debug.jsonl`（89.9KB，2026-10-09 那份调试落盘）还躺在 agent 根下，而包早已卸（§7.29）。**它就是 §3.3 里「1.1MB 调试落盘已删」漏掉的那半截**（当时删的是另一份），内含完整对话，可以删。
+- `settings.json` 里**没有** `shellCommandPrefix`，`~/.pi/agent/bash-prelude.sh` 也不在盘上 —— 但 §3.9 把它写成「必做」。根因不是漂移：脚本随 `e9c4132`（2026-11-03 卸 pi-fd / pi-bash-guard）一起 `git rm` 了，文档没跟着改。**2026-11-04 定案不恢复**，§3.9 已标死；`cd /d D:/x` 这种写法不认，用 `cd D:/x`。
+- `~/.pi/agent/cache-compact-debug.jsonl`（89.9KB，2026-10-09 那份调试落盘）还躺在 agent 根下，而包早已卸（§7.29）。**它就是 §3.3 里「1.1MB 调试落盘已删」漏掉的那半截**（当时删的是另一份），内含完整对话 —— **2026-11-04 已删**。
 
 **验证**：`settings.json` 键数 26，`cacheWarming` 已无；`pi --no-session -p "say OK"` 正常返回、无 `extension_error`。
 
@@ -1585,7 +1585,6 @@ GitHub 不通时先走 `ghproxy.net` 镜像 |
 | 路径 | 内容 |
 |---|---|
 | `~/.pi/agent/settings.json` | `packages` 注册表 + `defaultTools`（含 dsh-pet 的 object form 屏蔽，见 §3.6） |
-| `~/.pi/agent/bash-prelude.sh` | 每条 bash 命令前的 `cd /d` 兼容层（`shellCommandPrefix`，见 §3.9）。**canonical 在仓库 `config/agent/bash-prelude.sh`** |
 | `~/.pi/agent/extensions/` | 本地扩展副本 + 各扩展的全局配置（如 `edit-guard-config.json`、`pi-dsh-pet.json`，**只放这里，放 agent 根下不生效**） |
 | ~~`~/.pi/agent/{web-search,cache-compact}.json`~~ | 已随 2026-11-04 九连卸删除（§7.29）；重装对应包才再写 |
 | `~/.pi/agent/mcp-onboarding.json` | 内建 MCP 引导向导的状态（见 §3.10），**勿手改** |
@@ -1601,7 +1600,7 @@ Search fd/rg，见 §5「全局规则」
 | `~/.pi/agent/config/` | **已空**（smart-context 包卸载后配置已删，新装带 `startupConfig` 的包才会写） |
 本目录名写死在 `dist/config.js:403`。本仓库这份是**生成物**：canonical 在 `config/pi-project/settings.json`，跑 `node install-project-config.mjs` 拷入 |
 | `<仓库>/config/pi-project/*` | **项目级配置的 canonical 源**：`settings.json`（→ 拷进 `<仓库>/.pi/`）、`zvec.json`（留档件，不参与同步，见 §7.11） |
-| `<仓库>/config/agent/*` | **用户级配置的 canonical 源**：`bash-prelude.sh`（→ 拷进 `~/.pi/agent/`）、`AGENTS.md`（§5 全局规则全文 → 拷进 `~/.pi/agent/`）、`settings.snapshot-2025-09-15.json`（历史快照，只留档不拷）。`rtk-config.json` 已于 2026-10-12 `git rm`（§3.14 / §7.20） |
+| `<仓库>/config/agent/*` | **用户级配置的 canonical 源**：`AGENTS.md`（§5 全局规则全文 → 拷进 `~/.pi/agent/`）、`settings.snapshot-2025-09-15.json`（历史快照，只留档不拷）。~~`bash-prelude.sh`~~ 已于 2026-11-03 `git rm`（§3.9 作废）。`rtk-config.json` 已于 2026-10-12 `git rm`（§3.14 / §7.20） |
 | `~/.pi/agent/sessions/**/*.jsonl` | 会话历史，算命中率的原始数据 |
 
 **生效方式**：改配置或扩展后 `/reload`（不重启会话、不丢历史）。
