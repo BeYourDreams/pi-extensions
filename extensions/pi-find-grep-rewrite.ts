@@ -16,6 +16,46 @@
  */
 import type { BashToolCallEvent, ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
+/** 搜索命令名集合：真正要改写的那两个 GNU 名字。 */
+const SEARCH_CMDS = new Set(["find", "grep", "egrep", "fgrep"]);
+
+/** 修饰词：包在命令外面时跳过，不改变「这是 find/grep」的判定。 */
+const LEADING_NOISE = new Set([
+	"sudo", "doas", "time", "nice", "ionice", "nohup", "setsid", "stdbuf",
+	"command", "exec", "xargs", "env",
+]);
+
+/** shell 关键字 / 括号：分号切段后仍可能残留在段首。 */
+const SHELL_KEYWORDS = new Set([
+	"if", "then", "else", "elif", "fi", "do", "done", "for", "while", "until",
+	"case", "esac", "in", "{", "}", "(", ")", "!", "function",
+]);
+
+function baseName(t: string): string {
+	return t.replace(/\.exe$/i, "").split(/[/\\]/).pop()?.toLowerCase() ?? t.toLowerCase();
+}
+
+function isPrefixToken(t: string): boolean {
+	const b = baseName(t);
+	if (LEADING_NOISE.has(b)) return true;
+	if (SHELL_KEYWORDS.has(b)) return true;
+	if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(t)) return true;
+	if (t.startsWith("-")) return true;
+	if (/^\d+$/.test(t)) return true;
+	if (t === "--") return true;
+	return false;
+}
+
+/** 段内 effective command 的下标：跳过修饰词/关键字/赋值，定位 find/grep。 */
+export function findCommandIndex(tokens: string[]): number {
+	for (let i = 0; i < tokens.length; i++) {
+		const b = baseName(tokens[i]);
+		if (!SEARCH_CMDS.has(b)) continue;
+		if (i === 0 || isPrefixToken(tokens[i - 1])) return i;
+	}
+	return -1;
+}
+
 /** 引号感知的顶层切段：返回 [段, 分隔符, 段, …]，引号内的 |;& 不切。 */
 export function splitSegments(s: string): string[] {
 	const out: string[] = [];
@@ -275,11 +315,15 @@ export function isBroadScan(command: string): boolean {
 	for (let i = 0; i < parts.length; i += 2) {
 		if (parts[i - 1] === "|" || parts[i - 1] === "|&") continue;
 		const tokens = tokenize(parts[i].trim());
-		const head = tokens[0];
-		if (head === "find") {
-			if (!findHasPath(tokens)) return true;
-		} else if (head === "grep" || head === "egrep" || head === "fgrep") {
-			const info = grepInfo(tokens);
+		const cmdIdx = findCommandIndex(tokens);
+		if (cmdIdx < 0) continue;
+		const cmd = baseName(tokens[cmdIdx]);
+		const args = tokens.slice(cmdIdx + 1);
+		const arr = [cmd, ...args];
+		if (cmd === "find") {
+			if (!findHasPath(arr)) return true;
+		} else if (cmd === "grep" || cmd === "egrep" || cmd === "fgrep") {
+			const info = grepInfo(arr);
 			if (info.recursive && !info.hasFile) return true;
 		}
 	}
@@ -290,20 +334,24 @@ export const isBroadScanCommand = isBroadScan;
 export const isUnscopedSearch = isBroadScan;
 export const isUnscopedScan = isBroadScan;
 
-/** 单段改写：首词是 find/grep 才动；翻不了就原样返回。前后空白保留。 */
+/** 单段改写：定位 find/grep（跳过修饰词/关键字）才动；翻不了就原样返回。前后空白保留。 */
 export function rewriteSegment(seg: string): string {
 	const leading = seg.match(/^\s*/)?.[0] ?? "";
 	const trailing = seg.match(/\s*$/)?.[0] ?? "";
 	const trimmed = seg.trim();
 	if (!trimmed) return seg;
 	const tokens = tokenize(trimmed);
-	const head = tokens[0];
+	const cmdIdx = findCommandIndex(tokens);
+	if (cmdIdx < 0) return seg;
+	const cmd = baseName(tokens[cmdIdx]);
+	const prefix = tokens.slice(0, cmdIdx);
+	const args = tokens.slice(cmdIdx + 1);
 	let body: string | null = null;
-	if (head === "find") {
-		const translated = translateFindArgs(tokens.slice(1));
-		if (translated) body = ["fd", ...translated].join(" ");
-	} else if (head === "grep" || head === "egrep" || head === "fgrep") {
-		body = ["rg", ...translateGrepArgs(tokens.slice(1))].join(" ");
+	if (cmd === "find") {
+		const translated = translateFindArgs(args);
+		if (translated) body = [...prefix, "fd", ...translated].join(" ");
+	} else {
+		body = [...prefix, "rg", ...translateGrepArgs(args)].join(" ");
 	}
 	return body === null ? seg : leading + body + trailing;
 }
