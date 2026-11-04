@@ -11,9 +11,9 @@
 
 ---
 
-## 1. 清单（在用 27 个扩展 = 24 npm + 3 git）
+## 1. 清单（在用 26 个扩展 = 23 npm + 3 git）
 
-**实际在用 27 个**（2026-11-02 实核：§1.1–§1.3 表行 = `settings.json` 的 `packages` = `pi list`，27 条一一对齐，表内无多无漏）。
+**实际在用 26 个**（2026-11-04 实核：§1.1–§1.3 表行 = `settings.json` 的 `packages` = `pi list`，26 条一一对齐，表内无多无漏）。
 > 2026-10-06 增补 3 个：联网（`pi-web-access`）、会话级撤销（`@bacnh85/pi-checkpoint`）、完成通知（`pi-notify`）。PR 插件（`@henryqw/pi-pr`）装后即卸，见 §7.7。
 > 2026-10-08 精简：卸 `pi-budget-guard`（与 `pi-meter` 功能三层全重叠，见 §7.12）与 `pi-warm-cache`（本机不生效的死安装，见 §7.12）；补装 `@arhen/pi-core-subagent`、`pi-ocr`（此前清单漂移：列了但实际未装）；新增 `pi-deepseek-cache`（DeepSeek 后端专用，与 §5.5 原判相悳 —— **2026-10-09 已验实并卸载，见 §7.13**）。
 > 2026-10-09 压缩侧换血（见 §7.13）：装 `pi-cache-compact`（provider 无关的压缩调用缓存，本机实测命中 68.6%）；卸 `pi-deepseek-cache`（绑定 DeepSeek）与 `pi-compaction-cache`（被 cache-compact 取代，且同抢 `session_before_compact`）。29 → 28。
@@ -51,6 +51,8 @@
 > 2026-10-18 晚（同机、清单计数不动）：开机 `[Theme conflicts]`
 
 > 2026-11-02（**28 → 27**：卸 `D:\AI\pi-one-ui` 本地源码条目，改装 `git:github.com/BeYourDreams/pi-one-ui`；计数不变的那次拉齐在 11-01）：本仓 `master` 拉到 `f315550`（6 个 incoming，纯 fast-forward）；`pi-one-ui` / `pi-lazy-tools` / `pi-dsh-pet` 三个 git 源的 owner 从 `qq458249269` 统一成 `BeYourDreams`；`~/.gitconfig` 的全局 7890 代理删掉，git 改走 SSH（详 §7.26 同日两段）。
+
+> 2026-11-04（**27 → 26**：卸 `npm:pi-mono-context-guard`，23 npm + 3 git）
 
 > 2026-11-01（清单计数不动）**规则 E 以新形态恢复**
 > （只认每条流水线首段首词；管道消费位、`git grep`、`./find-helper.sh` 不拦），替代 2026-10-13 删掉的「按搜索根拦」。
@@ -96,7 +98,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `npm:pi-test-runner` | 项目感知的测试运行工具 | 2026-10-07 装。结构化跑测试，替代手写 `bash npm test`；懒加载 |
 | `npm:pi-ocr` | 多后端 OCR（MinerU 免费云 / Ollama 本地 / Pix2Text），零配置 | 2026-10-07 列装但实际漂移未装，2026-10-08 补装。截图/PDF 出文本；懒加载 |
 | `npm:@chendpoc/pi-memory` | 跨会话记忆（MEMORY.md ground truth + JSONL sidecar 检索） | 2026-10-07 装。备选 `pi-session-memory` 因 `node:sqlite` 在 Pi 内嵌运行时缺失（`ResolveMessage: No such built-in module: node:sqlite`）加载即败，已卸，见 §7.6 |
-| `npm:pi-mono-context-guard` | 上下文体积硬闸：自动截断 read/rg 超长输出 | 2026-10-07 装。cache-guardian 只告警，这是截断侧；懒加载 |
+`rg` 静默 `\| head -60` 让判断失真，见 §7.28 |
 | `npm:pi-meter` | 花费追踪 + 预算告警 + auto-downshift + 硬截断 | 2026-10-07 装。**唯一预算侧**（budget-guard 2026-10-08 已卸，追踪/告警/拦截/降级全并于此）；本机走本地代理，auto-downshift 与内置价格表可能对不上，费用数字仅供参考；懒加载 |
 
 | `npm:@narumitw/pi-lsp` | LSP 工具（语言无关，共享 runner，可配置） | 2026-10-07 装（此前只在增补注里提过，本行 2026-10-08 补录）；懒加载 |
@@ -163,15 +165,16 @@ pi install "npm:@bacnh85/pi-checkpoint"
 pi install "npm:pi-notify"
 
 # 2026-10-07 增补（OCR/跨会话记忆等；PR 插件已卸，见 §7.7；pi-ask-permission 已卸，见 §7.8；no-find 已卸，见 §7.9；pi-cwd-guard 已卸，见 §7.10；pi-zvec 已卸，见 §7.11；budget-guard/warm-cache 已卸，见 §7.12；deepseek-cache/compaction-cache 已卸，见 §7.13 —— 均勿再装）
-# ⚠ pi-lsp / test-runner / ocr / memory / core-subagent 与上面钩子层里的 mono-context-guard / meter 必须成对出现，漏一个清单就漂
-# 25 个 npm 一个都不能漏。
+# ⚠ pi-lsp / test-runner / ocr / memory / core-subagent 与上面钩子层里剩下的 pi-meter 必须成对出现，漏一个清单就漂
+# 23 个 npm 一个都不能漏。
 for p in @narumitw/pi-lsp pi-test-runner pi-ocr @chendpoc/pi-memory @arhen/pi-core-subagent; do
   pi install "npm:$p" || echo "[失败] $p"
 done
 
-# 钩子层（不注册常驻工具：截超长 read+rg 输出 / 预算与花费；凭据拦截 pi-secret-guard 已于 2026-10-12 卸，见 §7.19；
+# 钩子层（不注册常驻工具：预算与花费；上下文截断 pi-mono-context-guard 已于 2026-11-04 卸，见 §7.28；
+#        凭据拦截 pi-secret-guard 已于 2026-10-12 卸，见 §7.19；
 #        只读规划模式 @narumitw/pi-plan-mode 已于 2026-10-13 卸，见 §7.21 —— 勿再装）
-for p in pi-mono-context-guard pi-meter; do
+for p in pi-meter; do
   pi install "npm:$p" || echo "[失败] $p"
 done
 
@@ -197,7 +200,7 @@ node install-project-config.mjs
 >
 > 若 `pi update --extensions` 也超时，同一改写继续生效（git 源的 update 就是 git pull）；装完即可 `/reload`。
 
-装完自查：`pi list` 应见 **27 个扩展**（24 npm + 3 git；2026-11-02 把 `pi-one-ui` 从 npm 换到 git 所以是 3 git）
+装完自查：`pi list` 应见 **26 个扩展**（23 npm + 3 git；2026-11-02 把 `pi-one-ui` 从 npm 换到 git 所以是 3 git）
 
 ### 2.2 硬顺序约束
 
@@ -663,7 +666,7 @@ npm ls web-tree-sitter   # 应为 0.24.7 deduped，无 invalid
 | `pi-test-runner` | 测试运行工具 |
 | `pi-ocr` | OCR 工具 |
 | `@chendpoc/pi-memory` | 记忆工具 + 生命周期钩子 |
-| `pi-mono-context-guard` | 无工具（拦截钩子 + 命令） |
+| ~~`pi-mono-context-guard`~~（2026-11-04 卸） | ~~无工具（拦截钩子 + 命令）~~，见 §7.28 |
 | `pi-meter` | 1 个工具 + 预算命令 |
 | `pi-cache-compact` | 无工具（纯 `session_before_compact` 钩子；拒绝接管时打一行终端通知） |
 
@@ -800,7 +803,7 @@ pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传
 | 不改什么 | 管道消费位（`ls -la` 的输出交给 `grep foo`）、`git grep`（首词是 git）、`./find-helper.sh`、`findings.md`、`fd` / `fdfind` / `rg` / `ag` / `ack` |
 | 看不看搜索根 | **不看**，只认命令名。根选错交给 `fd` 的 `path` 参数与 §4.1 的超时兜底处理 |
 | 出口 | 翻译不了的 find flag 原样保留（不再 block），要 GNU 独占 flag 就自己用 `/usr/bin/find` |
-| 拦截 | 无 path 的 `find`，或递归 `grep` 无 file → block（避免整盘/整树扫描）；切段额外处理 `&` / `|&` |
+| 拦截 | 无 path 的 `find`，或递归 `grep` 无 file → block（避免整盘/整树扫描）；切段额外处理 `&` / `\|&` |
 
 回归：`.sc-test/probe-find-grep-rewrite.mjs`（`node --experimental-strip-types`，25 例 + 7 条 broad-scan）。回退：删 `extensions/pi-find-grep-rewrite.ts` + 删 `~/.pi/agent/extensions/` 同名副本 + `/reload`。
 
@@ -1180,7 +1183,7 @@ const AGENT_DIRS = [".agents/agents", ".claude/agents", ".pi/agents"] as const;
 
 ### 7.17 `@xynogen/pix-optimizer`：唯一会**改写 system 前缀文本**的扩展（2026-10-10 首记，2026-10-12 换包）
 
-与本清单里其它 27 个扩展不同，`pix-optimizer` 的 caveman / ponytail 会在 `before_agent_start` **往 system prompt 注入规则文本**，所以它与 §6 的静态前缀优化、与 §2.2 的 prefix-stabilizer 是同一根问题域：
+与本清单里其它 26 个扩展不同
 
 | 关注点 | 结论 |
 |---|---|
@@ -1247,7 +1250,7 @@ node install-project-config.mjs      # config/agent/rtk-config.json → ~/.pi/ag
 
 - `pi-ponytail` 与 `pi-caveman` **都改写 system 前缀**（`before_agent_start` 注入，§7.17 同类风险）：两者都只追加、不改前段结构，实测共存无冲突；但**任一换模式 = 换一次前缀文本**，切完第一次 `cacheRead` 归 0。日常别来回切。
 - `pi-rtk` 会**滤掉源码里的注释与空白**，导致 `edit` 报 old text 不匹配。扩展自带应急提示 + `rtk_configure` 工具：关 `sourceCodeFiltering` → 重读 → 改 → 开回来。真要常用编辑就别开 `sourceCodeFiltering`，改用 `/rtk-toggle-truncation` 之外的其余技术（§3.14）。
-- `pi-rtk` 的 `tool_result` 过滤与 `pi-mono-context-guard` 的 `tool_call` 注入是**两层叠加不是冲突**（§3.14 已对账）；若怀疑多砍了什么，`/rtk-what` 看开关、`/rtk-off` 一键关。
+- `pi-rtk` 的 `tool_result` 过滤与 `pi-mono-context-guard` 的 `tool_call` 注入是**两层叠加不是冲突**（§3.14 已对账）；若怀疑多砍了什么，`/rtk-what` 看开关、`/rtk-off` 一键关。（rtk 与 guard 都已卸，此条仅留档，guard 见 §7.28）
 
 ### 7.20 压缩层三合一：`@izhimu/pi-caveman` + `pi-ponytail` + `pi-rtk` → `@xynogen/pix-optimizer`（2026-10-12）
 
@@ -1347,7 +1350,7 @@ if (!content || typeof content !== "string") return;      // ❌ content 是 blo
 const filePath = event?.path || event?.args?.path;        // ❌ 字段叫 event.input.path
 ```
 
-对照本机 `pi-mono-context-guard`（同一个钩子、实际能用）的写法就一目了然：`event.toolName`、`event.input as {path}`、`event.content.some(b => b.type !== "text")`。**路径永远取不到 → 直接 return**，连 notify 都不会出现。
+对照本机 `pi-mono-context-guard`（同一个钩子、实际能用；2026-11-04 已卸，§7.28，留档时看源码即可）的写法就一目了然
 
 > 实测：headless 读一个 367 行的 `pi-fd.ts`，输出里没有它本该打的 `Large file optimized: ... (367 → N lines, R% reduction)`。所以**别指望它自动省 token**，它既不改 `read` 的返回，也不碰 `pi-mono-context-guard` 的截断职责（无冲突，但也没协同）。
 
@@ -1476,6 +1479,28 @@ Other errors:
 
 **2026-10-29 上游吸收 v0.9.2**（`dafe80e` → `91fddb2`，16 commits / 83 files）：上游把八个旧 JSON 检查器移进 `tests/legacy/` 并删掉 assets / image-prompts / review 三个技能的整个 `scripts/`——本仓库**不跟这个删除**，因为这些检查器是 pro 三阶段检查器的活跃依赖、且含自加的 SHT-31 上限，跟着删会让检查能力塌掉；三个技能的 `scripts/` 与 `selftest.py` 全部保留。同期收进 `--partial` 局部核对、`profile_notes` 算术冲突提示、`format.episode_count` 与 `multi_shot_containers` 决策写入。吸收明细见 `skills/UPSTREAM.md`。
 
+### 7.28 `pi-mono-context-guard` 卸载（2026-11-04）：省的是 token，付的是请求
+
+**什么时候装的**：2026-10-07（§1 表），`pi-cache-guardian` 只告警不截断，它是「截断侧」。三条守卫：`read` 补 `limit=120`、同段重复读 `block`、`rg` 自动追加 `| head -60`。
+
+**为什么卸**：三条里只有一条真省，另两条在花钱，而花钱的方式是**多轮请求**。
+
+| 守卫 | 行为 | 额外请求 | 账 |
+|---|---|---|---|
+| `read` 无 `limit` → 补 120 | 静默改参数，不拦 | **1~N 轮** | 一次请求要重发整个上下文（20–40k input，缓存命中约 10%），400 行文件被拆 4 次读只省约 3k token → **亏 10~30 倍** |
+| 同段重复读 → `block` + stub | 真拦截 | 0~1 轮 | stub 带行号范围，模型一般一次就换 `offset` → **基本免费** |
+| `rg` 无 `head/tail/wc` → 自动追加 `head -60` | 静默改命令，不拦 | 0，但错判 | 60 行被当成全部匹配 → 结论错 → 再补查 **2+ 轮**；最贵的一条，而且**没有报错** |
+
+关键点是这两条校准值的取向矛盾：`readLimit` 按「单轮上下文体积」优化，`rgHeadLimit` 按「单条输出体积」优化，而实际成本是「轮数 × 上下文体积累加」——所以砍得越狠，请求越多。
+
+**还有一层**：`DEFAULTS` 在 `index.ts` 里硬编码（`readLimit: 120` / `rgHeadLimit: 60` / 三个开关），`settings.json` 没有覆盖入口（装完不 merge 配置），想调只能改 `node_modules`，`pi update` 一升就冲掉。
+
+**卸载代价（明说）**：① 重复读同一段不再有 stub 兜底——长会话里手滑重读会白付一次全文件 token；② 大 `rg` 输出不再被自动砍——**这条本身是好事**，但意味着 `rg` 必须自己带 path/glob 收窄（`pi-find-grep-rewrite` 已在 `tool_call` 上拦「无 path 的 find/递归 grep」，见该扩展头注释），输出自己配 `| head`。
+
+`pi list` 26 项（23 npm + 3 git）。§1 表、§1 changelog、§2.1 循环与计数、§4 工具表、§9 计数同步。
+
+**重装条件**：只有「同一段内容在长会话里被反复读进上下文」成为主要浪费时才值得——那时该装的是去重，不是补 120 行下限。
+
 ## 8. 体检与排障
 
 本机的体检脚本**没有自动化的**，但有几个手跑的（都在仓库根或 `.sc-test/`，`.sc-test/` 属 gitignore、不入库）：
@@ -1544,7 +1569,7 @@ GitHub 不通时先走 `ghproxy.net` 镜像 |
 | `~/.pi/agent/state/` | 跨会话记账，**2026-10-09 清理后只剩 `pi-pet-autostart.json`**（记「本 pid 已弹过窗 + 落在哪只宠物上」） |
 | `~/.pi/agent/git/` | git 源扩展（lazy-tools fork + dsh-pet，后者扩展被屏蔽，见 §3.6） |
 | `~/.pi/agent/npm/node_modules/` | npm 源扩展 |
-| `~/.pi/agent/npm/package.json` | 25 个 dep + `allowScripts`（`overrides` 已随 `pi-smart-reader` 卸载整块删除，2026-10-18，见 §3.16 / §1 changelog） |
+| `~/.pi/agent/npm/package.json` | 23 个 dep + `allowScripts`
 | `~/.pi/agent/pix.json` | `@xynogen/pix-optimizer` 的三档状态（`optimizer.caveman` / `.rtk` / `.ponytail`），**2026-10-12 新建**，见 §3.15 |
 旧文件留 `pi-one-ui.json.bak.2026-10-18-pre-cwd`**。主题侧那三个越界色键不在这里改，走 `node fix-pi-one-ui-theme.mjs`（§7.26） |
 Search fd/rg，见 §5「全局规则」
@@ -1565,7 +1590,7 @@ Search fd/rg，见 §5「全局规则」
 
 在另一台机器上照本清单完整走一遍。**配置值与 §1–§7 全部一致，唯一差异是路径前缀**（本机 `yxh`，原记录机 `yinxuehao`；`compaction-cache.json` 的 `logPath` 已是本机路径）。
 
-同日三包换 `@xynogen/pix-optimizer` 后为 **28 项**（26 npm + 2 git，§3.15 / §7.20）；2026-10-13 卸 `@narumitw/pi-plan-mode` 后为 **27 项**（25 npm + 2 git，§7.21）。
+2026-11-04 卸 `pi-mono-context-guard` 后为 **26 项**（23 npm + 3 git，§7.28）。
 
 ### 9.1 拉代码：未提交改动先备份再 fast-forward
 

@@ -181,10 +181,6 @@ export function translateFindArgs(args: string[]): string[] | null {
 			const v = args[++i];
 			if (v === undefined) return null;
 			out.push("--min-depth", v);
-		} else if (t === "-newer") {
-			const v = args[++i];
-			if (v === undefined) return null;
-			out.push("--changed-after", v);
 		} else if (t === "-print") {
 			// fd 默认就打印
 		} else if (t === "-print0") {
@@ -277,6 +273,7 @@ export function findHasPath(tokens: string[]): boolean {
  */
 export function grepInfo(tokens: string[]): { recursive: boolean; hasFile: boolean } {
 	let recursive = false;
+	let patternGiven = false; // -e/-f 给了 pattern，后续非选项就是 file
 	const files: string[] = [];
 	let i = 1;
 	while (i < tokens.length) {
@@ -286,8 +283,14 @@ export function grepInfo(tokens: string[]): { recursive: boolean; hasFile: boole
 			i++;
 			continue;
 		}
-		if (t === "-e" || t === "-f" || t === "-m") {
+		if (t === "-e" || t === "-f" || t === "--regexp" || t === "--file") {
+			patternGiven = true;
 			i += 2;
+			continue;
+		}
+		if (t === "-m" || t.startsWith("--regexp=") || t.startsWith("--file=")) {
+			if (t !== "-m") patternGiven = true;
+			i += t === "-m" ? 2 : 1;
 			continue;
 		}
 		if (/^-[a-zA-Z]+$/.test(t)) {
@@ -302,8 +305,8 @@ export function grepInfo(tokens: string[]): { recursive: boolean; hasFile: boole
 		files.push(t);
 		i++;
 	}
-	// 第一个非选项参数是 pattern，其余是 file/path
-	return { recursive, hasFile: files.length >= 2 };
+	// pattern 未由 -e/-f 给出时，第一个非选项参数才是 pattern
+	return { recursive, hasFile: files.length >= (patternGiven ? 1 : 2) };
 }
 
 /**
