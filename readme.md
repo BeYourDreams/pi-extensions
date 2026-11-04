@@ -824,9 +824,9 @@ pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传
 4. **改 `.md` 优先 `md_edit`**：散文/列表用 `md_edit`（锚定标题+块序号，不受换行重排影响），代码块用 `edit`，`.mdx` 一律用 `edit`。
 ~~`pi-deepseek-cache`（绑定 DeepSeek）~~ **2026-10-09 已卸**（§7.13）：实测遥测半边可用、压缩半边必败（接管条件 `ctx.modelRegistry.find("deepseek", …)` 在本机注册表里根本没有 deepseek provider，代理也拒 `deepseek-flash` 这个模型 ID），按 DeepSeek 价格表换算的「省钱估算」属虚构。**要压缩缓存就装 `pi-cache-compact`**（provider 无关，§7.13 实测命中 68.6%）。
 6. **纯 UI 类扩展可以放心装**：`pi-tps` / `pi-one-ui` / `pi-dsh-pet` / `pi-pet-autostart` 这类只挂事件钩子、只注册命令的扩展，**不注册任何工具**，不进 `defaultTools`，wire 字节不变（§3.6 有 bench 实测：装宠物前后都是 5664B）。反过来，任何**注册工具**的扩展都要重新算 §6.3 那笔账。
-**全局规则：行为约定写 `~/.pi/agent/AGENTS.md`（2026-10-12 新建）**
+**全局规则：`~/.pi/agent/AGENTS.md` 现在是空文件（2026-11-04 `07f27cf` 清空，0B）—— 下面整节是历史文案，仅供想恢复时抄**
 
-本机**全英文**、分三块（Think / Read files / Search），短且稳：
+清空前本机**全英文**、分三块（Think / Read files / Search），短且稳。`07f27cf` 的卸载理由：那条「Don't read whole files by default」属于硬性纪律，与其用提示词求模型照做，不如换成插件强制（§5 的 `pi-find-grep-rewrite.ts` 与 §3.4 的常驻集收缩）。**恢复办法**：把下面两块表格的原文写回 `config/agent/AGENTS.md` 再 `node install-project-config.mjs`，`--check` 会认。
 
 | 规则 | 用意 |
 |---|---|
@@ -834,9 +834,9 @@ pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传
 | Read files: no full reads by default (only if <400 lines or truly needed); `rg -n` locate → `read` with `offset`/`limit`; `.md` via `md_inspect`; don't re-read | 长文件整读是本机最大的一笔 token 浪费（本仓库 readme 就 152KB）。例外：即将编辑的源码、200 行内配置、陌生结构的探路文件 |
 
 
-- **canonical 源在本仓库 `config/agent/AGENTS.md`**（2026-10-18 外迁）：`node install-project-config.mjs` 拷进 `~/.pi/agent/AGENTS.md`，`--check` 体检。此前它只在下面表格里留了文案、盘上无正本，换机 / 清理就整份丢失（本机 2026-10-18 体检即命中）。
+- **canonical 源在本仓库 `config/agent/AGENTS.md`**（2026-10-18 外迁，**2026-11-04 起内容是 0B**）：`node install-project-config.mjs` 拷进 `~/.pi/agent/AGENTS.md`，`--check` 体检。此前它只在下面表格里留了文案、盘上无正本，换机 / 清理就整份丢失（本机 2026-10-18 体检即命中）。
 - 它进的是**每轮 system 前缀**，所以改它等于改前缀（原理同 §2.2 / §7.17）：别拿它当 scratchpad，也别塞会变的文本。
-- 与扩展注入的规则是叠加关系、互不覆盖：本机是 AGENTS.md 这些条 + pix-optimizer 的 caveman/ponytail 档位规则（§3.15）。
+- 与扩展注入的规则是叠加关系、互不覆盖：清空前是 AGENTS.md 这些条 + pix-optimizer 的 caveman/ponytail 档位规则（§3.15）；现在只剩后者。
 
 
 ---
@@ -1527,6 +1527,20 @@ Other errors:
 - `~/.pi/agent/cache-compact-debug.jsonl`（89.9KB，2026-10-09 那份调试落盘）还躺在 agent 根下，而包早已卸（§7.29）。**它就是 §3.3 里「1.1MB 调试落盘已删」漏掉的那半截**（当时删的是另一份），内含完整对话 —— **2026-11-04 已删**。
 
 **验证**：`settings.json` 键数 26，`cacheWarming` 已无；`pi --no-session -p "say OK"` 正常返回、无 `extension_error`。
+
+### 7.31 取代 `bash-prelude.sh`：/d 开关那件事改成「不写」（2026-11-04）
+
+§3.9 作废之后，`cd /d D:/x` 这类 cmd 习惯写法在本机会直接报 `bash: cd: too many arguments`。用户问「要不写回插件强制？」——**决定不写**，理由：
+
+| 方案 | 成本 | 结论 |
+|---|---|---|
+| `shellCommandPrefix` + `source bash-prelude.sh` | **每条** bash 命令多一次 `source`（fork 不省，但每条都有固定开销）+ 一个新维护点 | 不选 |
+| 本地扩展挂 `tool_call` 改写 `cd /d` → `cd` | 比 `pi-find-grep-rewrite.ts` 多一个文件、多一份回归用例 | **不选**（收益比太低：只在人自己写错时省掉一次报错） |
+| **纪律：不写 `/d`** | 0 | ✅ 选这个 |
+
+- 生效方式只靠**提示词层**：`config/agent/AGENTS.md` 是空的（§5），所以这条纪律落在**本 readme + 模型自己看报错改正**上。实测一次报错就够：`bash: cd: too many arguments` 指向明确，模型下一轮自动改写成 `cd D:/x`。
+- 同一件事的**机器可判形态**已经在跑：`pi-find-grep-rewrite.ts` 只转译「`find`/`grep` 当搜索生产者」这种**有确定等价物**的命令；`cd /d` 没有等价物（要么丢掉 `/d`，要么当路径），猜错比报错贵——所以它是**故意不转的**。
+- 想加回来（不推荐）：`git show e9c4132^:config/agent/bash-prelude.sh > config/agent/bash-prelude.sh` + `node install-project-config.mjs` + `settings.json` 写 `"shellCommandPrefix": "source ~/.pi/agent/bash-prelude.sh"`。
 
 ## 8. 体检与排障
 
