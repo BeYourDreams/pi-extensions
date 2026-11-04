@@ -268,7 +268,7 @@ npm rebuild better-sqlite3  # 批完必须重编，批准本身不建原生 bind
   2. 安装/卸载**任何一个**扩展后（npm 会重解析整棵树）都复验一次：`node -e "console.log(require('better-sqlite3')(':memory:').prepare('select 1 as x').get())"` 应打印 `{ x: 1 }`；报 `Could not locate the bindings file` 就重跑上面两条。
   3. 重编需要 MSVC：本机 `cl.exe` 不在 PATH，但 `C:\Program Files (x86)\Microsoft Visual Studio\2022` 在位，node-gyp 经 vswhere 能找到 → `rebuilt dependencies successfully`。
 - `~/.pi/agent/npm/package-lock.json` 会被 npm 重写（本机 68KB → 222KB，npm 12 的 v3 格式更啰嗦），**属正常，不必回滚**。
-- **`@chendpoc/pi-memory@0.3.2` 的 postinstall 是有意不批的**（`npm install-scripts ls` 会一直报它 `blocked`）：该脚本只跑 `pi-memory init` + `scheduler sync`，**best-effort、不是加载必需**（实测不批照样加载，`~/.pi/pi-memory-data/` 下有 `MEMORY.md` + `logs`），符合「只批必需」的纪律。要批就 `npm install-scripts approve @chendpoc/pi-memory`（会写 `~/.pi/pi-memory-data` 与调度任务，自行取舍）。
+- **`@chendpoc/pi-memory@0.3.2` 的 postinstall 是有意不批的**（`npm install-scripts ls` 会一直报它 `blocked`）：该脚本只跑 `pi-memory init` + `scheduler sync`，**best-effort、不是加载必需**（实测不批照样加载，`~/.pi/pi-memory-data/` 下有 `MEMORY.md` + `logs`；该目录已于 2026-11-04 随包卸载清理，§7.29），符合「只批必需」的纪律。要批就 `npm install-scripts approve @chendpoc/pi-memory`（会写 `~/.pi/pi-memory-data` 与调度任务，自行取舍）。
 - 其余包实测均无 install 脚本。
 
 ### 3.2 ~~smart-context~~（已卸载 2026-10-02，配置一并作废）
@@ -1507,7 +1507,7 @@ Other errors:
 - 删 `npm/package.json` 的 `allowScripts` 整键（两条的宿主 computer-use / pi-memory 都卸了，树里 `better-sqlite3` 也已不在）→ §3.1 起无对象。
 - 删两个 0 触发的守门脚本：`fix-browser-native-compat.mjs`（目标 browser-native）、`fix-subagent-check.mjs`（目标 core-subagent）——**git 历史里能找回**，重装对应包时再取。
 - §2.2 顺序约束归零：唯一那条「cache-compact 必须在 prefix-stabilizer 之后」随卸载作废。
-- `~/.pi/pi-memory-data/`（MEMORY.md + 日志）**没动**，是数据不是配置；要彻底清自己删。
+- `~/.pi/pi-memory-data/`（MEMORY.md + `logs/` + 两个 `.memory_*` 队列文件，34KB）**2026-11-04 已删**。删前确认过内容：`MEMORY.md` 只有模板骨架（四个 section 全空）、`logs/` 是空目录 —— 没有真实记忆内容，删掉零损失。重装 `@chendpoc/pi-memory` 时会自己重建。
 
 **验证**：`pi list` 17 条；`pi --no-session -p "say OK"` 无 `extension_error`、正常返回。
 
