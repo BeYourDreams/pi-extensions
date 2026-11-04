@@ -114,6 +114,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `pi-lean-prompt.ts` | 裁 `payload.tools` 里 `edit`/`read` 的 description 与 schema 样板文字（**只改文字、不动字段结构**，故与 smart-edit / one-ui / undo-redo 兼容） |
 | `pi-lean-sections.ts` | 压 wire 上 system 的 `<docs>` / `<skills>` 两块（见 §6.2） |
 | `pi-pet-autostart.ts` | 让 `pi-dsh-pet` **默认常驻且整机只留一只**：TUI 会话一开就派发 `/pet`，已有宠物窗就复用不新开，跨会话/多开 pi 也只一只。不注册工具，只挂 `session_start` + `/pet-auto` 开关。配置见 §3.6 |
+| `pi-find-grep-rewrite.ts` | `tool_call` 钩子把 bash 命令里的 `find`/`grep` **自动改写成 `fd`/`rg`**（覆盖不到的参数原样保留让 find/grep 报错，不静默猜）。只认流水线首段首词，引号感知；不注册工具、不切 active 集。回归：`.sc-test/probe-find-grep-rewrite.mjs`（`node --experimental-strip-types`） |
 
 > 曾经的 `pi-plan-tools.ts`（把 lazy-tools 剥掉的 `plan_mode_*` 助手工具捞回来）**已删除**：`@narumitw/pi-plan-mode` 2026-10-13 卸载，`/plan` 在本机用不了，这个补锅扩展就没存在意义了（见 §7.21）。
 >
@@ -786,15 +787,21 @@ pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传
 编辑器（`vim` `nano` `emacs`…）、分页器/监视器（`less` `top` `watch` `tail -f` `journalctl -f`…）、交互客户端（`ssh` `mysql` `psql` `sqlite3`…）、光杆 REPL（`python` / `node` 不带参数）、前台服务（`npm run dev|start|serve|preview`、`python -m http.server`、不带 `-d`/`--rm` 的 `docker run`）。
 替代写法：把有产出的部分放前台跑（先 build/test，再查结果）；真需要常驻进程就显式 `… &` 起来、之后用另一条命令轮询。
 
-**第三类：`find`/`grep` 当搜索生产者 → block（`LEGACY_SEARCH_BINARIES`，2026-11-01 恢复）**。
+**第三类：`find`/`grep` 当搜索生产者 → 自动改写成 `fd`/`rg`（`extensions/pi-find-grep-rewrite.ts`，2026-11-04）**。
 纯文字纪律（`promptGuidelines` + AGENTS.md）实测拦不住：模型照样写 `find . -name x`。
+
+以前是 block（`LEGACY_SEARCH_BINARIES`，2026-11-01 恢复，2026-11-03 取消），现在是**转译而不是拒答**：`tool_call` 钩子改 `input.command`，find 能翻译的参数映射到 fd，翻不了的**整条原样保留**（让 find 自己报错，不静默猜）。
 
 | 点 | 现在的行为 |
 |---|---|
-| 拦什么 | 每条**流水线首段**的首词（跳过 `sudo`/`xargs`/`env` 这类修饰词）是 `find` `grep` `egrep` `fgrep` 之一 |
-| 不拦什么 | 管道消费位（`ls -la` 的输出交给 `grep foo`、`python t.py` 的输出交给 `grep Traceback`）、`git grep`（首词是 git）、`fd ts `\| xargs grep foo`（每组只判**首段**，fd 领头就放行）、`./find-helper.sh`、`findings.md`、`fd` / `fdfind` / `rg` / `ag` / `ack` |
-| 看不看搜索根 | **不看**。2026-10-13 删掉的那版按 `~` / AppData / 系统盘 / 盘根拦，误伤来自把 `cd` 的实参当搜索根；这版只认命令名：项目内的 `cd <这里> && find . -maxdepth 2` 照样拦（find 是生产者），但不再因为 `cd` 的路径牵连别的命令 |
-| 出口 | 没有 in-band 例外（不读配置、不认前缀白名单）。真要 GNU 独占的 flag 就让用户自己跑 |
+| 改什么 | 每条**流水线首段**的首词（引号感知切段，`\;` 不算分隔符）是 `find` `grep` `egrep` `fgrep` 之一 |
+| find → fd | `-name/-iname` → `-g`（`-iname` 加 `-i`）、`-type f/d/l` → `-t`、`-maxdepth` → `-d`、`-mindepth` → `--min-depth`、`-newer` → `--changed-after`、`-print0` → `-0`、`-exec CMD … \;` → `-x CMD`（`{}` 只在末尾时）；位置参数作 path。不认的 flag → 不转 |
+| grep → rg | 去掉 `-r/-R/-d/-E/-G`（rg 默认递归、默认扩展正则；`rg -E` 是 encoding 会冲突），组合参数 `-rn` → `-n`，`--include=G` → `-g G`，`--exclude=G` → `-g !G`；其余同名透传 |
+| 不改什么 | 管道消费位（`ls -la` 的输出交给 `grep foo`）、`git grep`（首词是 git）、`./find-helper.sh`、`findings.md`、`fd` / `fdfind` / `rg` / `ag` / `ack` |
+| 看不看搜索根 | **不看**，只认命令名。根选错交给 `fd` 的 `path` 参数与 §4.1 的超时兜底处理 |
+| 出口 | 翻译不了的 find flag 原样保留（不再 block），要 GNU 独占 flag 就自己用 `/usr/bin/find` |
+
+回归：`.sc-test/probe-find-grep-rewrite.mjs`（`node --experimental-strip-types`，23 例）。回退：删 `extensions/pi-find-grep-rewrite.ts` + 删 `~/.pi/agent/extensions/` 同名副本 + `/reload`。
 
 > 旧版的**量级证据仍然成立**（AppData/Local 194,968 文件、系统盘 345,409 文件 / fd 16.2s、
 > `find ~ -maxdepth 6` 60s 跑不完；fd 的 `.gitignore` 规则在非仓库目录同样失效），只是**执法点从
