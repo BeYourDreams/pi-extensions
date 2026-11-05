@@ -17,15 +17,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const CONFIG_PATH = path.join(homedir(), ".pi", "agent", "extensions", "no-find.json");
 
-const REASON = [
-	"`find` 已被全局禁用（在本机会假死：cmd/PowerShell 里命中的是 C:\\Windows\\System32\\find.exe，它会从 stdin 读；Git Bash 的 GNU find 在大目录树上极慢）。",
-	"改用 `fd`（同一底层、ignore 感知、更快）：",
-	'  - fd {pattern:"RULES", extension:"md"}        # 正则匹配整条路径 + 限定扩展名',
-	'  - fd {type:"directory", maxDepth:2}           # 只列目录、限深度',
-	'  - fd {changedWithin:"1d"}                     # 最近改过的（find 做不到）',
-	"  - bash 里直接写 fd / fdfind（等价于 find 的路径匹配，如 `fd -e ts`）",
-	"  - 找文件内容用 grep 工具，别用 find。",
-].join("\n");
+const REASON = "`find`/`grep` 已禁用，改用 fd/rg。";
 
 interface NoFindConfig {
 	enabled?: boolean;
@@ -436,6 +428,12 @@ export default function noFind(pi: ExtensionAPI): void {
 		return allowed.some((rule) => key === rule || key.startsWith(`${rule} `));
 	};
 
+	pi.on("before_agent_start", (event) => {
+		return {
+			systemPrompt: `${event.systemPrompt}\n\nUse \`fd\` instead of \`find\`, \`rg\` instead of \`grep\`.`,
+		};
+	});
+
 	pi.on("tool_call", (event) => {
 		if (event.toolName === "find") {
 			return { block: true, reason: REASON };
@@ -451,6 +449,6 @@ export default function noFind(pi: ExtensionAPI): void {
 			(event.input as { command: string }).command = next;
 			return;
 		}
-		return { block: true, reason: `${REASON}\n\n被拦的命令：${hit}` };
+		return { block: true, reason: REASON };
 	});
 }
