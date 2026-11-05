@@ -1,0 +1,844 @@
+# Pi 扩展安装配置 — 删改记录 / 冲突与遗留 / 实录
+
+## 7. 已知冲突与遗留
+
+### 7.1 `edit` 工具槽位：已定为 `@aboutlo/pi-smart-edit`
+
+`pi` 不允许两个扩展注册同名工具。`pi-edit-guard` 与 `@aboutlo/pi-smart-edit` 都想覆盖内建 `edit`，同时装必报：
+
+```
+Error: Failed to load extension ".../@aboutlo/pi-smart-edit/src/index.ts":
+Tool "edit" conflicts with ".../pi-edit-guard/dist/index.js"
+```
+
+**决定：卸载 `pi-edit-guard`，由 `@aboutlo/pi-smart-edit` 独占 `edit`。**
+
+| | `pi-edit-guard`（已卸） | `@aboutlo/pi-smart-edit`（在用） |
+|---|---|---|
+| 匹配策略 | 14 趟分级匹配 + 锚点窗口 + 自修复 | 精确 → NFKC 归一化行匹配 |
+| 附加能力 | 注册 `undo`、越界 cwd 提示、`.env`/secret 提示、锚点与诊断报告 | 无 |
+| 代价 | edit 描述更长（+59B/请求） | **失去 `undo` 与全部 guard 提示** |
+
+`undo` 的替代：文件级靠 git（或改前先 `read` 留底）。会话级的 `pi-undo-redo` 也已卸载（2026-09-29），暂缺替代。这与本机「有 git、改动走 `md_edit`/`edit` 精确替换」的习惯相容。卸载连带清了 `~/.pi/agent/state/pi-undo-redo/`（13 个 worktree、52MB 死数据）。
+
+> 若哪天要回退：装回 `pi-edit-guard` 并卸 smart-edit 即可；或给 edit-guard 写 `~/.pi/agent/extensions/edit-guard-config.json` 的 `{"editOverrideEnabled": false}`（**必须是 `extensions/` 子目录，放 `~/.pi/agent/` 根下不生效**——已实测），让它只让出 `edit`、保留 `undo`。
+
+### 7.2 其它遗留
+
+**已清理的死配置/死数据**（细节都在 git 历史里）：`~/.pi/lazy-tools.json`（含 `.bak`/`.bak2`，常驻名单已进 `settings.json` 的 `defaultTools`）、`settings.json` 里的 `alps-pi` 块、`~/.pi/agent/pi-hermes-memory/`（19MB）、`.backup-20250915/`（105 个文件，要找回：`git checkout bb9a6ae -- .backup-20250915`）、`settings.json.bak-*`、`state/pi-undo-redo/`（52MB）、`pi-better-toolcalls-undo-store.jsonl`（4MB）。共约 76MB。
+
+**2026-10-09 本轮体检又清一批**（`config/` 已清空、`state/` 只剩 `pi-pet-autostart.json`）：
+
+| 死物 | 为什么是死的 |
+|---|---|
+| `config/smart-context-ext-config.json` | 包已于 2026-10-02 卸载（§3.2），文件没人再读 |
+| `settings.json.bak-160608` | 手写备份 |
+| `pi-tidy-tools.pi-fff.json` | fff / pi-fff 卸载后的残留 |
+| `fff/`、`pi-fff/`（缓存） | 同上 |
+| `state/pi-undo-redo/` | pi-checkpoint 接手 undo/redo 后残留 |
+| `state/pi-pet-host.cjs`(+`.lock/`) / `state/pi-pet-host.exe`（**89MB**） / `pi-pet-ctrl.json` / `pi-pet-global.json.electron.json` | 旧架构（0.0.1 内嵌宿主）的宿主脚本/镜像 exe/控制与全局状态文件，现由上游 `bin/pi-pet.cjs` + `<home>/ctrl.json` 接管（§3.6.2）；其中 `pi-pet-global.json.electron.json` 正是铁律 3 警告的「写它会让两个宿主互相认定对方活着」的那类文件 |
+| `.pi-hermes-locks.sqlite{,-shm,-wal}`（4.1MB） | `pi-hermes-memory` 卸载后的 WAL 残留 |
+
+> 删前建议先 `node -e` 列出路径确认（删除不可逆）。`config/` 空了不是异常：**只有某些包会往 `~/.pi/agent/config/` 写 `startupConfig`**（本机清空后仍只服务上述几个已卸包）。
+
+**故意保留**：
+
+- `~/node_modules/@earendil-works*@0.85.1`：一棵自洽的 0.85.1 生态，`@wolido/pi-lazy-tools` 依赖它，删了会连带坏掉。pi 自身的扩展从 `~/.pi/agent/npm/node_modules`（Pi 1.1.0）解析，**不会走到家目录那份**。
+
+### 7.3 `omnify` 的两个 fork 修复（2026-09-29，`e972047`，已 push）
+
+本地 clone `D:\AI\pi-lazy-tools`（remote = 你的 fork）改完直接 commit + push，`pi update --extensions` 就会带上；改前先看 `npm test`（`node --import tsx --test`）。
+
+1. **内建工具执行不了却说「执行定义加载失败」**：pi 内建工具由内部工厂生成，`sourceInfo` 是合成标记（`agent-session.js:2502` `createSyntheticSourceInfo('<sdk:ls>', { source: "sdk" })`），jiti 没法 import。新增纯函数 `lazy-tools/core.ts` 的 `nonLoadableSourceReason()`，**先判后 import**，直接给「内建工具 omnify 执行不了，请用 bash / powershell」的可执行原因。
+2. **非指名模式下静默执行错工具（假成功）**：旧代码候选失败后无条件 `continue`；schema 宽松的 `mcp`（`Record<string, unknown>`）会照单全收，返回 `MCP: 0/0 servers, 0 tools` 冒充成功。改为：**候选一旦通过参数校验并开始执行，它就是最佳匹配，失败即最终失败**（`break`）；校验不符时仍按原逻辑（非指名继续试下一个，指名立即返回要求）。
+   - **BREAKING**：不再有「首个候选失败后自动换一个工具」。
+   - 回归：`npm test` 76 passed（新增 4 条），`tsc --noEmit` 干净；改动同步到已装副本 `~/.pi/agent/git/github.com/BeYourDreams/pi-lazy-tools/`，`check-ext-errors` 的 `extension_error` 0。
+
+### 7.4 `pi-web-access`：卸过一次又装回来了（2026-09-30 卸 → 2026-10-06 复装）
+
+**历史决策（当时是对的）**：`pi remove npm:pi-web-access`，连带删掉两个只为它存在的缓存目录 `~/.pi/web-search-cache/`、`~/.pi/agent/web-search-cache/`（§2.4 纪律）。卸载后重跑 bench：**5 个工具 / system 3026B + tools 2638B = 5664B**。
+
+**当时的卸载理由：`web_enable` 会在会话中途切 active 工具集，把前缀缓存整段掀掉。** 这是它的加载器设计：模型调空参 `web_enable` → `pi.setActiveTools([...现有, 4个])` → 工具集一变，请求前缀从第 0 个 token 起全部作废。本机实测（会话 `--D--AI-LLMlocal--/2026-09-30T00-55-59-851Z_01a0efcf…`）：
+
+| 轮次 | input | cacheRead |
+|---|---|---|
+| 调 `web_enable` 前 | 3291 | 86016 |
+| 调完（`toolsAdded` 四工具） | 92007 | **1152** |
+| 下一轮 | 2233 | 91008 |
+
+即激活那一轮把整段 89K 上下文按新 token 重算了一遍，下一轮才恢复。
+
+**复装理由 + 上游修没修**：0.37.0 把激活策略提成配置项 `toolActivation`（`auto`/`dynamic`/`eager`，`registerWebToolActivation(pi, tools, mode)`；`eager` 时压根不注册加载器）。写 `eager` 后掀缓存的**机制不存在了** —— 旧的卸载结论已被新版本推翻，保留本节只作决策记录。现按 §3.7 配置，且 lazy-tools 又把四工具收进懒加载集：前缀既不掀、也不长胖。
+
+> 顺带回答「懒加载工具会不会掀缓存」：**不会**。`omnify` 只在 `session_start` 调一次 `setActiveTools` 做隐藏（`D:\AI\pi-lazy-tools\lazy-tools.ts:487`），执行隐藏工具走 `findToolDefinition` + jiti 直接调 `definition.execute`（同文件 :349），**全程不动 active 集**；`load_tools`/`call_tool` 自 0.4.0 起已撤销。只有像 `web_enable` 这样主动 `setActiveTools` 的加载器才会掀 —— 且现在只在你主动配 `toolActivation: "dynamic"` 时才存在。内建工具（`ls` 等）omnify 根本执行不了（`nonLoadableSourceReason` 先判后 import），更不存在「激活」一说。
+
+---
+
+### 7.5 pi-dsh-pet 0.0.2 的两个上游坑（本机实测，2026-09-30）
+
+1. **`probeCaps()` 把自己的宿主误判成「没有控制面」**。判据是「`GET /control` 不带 action → 400 **且 `body.hint` 非空**」，但 v0.0.2 的宿主回的是 **400 + 空 body `{}`**（带 hint 的那条分支只在 POST 上）。后果：照抄它的扩展会把 `say` / `show-window` 全拦下来 —— 表现就是**「宠物在跑，但 `/pet` 怎么都叫不出窗」**。判据放宽到「非 404」即可（400 本身就说明端点在、只是不接受空 action）。
+2. **每 2s 探一次宿主能力会把服务端日志刷屏**（上游自己在 `app/server.cjs` 里为此专门加了注释）。本扩展改成「动作失败才探」+ 5s 缓存，热路径一个 GET 都不发。
+
+**顺带修掉的一个自造 bug**：`connectFeed()` 先 `await findHost()`（一次 HTTP）才建 socket，这段 await 里 `sock` 还是 null —— 看门狗、会话事件、重连定时器撞在一起时会各开一条，`sock` 只留最后一条，前面的**没人关**（`close` 回调还会误杀活着的那条），宿主那边 `feeds` 只增不减（本机实测 15s 涨到 18）。开着是真连接泄漏，长会话必拖垮宿主。已加 `feedPending` 在途闸 + `close` 只认自己那条，探针有对应用例（`B2b`：整个会话只建一条 `/feed`）。
+
+**旧路遗留的死文件**（架构换了，**已清**，本机 `state/` 下只剩 `pi-pet-autostart.json`）：`~/.pi/agent/state/pi-pet-host.cjs`（内嵌宿主源码，已不再落盘）、`pi-pet-global.json*`、`pi-pet-ctrl.json`、`pi-pet-host.cjs.lock/`、`pi-pet-host.cjs.boot.lock/`。新架构只认 `<home>/`（`%APPDATA%/pi-dsh-pet`）里的 `port` / `token` / `state.json` / `ctrl.json` / `host.lock` + `state/pi-pet-autostart.json` + `state/spawn-log.txt`。
+
+### 7.6 `pi-session-memory` 加载即败
+
+`pi install npm:pi-session-memory` 后 `pi list` 直接报：
+
+```
+Failed to load extension ".../pi-session-memory/extensions/index.ts":
+ResolveMessage: No such built-in module: node:sqlite
+```
+
+Pi 内嵌运行时缺 `node:sqlite` 内建模块。已 `pi remove`，跨会话记忆换 `@chendpoc/pi-memory`（deps 无 sqlite：chalk/dayjs/dotenv/es-toolkit/execa/lru-cache/proper-lockfile），`pi list` 加载正常。
+
+### 7.7 `@henryqw/pi-pr` 卸载 + `pi-zvec` Windows 补丁（2026-10-07）
+
+**pi-pr**：装后报 `Error: PR status refresh failed: status unavailable` —— 它依赖 `gh` CLI，本机未装。已 `pi remove npm:@henryqw/pi-pr`。备选 `@narumitw/pi-github-pr` 自述「Requires `gh`; there is no direct GitHub API or `GITHUB_TOKEN` fallback」。结论：**不装 gh CLI 就没有 PR 插件**，PR 需求用 `mcp`/`bash`+git 绕。要装 gh：`winget install GitHub.cli` + `gh auth login`，之后重新装 pi-pr。
+
+**pi-zvec**：两处需知（**已卸载 2026-10-08，见 §7.11**；下为历史留档）。
+
+1. `zg` 二进制：pi 内嵌 npm 装 `@zvec/zvec-grep` 时 install 脚本被 `allowScripts` 拦（`install failed`）；已手动 `npm i -g @zvec/zvec-grep`（§3.1 的 `allowScripts` 名单未加它，靠手动装）。`zg index` / `zg query` 实测通（本地 potion-code-16m-v2 embedding，256 维）。
+2. **Windows spawn 补丁**：上游 `env.ts` / `zg.ts` 裸 `spawn(ZG_BIN, ...)` 无 `shell:true`，Windows 上解析不到 `zg.cmd`（node 对 `.cmd` 裸 spawn 直接 `EINVAL`）。本机已 patch：两处 spawn 加 `shell: true`（env.ts 的 `--version` 探测、zg.ts 的执行入口）。**`pi update --extensions` 会冲掉此补丁**（同 fix-lazy-tools-notes.mjs），重装后重打：
+
+```bash
+sed -i 's/spawn(ZG_BIN, \["--version"\], { stdio: \["ignore", "pipe", "pipe"\] })/spawn(ZG_BIN, ["--version"], { stdio: ["ignore", "pipe", "pipe"], shell: true })/' ~/.pi/agent/npm/node_modules/pi-zvec/env.ts
+sed -i 's/spawn(ZG_BIN, args, { cwd: opts.cwd, stdio: \["ignore", "pipe", "pipe"\] })/spawn(ZG_BIN, args, { cwd: opts.cwd, stdio: ["ignore", "pipe", "pipe"], shell: true })/' ~/.pi/agent/npm/node_modules/pi-zvec/zg.ts
+```
+
+症状若再现：`could not run zg: not found on PATH`。验证：`node -e 'const{spawn}=require("child_process");spawn("zg",["--version"],{shell:true}).stdout.on("data",d=>console.log(String(d).trim()))'`。
+
+
+**`indexMode: "auto"` 与 `index reported not ready after a successful build`**：
+
+- 自动模式：`<项目>/.pi/zvec.json` 写 `{"indexMode":"auto","disabled":false,"coach":true,"verify":true,"gitignore":true}`（本仓库已写；**`.pi/` 已 gitignore（2026-10-08），不再随 repo** —— fresh checkout 需手写该文件才有 auto 索引；本机副本保留）。默认 `ask` 每次开仓弹选择框，`auto` 后台建/更新不弹。
+- 该 warning = **良性竞态**：auto 后台建完 → 紧接着 `zg status --check-ready` 判 `stale`（构建期间文件被改，本机即 readme 刚编辑过）。非构建失败，下次 `/zg:index` 或下个会话 auto 追上。实录：`--check-ready` 报 `not ready (state: stale)` → 重跑 `zg index`（7s，1 modified）→ `--check-ready` exit 0。
+
+### 7.8 `pi-ask-permission` 卸载（2026-10-30 前后）
+
+替代 gate 靠 secret-guard 等钩子组合（**注**：secret-guard 已于 2026-10-12 卸载，见 §7.19；现在提交侧无拦截闸）。
+
+### 7.9 `no-find` 全局卸载（2026-10-08）
+
+本机恢复 `find`，撤掉「禁用 find」全部 4 层封锁（§4.2 留档为历史）：
+
+- 仓库：`git rm extensions/no-find.ts`；已装的 `~/.pi/agent/extensions/no-find.ts` 同步删除（同步脚本只拷不删，需手工）。
+- 系统层回退到 `~/.pi/agent/no-find-global.json` 备份的原值：
+  - 用户 `PATH` 去掉 `C:\Users\yinxuehao\bin`（该目录只剩 find 桩，已一并删除）；
+  - 用户 `BASH_ENV` 还原为未设置；
+  - `~/.bashrc` 里 `find()` 拒答函数与注释删除；`~/bin/no-find.sh` / `~/bin/find.cmd` 删除。
+- 备份 `~/.pi/agent/no-find-global.json` 已删（还原完即无用）。
+
+生效无需 `/reload`（没动 pi 的扩展加载）；`find` 回到系统原样（System32 FIND.EXE / GNU find 并存，按 PATH 顺序命中）。
+
+> 2026-11-03：`find`/`grep` 不再拦截/不全局指向，仅提示词限制优先 fd/rg。口径见 §5 第三类。
+
+### 7.10 `pi-cwd-guard` 卸载（2026-10-08）
+
+`.env` 防误写改回常规默契；提交侧凭据拦截曾由 `pi-secret-guard` 兜底 —— **该包已于 2026-10-12 卸载**，提交侧现无拦截（§7.19）。
+
+### 7.11 `pi-zvec` 卸载（2026-10-08）
+
+卸载与残留清理（`zg`/索引数据可由重装重建）：
+
+- `npm uninstall pi-zvec --legacy-peer-deps`（在 `~/.pi/agent/npm/`；裸 `npm uninstall` 报 ERESOLVE）→ package.json/lock/node_modules 全清。
+- `~/.pi/agent/settings.json` packages 移除 `"npm:pi-zvec"`。
+- `npm uninstall -g @zvec/zvec-grep` → 全局 `zg` 二进制删（79 包）。
+- 项目索引与配置全删：`<项目>/.zvec-grep/` + `<项目>/.pi/zvec.json`（本仓库 6.1M、TUIProjectManager 12M、狗头军师 349K）。
+- Windows spawn 补丁（§7.7）随包删除作废。替代：`grep`/`fd`/`omnify`，需要语义搜索再重装（重装需重打 §7.7 补丁 + 重写 `zvec.json` auto 模式）。
+
+### 7.12 预算/缓存去重 + 清单漂移补装（2026-10-08）
+
+装 `@xynogen/pix-optimizer` 前做全量重叠排查的副产物，一并处理：
+
+- **卸 `pi-budget-guard`**：与 `pi-meter` 在「花费追踪 → 预算告警 → 超限拦截」三层完全重叠，meter 另有 auto-downshift、跨会话 JSONL 账本、CLI 报表，是超集。原 §1 里「budget-guard 拦截、meter 降级」的分工说法不成立——meter 自带硬拦截。留 meter 卸 guard。
+- **卸 `pi-warm-cache`**：§1 自己标注「本机不生效（本地代理属未注册路由），纯静默待命」。按本仓库 0 触发即卸的判据（同 zvec/smart-context）早就该卸。`pi remove npm:pi-warm-cache` 一条即净。
+- **补装 `@arhen/pi-core-subagent`、`pi-ocr`**：清单/安装循环里都列了、实际 `pi list` 里没有（清单漂移）。2026-10-08 重装，并把 subagent 补进 §2.1 安装循环（此前循环里就没有它，重装复现不了）。
+后端不是 DeepSeek 时三重叠全是白挂的钩子。**→ 2026-10-09 实测结论已出（已卸），见 §7.13**。
+
+### 7.13 压缩侧换血：`pi-deepseek-cache` / `pi-compaction-cache` → `pi-cache-compact`（2026-10-09）
+
+**先验 `pi-deepseek-cache`（装一天，判死）**：DeepSeek 绑定三处——① 省钱估算读 DeepSeek 官方价格表（本机全是虚构）② 压缩调用打 `deepseek-flash`（本机代理对它返回 400 "not a valid model ID"）③ 接管条件 `ctx.modelRegistry.find("deepseek", …)` 在本机注册表里根本没有 deepseek provider → 必失败。只剩遥测半边真实：headless 会话落盘 `~/.pi/agent/extensions/deepseek-cache/stats.json`，实测 `cacheRead:1664 / input:3856 / turns:1` ≈ 30.1% 命中——这同时证明**代理确实返回 `prompt_tokens_details.cached_tokens`，pi-ai 会归一化**。按本仓库 0 触发即卸的判据 → `pi remove npm:pi-deepseek-cache`。
+
+**换 `pi-cache-compact` 0.2.0**（源码 0 处 "deepseek"，provider 无关）。fork 排查留档：上游 `ruanbw/pi-deepseek-cache` 只有 2 个 0-star 陈旧 fork（zzddk / fchaix），不值得。**同时卸 `pi-compaction-cache`**：两者抢同一个 `session_before_compact`，只能留一个。
+
+**端到端实测（本机代理，provider `1` / 模型 `1`，非 DeepSeek）**：
+
+| 场景 | 结果 |
+|---|---|
+| 自动压缩（89K 陈旧会话，冷前缀） | 扩展发出 128 条消息的续写请求 → `cacheRead: 0` → **拒绝接管**，让位 Pi 默认压缩（`deferAfterCacheMiss` 随后 15 分钟内继续让位），不烧第二次冷 prefill ✅ fail-safe 生效 |
+| **手动 `/compact`（本会话，前缀热）** | `summary_start` → `provider_request msgs:162` → `200` → **`wrote cache-friendly summary`，`cacheRead: 81920`** → 压缩落地，会话缩到 54 条消息 ✅ |
+
+命中账：`{cacheRead: 81920, cacheWrite: 0, input: 37576, output: 10084}` → 总 prompt ≈ 119.5K，命中 **68.6%**。对照 Pi 默认压缩：它发的是截断改写后的全新 prompt，同一 119.5K 前缀**必然 0 命中、全量重算**。（`81920` 恰好是 80×1024，说明上游按块记账、只读不写。）
+
+**取舍结论（留 `pi-cache-compact`，不留 `pi-compaction-cache`）**：cache-compact 是唯一在**本机后端**跑完「命中 → 压缩落地 → 会话继续」全闭环的（compaction-cache 的 98.8% 是更早、不同后端的旧数据，恢复它要重走一遍今天的取证流程）；且它有 `deferAfterCacheMiss` 这个别的扩展没有的止损设计。代价：全文续写的摘要很重（本次 output 10084 tok、耗时 **227s**）——长会话压缩本来就慢，可接受。
+
+**验证方法可复现**（供以后复测）：临时把 `models.json` 的 `contextWindow` 压到 9000 制造真实压缩场景 → headless `pi --session <id> -p "…"` 连打两轮大文本焐热前缀 → 手动 `/compact`；想把“手动”与“自动”分开取证，就把窗口调回 128000 排除自动压缩干扰（此时只剩手动一条路径）→ 读 `cache-compact-debug.jsonl` 里 `"summary": true` 记录的 `cacheRead`。坑：headless `pi -p` 会因 pi-dsh-pet 的 `/feed` 重连循环不退出，必须用 `timeout` 包裹（exit=124 属预期噪音）；`-c` 会续上**别的**旧会话（测到过 89K 的），要精确定位就 `--session <id>`。
+
+### 7.14 subagent 把 pi 带崩：`proper-lockfile` 撞 jiti 的 interop Proxy（2026-10-09）
+
+**症状**：subagent 跑着跑着整个 pi 进程死掉，控制台只留一行（没有扩展名、没有 TUI 堆栈）：
+
+```
+TypeError: Proxy handler's 'get' result of a non-configurable and non-writable
+property should be the same value as the target's property
+    at probe (C:\Users\yinxuehao\.pi\agent\node_modules\proper-lockfile\lib\mtime-precision.js:6:29)
+```
+
+（`6:29` 正是 `const cachedPrecision = fs[cacheSymbol];` 里 `fs` 的位置。行尾那串 `[13;5u[57442;1:3u` 是崩前 TUI 刷屏留下的转义残渣，不是错误的一部分。）
+
+**根因（已本地复现，非猜测）**：`proper-lockfile@4.1.2` 的 `lib/mtime-precision.js` 把探测到的 mtime 精度用 `Object.defineProperty(fs, cacheSymbol, { value })` 挂在 **fs 模块对象**（= `graceful-fs` 的 exports）上，之后每次加锁都读 `fs[cacheSymbol]`。而 pi 用 **jiti 加载扩展**（`moduleCache:false` + `interopDefault:true`），jiti 的 interop 会把 CJS exports 包一层 **Proxy**：get 陷阱把每次取值缓存进 `Map`，对 target 上不存在的键（含 Symbol）返回并**缓存** `undefined`。于是：
+
+1. 第 1 次 probe：`fs[sym]` → `undefined`（顺带被 trap 缓存）→ 继续；`defineProperty` 落到 Proxy 的 **target** 上，该属性变成 non-writable + non-configurable；
+2. 第 2 次 probe：`fs[sym]` 命中 trap 缓存 → 仍返回 `undefined`，与 target 里的 `'ms'` 不等 → **JSC 抛 Proxy 不变量 TypeError** → 未捕获 → pi 死。
+
+**为什么「像 subagent 的锅」**：subagent 只是在运行期触发落盘（settings/auth/trust、子代理状态），真正的雷是**同进程内第二次及以后**的加锁。fs 是不是 Proxy 与锁本身无关，jiti 只是让 `proper-lockfile` 内部的 `require('graceful-fs')` 拿到了 interop Proxy。
+
+**处置**：缓存从 fs 对象挪进模块级 `WeakMap`（以 fs 对象为键），完全不再改写 fs——语义等价（仍是「每个 fs 对象只探测一次」），对 Proxy 免疫。`node fix-proper-lockfile-proxy.mjs`（幂等，`--check` 只体检）会把 `~/.pi/agent` 下**所有** proper-lockfile 副本一起改掉（本机 2 份：`agent/node_modules` + `agent/npm/node_modules`），写后回读校验。**pi 升本体/重装 node_modules 会冲掉补丁，重跑即恢复**（§2.3 已加提醒）。
+
+验证：补丁前用 jiti 复现脚本抛的是同一行 frame（`at probe (...mtime-precision.js:6:29)`）；补丁后同一脚本在 bun 与 node 下、两个副本共 4 组全部通过（两次 probe 正常回调，无不变量错误）。
+
+> 上游真修要看两处：jiti interop 的 get 陷阱（对非 own key 不该缓存 `undefined` / 该走 `Reflect.get`），或 proper-lockfile 别往外来对象上挂属性。本仓库只做后者，幂等且不动语义。
+
+### 7.15 全机体检实录（2026-10-09）：清单没漂，漂的是「必做配置层」
+
+对照 readme 与本机逐项过了一遍，**28 个扩展本身零漂移**（`pi list` = `settings.json` 的 `packages` = §1 表，26 npm + 2 git；本地扩展与仓库逐字节一致）。问题全在清单之外的层：
+
+| # | 发现 | 根因 | 修法 | 验证 |
+|---|---|---|---|---|
+| 1 | **上游 `pi-dsh-pet` 扩展一直在加载**，与本地薄客户端重复注册 `/pet` `/pet-stop` `/pet-say` `/pet-status`（铁律 1 的事故源） | `extensions: []` 只筛 **npm 包内的子扩展**，对 git 仓库顶层 `pi/extensions/index.ts` 无效；以前一直以为「写了 extensions:[] 就算屏蔽」 | `packages` 里改成 object form：`{"source": "git:github.com/BeYourDreams/pi-dsh-pet", "extensions": []}`（§3.6） | `pi list` 该行显示 `(filtered)`；headless `pi --no-session -p "reply with: ok"` 里**再没有** `[pi-dsh-pet] /feed 连接断开，2s 后重连`，只剩本地客户端的 notify OSC 777 + `ok`；条目数仍 28 |
+| 2 | `cache-compact.json` 是 debug 配置，会 dump 全量 payload（1.1MB） | 当初为取证开后忘关 | 改生产白名单 `{"models": ["1/1"]}`，删 `cache-compact-debug.jsonl`（§3.3） | 文件 23B，`debug` 键没了 |
+| 3 | 一批死数据/死配置 | 旧架构 + 已卸包的遗留 | 列在 §7.2 表格，一律删 | `config/` 空、`state/` 只剩 `pi-pet-autostart.json` |
+| 4 | **better-sqlite3 binding 丢了**（pi-memory 的 vec 索引用不了，报 `Could not locate the bindings file. Tried:`） | `npm uninstall` 触发整棵树重解析：`allowScripts` 里钉的 `better-sqlite3@13.0.3` 与树内实际的 `12.11.1`（pi-memory 的 `^12.10.0`）对不上 → npm 当「未覆盖」→ `node-gyp rebuild` 被挡 | `npm install-scripts approve better-sqlite3`（**不带版本号**）+ `npm rebuild better-sqlite3`（§3.1） | `node -e "require('better-sqlite3')(':memory:')"` OK；`npm install-scripts ls` 只剩 pi-memory 的 postinstall（有意不批） |
+| 5 | `fix-lazy-tools-notes.mjs` 补的 DOCS_NOTE 路径**大小写错了半角** | 脚本做**精确字符串替换**，`D:\agent\pi\docs` 与实机 `D:\Agent\pi` 不符就不匹配 | 重跑脚本（幂等），并同步到已装副本 | `--check` exit 0；已装副本 `git status` 显示 ` M lazy-tools.ts` |
+| 6 | readme 的必做配置层漏了 3 样东西 | 一边改一边没补文档 | §3.9 `bash-prelude.sh`（`shellCommandPrefix`，**2026-11-04 已作废，不恢复**）、§3.10 `-builtin:mcp`、§3.11 用户级 settings 备忘 | 照另两条即可从零复现 |
+| 7 | readme 安装循环漏了 4 个包 | 清单加了但循环没加（§7.12 同一类错） | §2.1 补 `pi-secret-guard` / `pi-mono-context-guard` / `pi-meter` / `@narumitw/pi-plan-mode` | 循环数 = 26 npm + 2 git |
+
+**顺序纪律（本次最贵的经验）**：先备份 → 改 `settings.json` → 验证 → 清死数据 → 补文档，**不要**在会话开着的时候边走边改（§9.6）。本轮全程用 headless `pi -p` 做验证，不碰自己这条交互会话。
+
+**留个教训**：`extensions: []` 是「只筛 npm 包内子扩展」的语义，不看文档只信直觉，会让上游扩展在机器上多跑一个月都没人发现。**凡是屏蔽类配置，改完必须用 headless 实测**（只看 `pi list` 有 `(filtered)` 才行——那才是真屏蔽）。
+
+---
+
+### 7.16 子代理调不起来：不是插件坏了，是**一个 agent 定义都没有**（2026-10-10）
+
+**症状**：子代理坏掉时**不报错、不崩、不进 `crashes.json`**，只是安静地调用失败或什么都不返回。表面看像插件坏了，实际是**配置文件一个都没装**。
+
+**根因**：`@arhen/pi-core-subagent` 的 `src/agentfile.ts:20` 写死了发现目录：
+
+```ts
+const AGENT_DIRS = [".agents/agents", ".claude/agents", ".pi/agents"] as const;
+```
+
+它只从这三个目录读 `.md`（frontmatter 的 `description` 参与按描述匹配）。本机实测**三个全不存在**，`~/.pi/agents` 也没有 → 没有 agent → `agent` 参数无值可填。
+
+**复现链（每一步的报错都指向同一处，很有迷惑性）**：
+
+| 尝试的 args | 实际报错 |
+|---|---|
+| `{task}` | `Provide one subagent mode: agent+task (single), tasks: [...]…` |
+| `{agent:"default", task}` | `2 model(s) available — this session has no model scoping…`（要求先定 model） |
+| `{task, autoAwait}`（漏 goal） | `Validation failed for tool "omnify": goal: must have required properties` |
+| `autoAwait: "true"`（字符串） | `参数不符（autoAwait: expected boolean, got "true"）` |
+
+**修法**：建 `~/.pi/agents/default.md`（带 `description` frontmatter）。装完实测 `1/1 succeeded`，子代理正常返回。已固化为 `node fix-subagent-check.mjs`（幂等 + `--check`）。
+
+> 冒烟测试默认**不跑**：rpc 没有「直接调工具」的命令，只能让模型发一次 tool call，受模型行为影响（会漏 `goal`、会把布尔值写成字符串）。故默认只做确定性静态检查（0.2s、不花 token）；需要确认「此刻真能调」时显式加 `--smoke`。
+
+#### ⚠️ 一条已被实测推翻的诊断（勿再照抄）
+
+当时另有诊断称：
+> `pi.exe` 是 `bun build --compile` 单文件可执行；子代理从 `~/.pi/agent/node_modules` 动态加载 `pi-ai` **0.87.1**；该文件 `dist/utils/json-parse.js` 首行是 bare specifier `import … from "partial-json"`；而 Bun 编译版解析外部 bare specifier 时只看自身 bundle、不回落到 importer 的 `node_modules` → 即使磁盘上有 `partial-json` 也报找不到。
+
+**三条前提实测全部不成立**：
+
+| 诊断前提 | 实测 |
+|---|---|
+| exe 动态加载 `~/.pi/agent/node_modules` 的 0.87.1 | ❌ `pi.exe --version` = **1.1.0**，而 `~/.pi/agent/node_modules` 里是 0.87.1；且 `D:\Agent\pi\dist\` **不存在** → exe 是自包含 bundle，根本不读磁盘那份 |
+| `json-parse.js` 首行是 bare specifier | ❌ 磁盘 0.87.1 那份首行是**相对路径** `"../../../../partial-json/dist/index.js"`；且 `fd -t f json-parse D:\Agent\pi` **零结果**——该文件不在 1.1.0 里 |
+| Bun 不回落 `node_modules` 所以报找不到 | ❌ 实测在 `pi.exe` 下跑 subagent **1/1 succeeded**，无任何 `partial-json` 报错 |
+
+**教训**：诊断里出现具体版本号与文件路径时，先跑 `pi.exe --version` 和 `fd` 确认它们对当前 exe 成立，再动手改代码。跨版本的旧结论会被当成现状（那个 `json-parse.js` 是 0.87.1 的，exe 早已是 1.1.0）。
+
+### 7.17 `@xynogen/pix-optimizer`：唯一会**改写 system 前缀文本**的扩展（2026-10-10 首记，2026-10-12 换包）
+
+与本清单里其它 17 个扩展不同
+
+| 关注点 | 结论 |
+|---|---|
+| 对 wire 工具集 | **零影响**。它不注册任何工具，`tools` 部分字节数与装之前完全一致 |
+| 对 skill 常驻注入 | **不适用**：新包**不带 skill**，规则本身就是 system prompt 片段（§3.15）。与本机「skill 不常驻注入 system」（§6.2，`pi-lean-sections.ts` 压 `<skills>` 块）没有交集 |
+| 对前缀缓存 | **切档必然让下一轮 `cacheRead: 0`**（system 文本变了）；同档位内连续对话不影响。**档位定下来就别反复切**，切多了等于反复自毁缓存 |
+| 与 `pi-prefix-stabilizer` | 不抢钩子（它只 hook `session_start`/`before_agent_start`/`input`/`turn_end`，压缩侧那个钩子是 `session_before_compact`），**不构成新的硬顺序约束**（§2.2 无需改） |
+| 与 `pi-cache-compact` | 同上，两者互不干扰 |
+| RTK 那层 | 只改写 **bash 命令前缀**，不碰 system 文本，故**与前缀缓存无关**；代价是首次加载可能下 `rtk` 二进制（§3.15） |
+
+**使用纪律**（与本手册「少切、少动」倾向一致）：
+
+1. 档位**只切一次**，切完长期驻留；要查当前值就 `/optimizer` 开面板（**没有 `status` 文本命令**）。
+2. 觉得输出变得难读、影响定位问题时，先确认是不是它干的（面板里调档或关掉），而不是怀疑别的扩展。
+3. **省 token 的数字全是上游口径，本机未复测**；输出侧压缩不影响缓存命中与输入侧成本。
+
+---
+
+### 7.18 配置源外迁 `config/`：`.pi/` 回到「纯运行时目录」（2026-10-10）
+
+
+**起因**：`~/.pi/agent/settings.json` 在 2026-10-10 20:38 被写回旧快照——`packages` 退回 10-08 之前的 30 条（多出 `pi-compaction-cache`/`pi-warm-cache`/`pi-budget-guard`/`pi-zvec`/`pi-cwd-guard`，少了 `pi-cache-compact`/`@tian.zuo/pi-find`/`@narumitw/pi-lsp`），§3.11 的 13 个非默认键整段消失。机器侧按 readme 校正后（卸 5 装 3 + 补键），顺手把**配置与仓库的关系**改成不会丢的形态。
+
+**问题**：pi 的项目级配置只认 `<cwd>/.pi/settings.json`（`docs/configuration.md`，目录名写死 `dist/config.js:403`），而 `.pi/` 是运行时目录（索引/阶段数据会 churn），在仓库里被整体 `.gitignore` → 配置无处可存，只能靠「单独放行一个文件」这种脆做法。
+
+**改法**：配置的 canonical 源放仓库 `config/`（不被忽略、可 review、可 diff），由 `node install-project-config.mjs`（幂等 + `--check`）拷进 pi 实际读取的位置。
+
+| 层 | canonical 源（入库） | 落到哪 | 怎么装 |
+|---|---|---|---|
+| 项目级 | `config/pi-project/settings.json` | `<仓库>/.pi/settings.json` | `node install-project-config.mjs` |
+| 项目级留档 | `config/pi-project/zvec.json` | 不落（`pi-zvec` 已卸，§7.11） | 手动（重装 zvec 时） |
+| 用户级规则 | `config/agent/AGENTS.md` | `~/.pi/agent/AGENTS.md`（**两边都是 0B**，2026-11-04 定案不发规则，§5） | 同上 |
+
+| 用户级快照 | `config/agent/settings.snapshot-2025-09-15.json` | 不落（脚本对 `settings.snapshot-*` 一律跳过） | — |
+
+- **恢复来源**：`.pi/settings.json`、`.pi/zvec.json` 取自 git 历史（`15c714b` 删除前）；~~`bash-prelude.sh` 取自 §3.9 全文~~（2026-11-04 起不再恢复，§3.9 已作废）；用户级快照取自 `.backup-20250915/settings.json`（`51e457d` 删除前，含 §3.11 多个键的取值）。
+- `.pi/` 重新**整体忽略**（不再放行 `settings.json`）：配置是生成物，clone 后跑一次同步脚本即可；索引/churn 照样不入仓。
+- **根目录放 `settings.json` 无效**（pi 不读它）→ 是「源放 `config/` + 脚本拷进 `.pi/`」，不是「把文件挪到仓库根」。
+- 机器侧同时补回：`~/.pi/agent/settings.json` 的 §3.11 十三键（备份留 `settings.json.bak.2026-10-10-pre-config-restore`）、`bash-prelude.sh`（2026-11-04 起不再补，§3.9）、`~/.pi/agents/default.md`（§7.16）与 proper-lockfile 补丁 ×2（§7.14）。两个 fix 脚本 `--check` 全绿。
+- 顺手修的两处 readme 失真：§5 与 §8 表引用的 `.sc-test/probe-bash-guard.mjs`（从未入库、现不存在）。
+
+### 7.19 `pi-secret-guard` 卸载 + 压缩层补齐（2026-10-12）
+
+> **压缩部分已于当晚作废**：本节装的 `@izhimu/pi-caveman`（10-10）/ `pi-ponytail` / `pi-rtk` 三包当天换成单个 `@xynogen/pix-optimizer`，见 §7.20 / §3.15。下面除 secret-guard 外的一切命令与配置点**仅作当日记录，勿照抄**。`pi-secret-guard` 那一半仍然有效。
+
+一轮做完（顺序：`pi remove` → `pi install` → 写两个 config → 同步 → `/reload`）：
+
+```bash
+pi remove npm:pi-secret-guard        # 凭据拦截钩子，本机不再需要
+pi install npm:pi-ponytail           # 做法层压缩（YAGNI），默认 ultra
+pi install npm:pi-rtk                # 输入层 token 削减
+# 默认模式两个 config（均非 settings.json）：
+mkdir -p ~/.config/ponytail && echo '{ "defaultMode": "ultra" }' > ~/.config/ponytail/config.json
+printf '%s\n' "$APPDATA/caveman/config.json"   # 已存在，defaultMode=ultracave，不用动
+node install-project-config.mjs      # config/agent/rtk-config.json → ~/.pi/agent/
+```
+
+结果：29 → **30 个扩展**（28 npm + 2 git；当晚即改成 28，见 §7.20）。§1.1 / §1.3 / §2.1 / §3.13 / §3.14 / §4 / §9 同步。
+
+**卸载代价（明说）**：提交 API key / 凭据到 git 的拦截**没了**，且 `pi-cwd-guard` 早已卸（§7.10），所以 `.env` 写保护与提交侧**都没有闸**了。规矩回落到纪律层：`.env` / 密钥文件不手改、不 `git add`，提交前自己看 `git diff --cached`。再想装回来：`pi install npm:pi-secret-guard`。
+
+**新装两个的坑**（**三条都已随卸载消失，仅作历史记录**）：
+
+- `pi-ponytail` 与 `pi-caveman` **都改写 system 前缀**（`before_agent_start` 注入，§7.17 同类风险）：两者都只追加、不改前段结构，实测共存无冲突；但**任一换模式 = 换一次前缀文本**，切完第一次 `cacheRead` 归 0。日常别来回切。
+- `pi-rtk` 会**滤掉源码里的注释与空白**，导致 `edit` 报 old text 不匹配。扩展自带应急提示 + `rtk_configure` 工具：关 `sourceCodeFiltering` → 重读 → 改 → 开回来。真要常用编辑就别开 `sourceCodeFiltering`，改用 `/rtk-toggle-truncation` 之外的其余技术（§3.14）。
+- `pi-rtk` 的 `tool_result` 过滤与 `pi-mono-context-guard` 的 `tool_call` 注入是**两层叠加不是冲突**（§3.14 已对账）；若怀疑多砍了什么，`/rtk-what` 看开关、`/rtk-off` 一键关。（rtk 与 guard 都已卸，此条仅留档，guard 见 §7.28）
+
+### 7.20 压缩层三合一：`@izhimu/pi-caveman` + `pi-ponytail` + `pi-rtk` → `@xynogen/pix-optimizer`（2026-10-12）
+
+上游把三个包的功能合成一个扩展，装它等于同时装了那三个（README 自述是 rewrite 而非 copy，全 MIT）。故当天先装后卸，3 → 1：
+
+```bash
+pi install "npm:@xynogen/pix-optimizer"
+pi remove npm:@izhimu/pi-caveman
+pi remove npm:pi-ponytail
+pi remove npm:pi-rtk
+# 死配置清理（§2.4 纪律）
+rm -rf "$APPDATA/caveman" ~/.config/ponytail
+rm -f  ~/.pi/agent/rtk-config.json
+git rm config/agent/rtk-config.json     # 不删的话 install-project-config.mjs 每次同步又拷回去
+# 档位写 pix.json（本机三档全 ultra，§3.15）
+```
+
+结果：30 → **28 个扩展**（26 npm + 2 git）。§1.1 / §1.3 / §2.1 / §3.12–3.15 / §4 / §5 / §8 / §9 同步。
+
+**为什么是「换实现」而不是「装重了」**：三处机制都变了，**旧结论一律作废**。
+
+| 层 | 旧实现（已卸） | 新实现（`pix-optimizer`） |
+|---|---|---|
+档位 `lite`/`full`/`ultra`/`micro`，单一 `pix.json` |
+| RTK | 纯 JS 拦 `tool_result` 过滤内容，**不依赖二进制** | prompt 注入 + **改写 bash 命令加 `rtk` 前缀** + 官方 Rust `rtk` 二进制 |
+| ponytail | 自带 5 个 skill，逐档过滤后注入 | 无 skill，整份规则是 system prompt 片段 |
+
+- **新代价**：RTK 开着时 pi 首次加载会**联网下 `rtk` 二进制**到 `~/.pi/agent/bin`（有 `checksums.txt` 校验，不阻塞启动）；设 `PI_OFFLINE` 则跳过下载且命令改写不生效（§3.15）。
+- **顺手消掉的老坑**：`rtk_configure` + `sourceCodeFiltering` 那套「`edit` 报 old text 不匹配 → 关过滤 → 重读 → 改 → 开回来」的应急流程整条作废；`/rtk-what`、`/rtk-stats` 等记忆型统计命令不再有。
+- **入口变了**：三个命令家族收成**一个 `/optimizer` 交互面板**，且**没有文本参数形**（§3.15）——写自动化脚本时要注意这条。
+
+### 7.21 `@narumitw/pi-plan-mode` 卸载（2026-10-13）
+
+`/plan` 只读规划模式在本机用不了，连带收拾掉它的补锅件。
+
+```bash
+# 1) settings.json 的 packages 去掉 "npm:@narumitw/pi-plan-mode"
+# 2) npm 树里清掉（在 ~/.pi/agent/npm/；裸 npm uninstall 报 ERESOLVE，见 §7.11）
+npm uninstall @narumitw/pi-plan-mode --legacy-peer-deps
+# 3) 本地补锅扩展：仓库与用户目录两份都删，再 /reload
+rm extensions/pi-plan-tools.ts ~/.pi/agent/extensions/pi-plan-tools.ts
+```
+
+**为什么连带删 `pi-plan-tools.ts`**：那个本地扩展的**全部**作用就是 `session_start` 里把 lazy-tools 剥掉的 `plan_mode_question` / `plan_mode_complete` 捞回 active 集——包没了，`pi.getAllTools()` 里根本没有这两个工具，扩展变成空转（只会刷一行无意义的 notify）。
+
+**代价（明说）**：没有只读规划模式了。想装回来：`pi install npm:@narumitw/pi-plan-mode` + 把 `extensions/pi-plan-tools.ts` 加回本仓库（git 历史里有，§7.21 前一版）。规划纪律交给模型自己（`AGENTS.md` 2026-11-04 起已清空为 0B，那条 Think 段落的提示词不再存在，§5），不靠工具。
+
+### 7.22 浅色终端里 footer 的文件夹名发白：`cwd` 是唯一用裸 ANSI 色的字段（2026-10-13）
+
+**现象**：浅色终端（浅背景）里 footer 的**文件夹名**发白 / 颜色不对，token、耗时、git 分支等其它段都正常。切 `light` / `cc-light` / `system` 都一样。
+
+**根因**（`pi-one-ui@0.9.1`，footer 与 minimalist-editor 共用同一条路）：
+
+```ts
+// extensions/shared/style.ts:439
+renderSourceColor(theme, spec, themeToken, themeDefault, text)
+// 1) 配置了 colors.cwd        → 按配置走
+// 2) 主题定义了 colors.cwd     → theme.fg("cwd")
+// 3) 都没有                    → renderThemeStyle(theme, themeDefault)
+// extensions/layouts/footer/footer.ts:326
+renderSourceColor(theme, config.colors.cwd, "cwd", "bold cyan", formattedCwd)
+```
+
+第 3 步的 `"bold cyan"` 是**裸 ANSI 色**：`renderThemeStyle` 见到终端色名就不查主题，直接吐 `\x1b[1;36m`。而 `cwd` 是**全包唯一**默认落到裸 ANSI 色的字段——其余同类字段的默认都是主题 token（`editorModel` → `syntaxKeyword`，`editorBorder` → `borderMuted`），所以只有文件夹名会翻车。SGR 36 取的是**终端调色板的 cyan 槽**，浅色背景下那个槽往往是很浅的青，叠上 `bold` 就是一片惨白。
+
+**排除过的猜测**（都错，别再走一遍）：
+
+- ❌ “pi-one-ui 写死了白色”：全包唯一的 `#fff` 在 `themes/cc-light.json` 的 `panel` **背景**变量里，footer 文本路径无白色字面量。
+- ❌ “主题 token 查不到就退回终端默认 fg（于是白字）”：退回的是 `bold cyan`，不是终端默认色；真正的终端默认 fg 回退只发生在 `safeThemeFg` 抛异常时。
+
+**修法**（一行配置，2026-10-13 已写入 `~/.pi/agent/pi-one-ui.json`）：
+
+```json
+{ "colors": { "cwd": "accent" } }
+```
+
+然后 `/reload`。`accent` 是 theme schema 的 46 个 `required` 色之一，`light`/`dark`/`cc-light`/`cc-dark` 全都定义，所以这一行**跟着主题自动切换**。
+
+**为什么升级不会被覆盖 / 为什么别走别的路**：
+
+- 配置文件在 agent 目录（不在 `node_modules` 里），pi 升级不动它；pi-one-ui 自己的 `ConfigStore` 只写它自己管的字段（`components` / `renderer`），`colors` 保留，官方也明说“不重写文件”。
+- pi 自带的 `light`/`dark` 跟着 pi 本体整目录替换（同目录有 `pi.exe.old` 为证），值会变但名字不变；`settings.json` 里存的是名字，所以 `"theme": "light"` 一直有效。
+- ❌ **别把 footer 配色钉成字面 hex**（本节踩过）：那会绕过主题，`light/dark` 自动切换直接死掉，而且对浅色终端**一点用没有**——那些字段本来就没坏。
+- 想让 `cwd` 颜色也由主题控制（而非配置），以前是「在 `~/.pi/agent/themes/` 放一份自己的主题并加 `colors.cwd`」——**这条在 pi ≥1.0 已作废**：用户主题走同一条严格校验，`colors` 里加自造键会把整份自定义主题打死（§7.26）。要调 pi-one-ui 专属色就只写它的配置 `colors`（配置优先级最高）；本机继续用 `{"colors":{"cwd":"accent"}}`。
+
+### 7.23 ~~`pi-smart-reader`~~（2026-10-14 已卸载；以下为卸载前的实测记录，留档）
+
+装上、钉版（§3.16）、parser 正常加载之后，唯一真能用的是 `smart_read` 工具。另外三个卖点全部落空：
+
+**1）自动优化大文件（passive mode）：永远不触发。** 它挂 `tool_result` 后连过三道闸就`return`，而这三道闸按 pi 1.1.0 的真实事件形状全不过：
+
+```ts
+// pi-smart-reader/extensions/index.ts（原文）
+const toolName = event?.toolName || event?.name;          // ✅ 这条对
+const content  = event?.content || event?.result;
+if (!content || typeof content !== "string") return;      // ❌ content 是 block 数组
+const filePath = event?.path || event?.args?.path;        // ❌ 字段叫 event.input.path
+```
+
+对照本机 `pi-mono-context-guard`（同一个钩子、实际能用；2026-11-04 已卸，§7.28，留档时看源码即可）的写法就一目了然
+
+> 实测：headless 读一个 367 行的 `pi-fd.ts`，输出里没有它本该打的 `Large file optimized: ... (367 → N lines, R% reduction)`。所以**别指望它自动省 token**，它既不改 `read` 的返回，也不碰 `pi-mono-context-guard` 的截断职责（无冲突，但也没协同）。
+
+**2）`ctx.setContext(...)` / `impact_detected` / 上下文 70% 自动优化**：前者不是 pi 的公开 API（被 `if (ctx.setContext)` 护着，无报错、无效果）；`impact_detected` 需要另装 `pi-impact-analyzer` 扩展才有人发（本机没装）；`context` 钩子里的 `findLargeFilesInContext()` **直接 `return []`**（源码注释写着 "This is a heuristic - in practice, we'd need to check Pi's actual context"）。三条全空转。
+
+**3）多语言支持：只有 TS/JS。** `wasm/` 目录里**只有** `tree-sitter-typescript.wasm` 一个语法，README 宣传的 Python / Rust / Go / Java 没有对应 wasm（`parser.ts` 里也只 load 这一个）。非 TS 文件要么解析报错被 catch 吞掉，要么得到无意义的树。
+
+**能用的部分**：`smart_read` 两个模式实测正常（`skeleton` 保留签名、隐函数体；`symbol` 抽指定符号），wasm 与 `web-tree-sitter@0.24.7` 兼容（§3.16）。
+
+**`/smart-reader` 命令**：只有 `on|off|status|threshold <n>|clear` 五个子命令，且全部改**内存里的 `config` 常量**、**不落盘** —— `/smart-reader threshold 500` 重启即丢。想关掉 passive mode 只能重启前设，说白了它反正也不触发。
+
+**（2026-10-14 更新：因只覆盖 TS/JS、passive mode 又是死代码，已整体卸载，见 §3.16。）**
+
+### 7.24 每条 bash 命令都带 `[rtk] /!\ No hook installed` 噪音（2026-10-14 已修）
+
+**症状**：`bash` 工具每次执行，`ls` / `rg` / `git` 等命令的输出**前面**都缀一行
+
+```
+[rtk] /!\ No hook installed — run `rtk init -g` for automatic token savings
+```
+
+不是报错，是 rtk 0.51.0 自己往 **stderr** 打的提醒，混进工具输出被当回显读进来。
+
+**根因**：`pix-optimizer` 的 RTK 档开着（§3.15 `pix.json` 的 `optimizer.rtk: "on"`），它在 `tool_call` 里给已知首词加 `rtk` 前缀；而 rtk 检查的「hook 装没装」指的是 **Claude Code 风格的 `PreToolUse` hook**（`~/.claude/settings.json` + `hooks/rtk-rewrite.sh`，另有 cursor/codex/gemini 各一份）。**pi 不走那条链路**，pix 的改写发生在工具调用之前，rtk 看不见 → 每次都判定「没装 hook」。所以照它提示跑 `rtk init -g` 只会给 pi 多装一份重复改写器。
+
+**处置**（rtk 自己的开关，二进制里只有这个）：
+
+```toml
+# %APPDATA%\rtk\config.toml
+[hooks]
+suppress_hook_warning = true
+```
+
+等价的环境变量是 `RTK_SUPPRESS_HOOK_WARNING=1`（值不是 `off` 就算开），**但别用**——pi 的 Bash 工具走 `bash -c`、不读 `~/.bashrc`（§3.9），环境变量挂不上；配置项是唯一能跟着进程走的旋钮。
+
+**配这个文件的坑**：
+
+- 文件**默认不存在**（`rtk config` 显示 `(default config, file not created)`）。手写一个 `[display]` 小节会报 `rtk: missing field 'colors'`——rtk 的反序列化**没有默认值兜底，缺字段即失败**。要手改先 `rtk config --create` 生成全量，再改那一行。
+- 小节名是 **`[hooks]`**，不是 `[display]`/`[filters]`。从二进制字符串表里能看出 `suppress_hook_warning` 与 `exclude_commands`、`transparent_prefixes` 同属 hooks 段；`[display]` 只有 `colors`/`emoji`/`max_width`。
+- 顺带确认：`rtk init -g --agent pi` 装的是 `~/.pi/agent/extensions/rtk.ts`（**每次 bash 调用多 fork 一个 `rtk rewrite` 子进程**），与 pix 的正则改写重复，**本机已删**。真要留就别让 pix 再改写一遍。
+
+**没做的**：没去装真正的 Claude hook（pi 用不上那条链路）；没关 RTK 档（省 token 的部分照常生效，关掉反而亏）。
+
+---
+
+### 7.25 桌面宠物僵窗：上游 `needsRelaunch()` 只认「pid 死了」，僵窗没人管（2026-10-16 已修，上游 `b4b779a` 已 push）
+
+**现场**：pi 开着、`log.txt` 还在刷状态，屏幕上却没宠物。查下来宿主（`node bin/pi-pet.cjs start`）在跑、窗进程（`electron.exe … pet-electron.cjs 47653 --pi-pet-window`）也活着，但 `log.txt` 连续 13 分钟每行都是 `窗客户端 0`，`state.json` 里 `windowState` 永远是 `starting`。手动 `POST /control {"action":"restart-window"}` 后 0.7s 就 `窗接上了` —— 窗进程还在，只是渲染进程崩了（`tasklist` 里同一时刻只有 main + gpu-process + utility，**没有 `--type=renderer`**）。
+
+**根因**（上游 `app/window.cjs`）：文件头写着「窗在不在以有没有 WS 客户端为准，不是 pid」，代码却是
+
+```js
+const childGone = !child || child.exitCode !== null || !pidAlive(pid);
+return childGone && pastGrace && pastLost && …;
+```
+
+`pidAlive` 这道闸把「pid 活着但渲染进程崩了」的僵窗整个排除了 ⇒ 宿主 tick 每 2s 判一次「不用重拉」，一直判到天荒地老。**修**：判据抽成纯函数 `windowDecision()`，只看客户端（连上过又丢了按 `lostMs`、从没连上过按 grace 的 `graceMs` 判，`gapMs` 节流仍在）—— 真连不上时每 max(grace, gap) 换一扇，不是拉起洪水。
+
+**配套**（`app/host.cjs`）：重拉路径 `win.launch()` → `win.restart()`。僵窗的 pid 还活着，直接再拉一只就是**新旧两只抢同一个 electron profile**（新的那扇连页面都加载不出来 = 现场那个「窗客户端一直 0」），必须先 `taskkill` 掉旧的。回归：`test/fused.mjs` +7 条断言，含「判据里不许再出现 `pidAlive`」；`npm test` 400 + 27 + 8 + 9 全过。
+
+**客户端也兜了一层**（本仓库 `extensions/pi-pet-autostart.ts`，见 §3.6 那条）：宿主被硬杀 / 跑了旧版 exe / 上游哪天又改回去，`/health` 的 `clients` 还是 0，客户端 60s 后就自己叫它换窗。
+
+**顺带发现（未改）**：`npm run sync` 的「把宿主那份检出收干净」那步其实收不干净 —— 同步写完文件后 `git merge --ff-only` 会以「有本地改动」拒绝（现场：`origin/main` 已快进到远端，那份检出的 HEAD 还停在旧提交）。要收干净得手动 `git checkout -- <被同步的文件>` 再 `merge --ff-only`（内容已在远端时这俩合起来等价，且不丢东西）。
+
+### 7.26 `[Theme conflicts] Invalid theme cc-dark.json`：pi 收紧主题 schema，把 pi-one-ui 内置主题整体打死（2026-10-18 已修，`fix-pi-one-ui-theme.mjs`；2026-10-27 上游源码层已修）
+
+**现象**：开机 / `/reload` 在已加载资源区弹两段（标题就是 `[Theme conflicts]`，`interactive-mode.js` 拿主题 diagnostics 渲的）：
+
+```
+Invalid theme "…\\npm\\node_modules\\pi-one-ui\\themes\\cc-dark.json":
+Other errors:
+  - /colors/cwd: schema is false
+  - /colors/editorModel: schema is false
+  - /colors/editorBorder: schema is false
+  - /colors: must not have additional properties
+```
+
+`cc-light.json` 紧跟一份一模一样的。**代价不是「少三个颜色」**：整份主题被判非法 → 不注册（`theme.js`：「Invalid themes are ignored here; the resource loader reports them」），`/theme` 列表里 cc-dark / cc-light 直接消失。本机 `settings.json` 是 `light/dark`，平时看不出来，但 `/theme` 一开就露。
+
+**根因**：pi 的主题对象是**严格**的——`<pi>/docs/themes.md`：「Theme objects are strict: only documented top-level fields and color tokens are accepted. Define reusable custom colors under `vars`; custom keys under `colors` or `export` and additional top-level metadata are rejected.」schema 就在 `<pi>/theme/theme-schema.json`（本机 `D:\agent\pi\theme\theme-schema.json`，pi 1.3.0）：`colors.additionalProperties = false`、共 56 个键、到 `bashMode` 为止。而 `pi-one-ui@0.9.1`（npm 最新，2026-10-05）把自家扩展色键 `cwd` / `editorModel` / `editorBorder` **直写进了两个内置主题的 `colors`**——它 README「颜色体系与主题定制」一节明说这是设计（「主题文件 `colors` 可以写这些键，`cc-dark` 和 `cc-light` 已支持」）。两边各自没错，撞在一起就是死。
+
+**是 pi 侧收紧，不是包装错了版本**：拿 `~/.pi/agent/node_modules` 里那份 **0.87.1** 的 `validateThemeJson()` 跑未补的原始文件 → `[valid]`；同两份文件用 **1.3.0** 的 schema 跑 ajv → 命中上面那 4 条错。所以旧 pi 上它们一直合法，升到 1.x 才炸。
+
+**修法**（一行）：`node fix-pi-one-ui-theme.mjs`（幂等，`--check` 只体检、还有越界键就 exit 1）。删掉那 3 个键，其它内容逐字节不动（round-trip 保持 tab 缩进 + 尾换行，diff 只有那 3 行删除 + `bashMode` 尾逗号收口）。脚本拿 pi 自己的 schema 算白名单（`PI_INSTALL_DIR` > `where.exe pi` > 约定目录），上游哪天改对了它就自动 `[skip]`。
+
+**为什么删了不会花屏**：pi-one-ui 自己就是三级回退 `renderSourceColor(theme, spec, themeToken, themeDefault, text)`（`extensions/shared/style.ts`）= 配置 > 主题 token > 原生默认，`themeHasToken()` 探不到 token **不抛错**；全包也没有一处直读 `theme.colors`。删后：
+
+| 字段 | 删键后走哪条 |
+|---|---|
+| `cwd` | `~/.pi/agent/pi-one-ui.json` 的 `colors.cwd`（本机 `accent`，§7.22）——本来就走这条，主题里那个键轮不到用；真没配置时才退 `bold cyan`（裸 ANSI，就是 §7.22 翻车的那个） |
+| `editorModel` | 原生默认：minimalist 行走 `syntaxKeyword`（`MINIMALIST_MODEL_FALLBACK`），editor metadata 格式化那条走 `accent`（`EDITOR_ACCENT_FALLBACK`）——两条都仍是主题 token，跟着 light/dark 切 |
+| `editorBorder` | 原生默认 `borderMuted`（`EDITOR_BORDER_FALLBACK`） |
+
+**验证**：ajv + `D:\agent\pi\theme\theme-schema.json`（required / 色值格式一起校）：未补两份各 4 条错 → 补后两份 `VALID`；`node fix-pi-one-ui-theme.mjs --check` exit 0。
+
+**2026-11-02 本机改吃 git 源**：`pi remove "D:\AI\pi-one-ui"` + `pi install git:github.com/BeYourDreams/pi-one-ui`（同 HEAD `7f394f3`，与 npm 0.9.2 / 本地源码一致），落在 `~/.pi/agent/git/github.com/BeYourDreams/pi-one-ui`。好处：`settings.json` 里不再有绝对路径条目，`pi update --extensions` 能升它（本地源码安装升不到）。`D:\AI\pi-one-ui` 目录留着做开发，pi 不再加载它。补丁脚本同时改为 **npm + git 两份副本都扫**（实测：往 git 副本注入一个 `colors.cwd` → `--check` exit 1；不带 `--check` 跑一次后与原文件逐字节一致）。还吃 `npm:pi-one-ui@0.9.1` 的人照旧必跑该脚本。
+
+**走 SSH**（同日，直连 443 时通时断之后的常规通道）：本仓与三个 git 源插件的 `origin` 都改成 `git@github.com:<owner>/<repo>.git`（`ssh -T git@github.com` 认到 `BeYourDreams`，密钥 `~/.ssh/id_ed25519`）。`pi install git:github.com/...` 新装仍走 https（会 `invalid index-pack output`），**已存在 clone 直接改 remote 就绕开了**：`git remote set-url origin git@github.com:BeYourDreams/pi-dsh-pet.git`（三个插件同法）；`pi update --extensions` 用的是 clone 自己的 remote，改完就吃 SSH。本仓 push：`git remote set-url origin git@github.com:BeYourDreams/pi-extensions.git`。
+
+**代理**（同日）：`~/.gitconfig` 的全局 `http.proxy`/`https.proxy = http://127.0.0.1:7890` 已
+
+**2026-10-27 上游源码层已修（本机改吃本地源码）**：`D:\AI\pi-one-ui`（`git:github.com/BeYourDreams/pi-one-ui`，与 npm 0.9.2 同源）里把那两个主题的 `cwd` / `editorModel` / `editorBorder` 直接删了，并补了回归用例 `tests/themes/builtin-themes-schema.test.ts`：拿 `@earendil-works/pi-coding-agent` 自带的 `dist/modes/interactive/theme/theme-schema.json` 校顶层键与 `colors`/`export` 的额外键（修前必红、修后绿）。文档一并改口：这三个键**只能写在 `~/.pi/agent/pi-one-ui.json`**，写进任何主题文件（包括 `~/.pi/agent/themes/`）都会把整份主题判非法。本机安装随之改成 `pi install ./`（见 §2.1 注），`settings.json` 里不再有 `npm:pi-one-ui`，所以补丁脚本现在直接 `[skip]`（npm 副本已不存在，脚本对“目录不在”改为 exit 0）。
+
+**别走的两条路**：
+- ❌ 抹掉整个 `pi-one-ui` 主题声明（`package.json` 的 `pi.themes`）：能止错，但连官方那两个皮肤都没了。
+- ❌ 把这三个键搬到 `~/.pi/agent/themes/` 自建主题：用户主题走同一条严格校验，结果是新建的那份被打死（§7.22 末尾旧建议据此作废）。要调 pi-one-ui 专属色就只写它的配置 `colors`。
+
+两个包各自都没错，现阶段只能先在本机绕过去。
+
+---
+
+### 7.27 `drama-skills` 创作三阶段会被上游升级覆盖：改用自包含 `short-drama-pro`，卸载旧三件（2026-10-18）
+
+**现象**：`drama-skills` 的官方升级方式就是重跑同一条安装命令（`npx skills add zenstory-ai/drama-skills -y -g`，其 README 写明「更新时重新执行同一条命令即可」），它按技能**整目录覆盖** `~/.pi/agent/skills/`。我们给 `short-drama-write` / `short-drama-storyboard` / `short-drama-video-prompts` 打的补丁——生成就绪五问、动作因果链与朝向绑定（SCR-23 / SHT-30 / VID-28）、单镜 ≤12 秒上限（SHT-31，含 `storyboard_check.py` 的机械检查）——会被静默盖回上游版本，且不会有任何报错提示。
+
+**根因**：同名同目录，上游重装即覆盖；而补丁分散在 `SKILL.md`、`references/`、检查脚本三处，靠人工 diff 记忆维护不可靠。
+
+**修法**：把三阶段「复刻 + 补丁」成一个**新名字**的自包含技能 `short-drama-pro`（上游不认识这个名字，重跑安装命令碰不到它），并卸载旧三件：
+
+- 深度参考搬进 `references/{script,storyboard,video}/`，检查器与估时工具搬进 `scripts/`（`storyboard_check.py` 保留 `--shot-duration-cap` 默认 12.0），样例在 `examples/`——本技能不引用任何上游路径；
+- router `short-drama` 的路由表、`knowhow-index`、`creator-workflow` 改指 `$short-drama-pro`，其余七个阶段技能里的引用一并改指（共 55 处，全为技能名提及，无路径形态）；
+- **策略：不再跑上游安装器。** 本仓库 `skills/` 是九个已装 drama 技能的**唯一更新源**：`node sync-drama-skills.mjs install` 精确镜像到全局（逐文件复制 + 删除全局多余 + 清掉退役三件），`check` 体检、`save` 抢救；上游降级为参考快照，版本与人工吸收流程见 `skills/UPSTREAM.md`；
+- 顺带修掉上游索引器的一处消息缺陷：裸写 `[转场]`（标签后无正文）原报「不支持生产标签 [转场]」，实际它受支持、只是缺正文；现在报 `production_tag_missing_body` 并给出写法（`selftest_write` 增至 15 项）。
+
+**验证**：`node sync-drama-skills.mjs check` 无漂移；`short-drama-pro` 四组自检全绿（`pro_check --selftest` 4 组 + `selftest_write` 17 + `selftest_storyboard` 17 + `selftest_video` 10），router `selftest` 17 项全绿；
+
+**2026-10-29 上游吸收 v0.9.2**（`dafe80e` → `91fddb2`，16 commits / 83 files）：上游把八个旧 JSON 检查器移进 `tests/legacy/` 并删掉 assets / image-prompts / review 三个技能的整个 `scripts/`——本仓库**不跟这个删除**，因为这些检查器是 pro 三阶段检查器的活跃依赖、且含自加的 SHT-31 上限，跟着删会让检查能力塌掉；三个技能的 `scripts/` 与 `selftest.py` 全部保留。同期收进 `--partial` 局部核对、`profile_notes` 算术冲突提示、`format.episode_count` 与 `multi_shot_containers` 决策写入。吸收明细见 `skills/UPSTREAM.md`。
+
+### 7.28 `pi-mono-context-guard` 卸载（2026-11-04）：省的是 token，付的是请求
+
+**什么时候装的**：2026-10-07（§1 表），`pi-cache-guardian` 只告警不截断，它是「截断侧」。三条守卫：`read` 补 `limit=120`、同段重复读 `block`、`rg` 自动追加 `| head -60`。
+
+**为什么卸**：三条里只有一条真省，另两条在花钱，而花钱的方式是**多轮请求**。
+
+| 守卫 | 行为 | 额外请求 | 账 |
+|---|---|---|---|
+| `read` 无 `limit` → 补 120 | 静默改参数，不拦 | **1~N 轮** | 一次请求要重发整个上下文（20–40k input，缓存命中约 10%），400 行文件被拆 4 次读只省约 3k token → **亏 10~30 倍** |
+| 同段重复读 → `block` + stub | 真拦截 | 0~1 轮 | stub 带行号范围，模型一般一次就换 `offset` → **基本免费** |
+| `rg` 无 `head/tail/wc` → 自动追加 `head -60` | 静默改命令，不拦 | 0，但错判 | 60 行被当成全部匹配 → 结论错 → 再补查 **2+ 轮**；最贵的一条，而且**没有报错** |
+
+关键点是这两条校准值的取向矛盾：`readLimit` 按「单轮上下文体积」优化，`rgHeadLimit` 按「单条输出体积」优化，而实际成本是「轮数 × 上下文体积累加」——所以砍得越狠，请求越多。
+
+**还有一层**：`DEFAULTS` 在 `index.ts` 里硬编码（`readLimit: 120` / `rgHeadLimit: 60` / 三个开关），`settings.json` 没有覆盖入口（装完不 merge 配置），想调只能改 `node_modules`，`pi update` 一升就冲掉。
+
+**卸载代价（明说）**：① 重复读同一段不再有 stub 兜底——长会话里手滑重读会白付一次全文件 token；② 大 `rg` 输出不再被自动砍——**这条本身是好事**，但意味着 `rg` 必须自己带 path/glob 收窄（`no-find` 已在 `tool_call` 上拦「无 path 的 find/递归 grep」，见该扩展头注释），输出自己配 `| head`。
+
+`pi list` 26 项（23 npm + 3 git）。§1 表、§1 changelog、§2.1 循环与计数、§4 工具表、§9 计数同步。
+
+**重装条件**：只有「同一段内容在长会话里被反复读进上下文」成为主要浪费时才值得——那时该装的是去重，不是补 120 行下限。
+
+### 7.29 九连卸（2026-11-04）：清掉所有会自己多发请求的扩展（26 → 17）
+
+**判据**：接 §7.28（mono-context-guard 省 token 付请求）的同一条线，按「一个 user turn 实际发出几个 provider 请求」把 26 个扩展全过一遍。凡自己发请求、或会把模型逼成多轮的，全下。**14 npm + 3 git。**
+
+| 卸的包 | 机制 | 换回的东西 |
+|---|---|---|
+| `@agenticup/pi-loop` | 每次深潜 = 一轮全新请求，收敛全靠模型自觉 | `bash` 手工分步做同样的事 |
+| `@arhen/pi-core-subagent` | 每次 spawn 一个独立上下文（模型继承 `1/1`），`steer`/`reply`/`await` 再叠 | 主会话自己做；顺带丢掉 §7.14 的 proper-lockfile 崩溃面与 §7.16 的 agent 定义依赖 |
+| `@chendpoc/pi-memory` | 记忆检索钩子 + `better-sqlite3` 原生依赖（§3.1 那两条 `allowScripts` 的一半） | 跨会话记忆改由本 readme 承担（`AGENTS.md` 0B 且不恢复，§5） |
+| `pi-cache-compact` | 冷前缀时「发一轮续写 → 拒绝接管 → 让位默认压缩」，压缩期多一发冷 prefill，15 分钟内连让位 | Pi 内置压缩（实测必 `cacheRead: 0`，§7.13）——本来就没赚到的那份命中，现在连试都不试 |
+| `pi-ocr` | OCR 走 Ollama / MinerU 另一个模型 | 图里文字人读 |
+| `pi-web-access` | 只有配错时才贵：`web_enable` 中途切 active 工具集，前缀从第 0 个 token 作废（§7.4 实测 86016 → 1152） | 不联网；真要搜再 `pi install npm:pi-web-access`，**第一件事写 `toolActivation: "eager"`（§3.7）** |
+| `pi-agent-browser-native` | 8 个 `agent_browser*` 工具 + 截图塞上下文 → 提前撞压缩；外加 node `EBADENGINE` 永久警告 | 浏览类需求当前没有 |
+| `@injaneity/pi-computer-use` | 桌面截图/点击，同上（截图吃窗口）+ 唯一需要批 install 脚本的包 | 暂无桌面控制 |
+| `pi-test-runner` | 跑测试本身不贵，但大输出灌上下文 → 多一轮压缩 | `bash npm test`（输出自己带 `\| head`） |
+
+**连带清理（照 §2.4「卸载后同步删掉只为它存在的配置」）**：
+
+- `settings.json` 的 `packages` 26 → 17（`pi list` 实核 14 npm + 3 git，与 §1 表、§2.1 循环对齐）。
+- 删 `~/.pi/agent/cache-compact.json`、`~/.pi/agent/web-search.json`（配置值都在 §3.3 / §3.7 留档，重装照抄）。
+- 删 `npm/package.json` 的 `allowScripts` 整键（两条的宿主 computer-use / pi-memory 都卸了，树里 `better-sqlite3` 也已不在）→ §3.1 起无对象。
+- 删两个 0 触发的守门脚本：`fix-browser-native-compat.mjs`（目标 browser-native）、`fix-subagent-check.mjs`（目标 core-subagent）——**git 历史里能找回**，重装对应包时再取。
+- §2.2 顺序约束归零：唯一那条「cache-compact 必须在 prefix-stabilizer 之后」随卸载作废。
+- `~/.pi/pi-memory-data/`（MEMORY.md + `logs/` + 两个 `.memory_*` 队列文件，34KB）**2026-11-04 已删**。删前确认过内容：`MEMORY.md` 只有模板骨架（四个 section 全空）、`logs/` 是空目录 —— 没有真实记忆内容，删掉零损失。重装 `@chendpoc/pi-memory` 时会自己重建。
+
+**验证**：`pi list` 17 条；`pi --no-session -p "say OK"` 无 `extension_error`、正常返回。
+
+**代价（明说）**：子代理、深潜循环、联网搜索、OCR、跨会话记忆、结构化测试、截图/桌面控制全部没有了。要哪个就 `pi install npm:<包>` 单独装回来，配置点各自留档在 §3.x；**这九个不要再无脑装回整包**——装回前先答一遍「它会让我多发几个请求」。
+
+### 7.30 `settings.json` 的 `cacheWarming: "streaming"` 删除（2026-11-04）：宿主自己也会多发一发
+
+§7.29 把扩展清了，但漏在视野外的一个**在宿主配置里**：`cacheWarming: "streaming"`。它不注册工具、不读会话，所以巡检扩展永远看不见它，可它干的事就是**在正常回合之外再发一次请求把前缀烘热**。
+
+**为什么删**：本机目标是「一个 user turn = 一个 provider 请求」，warmup 在这一条上永远是净支出 —— 省的是首 token 的 p95，付的是一发完整请求（本机走本地代理，钱不是问题，但请求数就是这次清理的口径）。
+
+**代价（明说）**：首 token 会变慢（尤其冷启动第一轮、以及长前缀后缀变化后的第一轮）。**缓存命中率本身不掉** —— warmup 只是提前把缓存烤热，不烤也照样命中，只是晚一点点。觉得慢了就写回 `"cacheWarming": "streaming"`，`/reload` 即恢复。
+
+**同批发现的两处漂移（未修，留档）**：
+
+- `settings.json` 里**没有** `shellCommandPrefix`，`~/.pi/agent/bash-prelude.sh` 也不在盘上 —— 但 §3.9 把它写成「必做」。根因不是漂移：脚本随 `e9c4132`（2026-11-03 卸 pi-fd / pi-bash-guard）一起 `git rm` 了，文档没跟着改。**2026-11-04 定案不恢复**，§3.9 已标死；`cd /d D:/x` 这种写法不认，用 `cd D:/x`。
+- `~/.pi/agent/cache-compact-debug.jsonl`（89.9KB，2026-10-09 那份调试落盘）还躺在 agent 根下，而包早已卸（§7.29）。**它就是 §3.3 里「1.1MB 调试落盘已删」漏掉的那半截**（当时删的是另一份），内含完整对话 —— **2026-11-04 已删**。
+
+**验证**：`settings.json` 键数 26，`cacheWarming` 已无；`pi --no-session -p "say OK"` 正常返回、无 `extension_error`。
+
+### 7.31 取代 `bash-prelude.sh`：/d 开关那件事改成「不写」（2026-11-04）
+
+§3.9 作废之后，`cd /d D:/x` 这类 cmd 习惯写法在本机会直接报 `bash: cd: too many arguments`。用户问「要不写回插件强制？」——**决定不写**，理由：
+
+| 方案 | 成本 | 结论 |
+|---|---|---|
+| `shellCommandPrefix` + `source bash-prelude.sh` | **每条** bash 命令多一次 `source`（fork 不省，但每条都有固定开销）+ 一个新维护点 | 不选 |
+| 本地扩展挂 `tool_call` 改写 `cd /d` → `cd` | 比 `no-find.ts` 多一个文件、多一份回归用例 | **不选**（收益比太低：只在人自己写错时省掉一次报错） |
+| **纪律：不写 `/d`** | 0 | ✅ 选这个 |
+
+- 生效方式是**模型自己看报错改正**，不设提示词层：`AGENTS.md` 0B 且定案不恢复（§5），这条纪律只活在本 readme 里。实测一次报错就够：`bash: cd: too many arguments` 指向明确，下一轮自动写成 `cd D:/x`。
+- 同一件事的**机器可判形态**已经在跑：`no-find.ts` 只转译「`find`/`grep` 当搜索生产者」这种**有确定等价物**的命令；`cd /d` 没有等价物（要么丢掉 `/d`，要么当路径），猜错比报错贵——所以它是**故意不转的**。
+- 想加回来（不推荐）：`git show e9c4132^:config/agent/bash-prelude.sh > config/agent/bash-prelude.sh` + `node install-project-config.mjs` + `settings.json` 写 `"shellCommandPrefix": "source ~/.pi/agent/bash-prelude.sh"`。
+
+### 7.32 六连卸：按工具清单卸载（2026-11-04 晚，17 → 11）
+
+用户按「工具名清单」要求卸载：`grep` `find` `md_inspect` `md_diff` `md_edit` `mcp` `todo` `ask_question` `lsp_diagnostics` `lsp_fix` 全不要。逐条反查归属（`grep -n 'name: "'` 各包源码）后，落到 6 个包：
+
+| 包 | 注册的工具 | 备注 |
+|---|---|---|
+| `npm:@tian.zuo/pi-find` | `grep` `find` | 覆盖内建；卸后回到内建实现 |
+| `npm:@trycedar/pi-mdiff` | `md_inspect` `md_diff` `md_edit` | 卸后 `.md` 改用 `edit` |
+| `npm:pi-mcp-adapter` | `mcp` | **代价最大**：MCP 服务器接入/认证/面板整个下线；本机本就没有 `.mcp.json`，0 server，故无实际损失 |
+| `npm:@henryqw/pi-ask-question` | `ask_question` | 歧义时改为直接问用户（文本） |
+| `npm:@ssk_dev/rpiv-todo-lean` | `todo` | 任务清单回到模型自带 todo 习惯 |
+| `npm:@narumitw/pi-lsp` | `lsp_diagnostics` `lsp_fix` | 诊断需另跑 `tsc`/`eslint` 等 |
+
+**保留 `@aboutlo/pi-smart-edit`**：它注册的是 `edit`（覆盖内建），不在本次工具清单里，且 `defaultTools` 明确要 `edit`，故不动。
+
+**连带清理**：① `settings.json` 的 `extensions: ["-builtin:mcp"]` 清空后整个键删除（§3.10 作废）；② `extensionChangelogVersions` 里 `pi-find` / `pi-mcp-adapter` / `pi-lsp` 三条删除。
+
+**验证**：`pi list` = 11 条（8 npm + 3 git），与 `settings.json` 的 `packages` 逐条一致；`settings.json` JSON 合法。
+
+**不受影响**：`extensions/no-find.ts`（把 **bash 命令**里的 `find`/`grep` 改写成 `fd`/`rg`）与 `pi-find` 包无关，仍生效。
+
+## 8. 体检与排障
+
+本机的体检脚本**没有自动化的**，但有几个手跑的（都在仓库根或 `.sc-test/`，`.sc-test/` 属 gitignore、不入库）：
+
+| 脚本 | 干什么 | 结果 |
+|---|---|---|
+| `node check-readme-tables.mjs` | 体检 readme 表格列数 | 一致 exit 0、不一致 exit 1 |
+| `node sync-drama-skills.mjs check` | 本仓库 drama 技能镜像与全局安装是否漂移（更新用 `install`） | 无漂移 exit 0；有漂移列出差异文件 exit 1 |
+| `node install-local-extensions.mjs --check` | 本地扩展副本与仓库是否逐字节一致 | 不一致会提示重拷 |
+| `node fix-lazy-tools-notes.mjs --check` | DOCS_NOTE 路径补丁是否需要重打 | 基线已修好 exit 0 |
+| `node fix-proper-lockfile-proxy.mjs --check` | proper-lockfile 补丁在位 | 一致 exit 0 |
+| ~~`node fix-browser-native-compat.mjs`~~ / ~~`fix-subagent-check.mjs`~~ | 两脚本随 2026-11-04 九连卸删除（目标 `pi-agent-browser-native` / `@arhen/pi-core-subagent` 已卸，0 触发即删） | 重装对应包时从 git 历史找回，见 §7.29 |
+| `node fix-pi-one-ui-theme.mjs --check` | pi-one-ui 内置主题里是否还有 pi 主题 schema 不认的 `colors` 键；npm 与 git 两份副本一起扫（§7.26） | 本机 2 份 git 副本合规 → `[skip]`/exit 0；`[待修补]` exit 1 时重跑不带 `--check` 即修；两份副本都不存在也 `[skip]` exit 0 |
+| `node install-project-config.mjs --check` | `config/` 里的配置/小脚本与 pi 实际读取位置是否一致（行尾 CRLF/LF 归一后再比，不算漂移） | 一致 exit 0 |
+| `.sc-test/check-ext-errors.mjs` | 扫会话里的 `extension_error` | 盘上还在，但 `.sc-test/` 是 gitignore、**不入库** → 当一次性探针用，别当长期工具（升级/清理会丢） |
+| `.sc-test/probe-bash-guard.mjs` | bash-guard 回归用例（含规则 E 正反两组） | **不入库**；2026-11-01 按 §5 清单重写并跑通 |
+
+改完 `/reload`，看 TUI 有无 `extension_error`；本地扩展与仓库是否漂移跑 `node install-local-extensions.mjs --check`；readme 表格列数跑 `node check-readme-tables.mjs`（编辑手滑插/漏一个 `|` 时靠它兜住）。
+
+| 症状 | 原因 | 处置 |
+|---|---|---|
+| 扩展报 `Tool "x" conflicts with ...` | 两个扩展抢同一工具名 | 二选一卸载（见 §7.1） |
+| 懒加载报 `Cannot find module` | lazy 执行层地基缺失（版本要与 pi 本体一致，别写死） | `npm i --prefix ~/.pi/agent @earendil-works/{pi-coding-agent,pi-tui,pi-ai}@$(pi --version \| grep -oE '[0-9]+\.[0-9]+\.[0-9]+')` |
+| 工具调用不到、wire 上也没有 | 内建工具不在 `defaultTools`（不注册），扩展工具不在其中（被 lazy） | 改 `defaultTools`（§3.4），`/reload` |
+| `fd` 报 “fd executable not found” | pi 自带副本与 PATH 都没有 fd | 跑 `/fd-check` 看解析结果；或 `npm i -g fd-find` |
+| 会话/文件撤销 | `pi-edit-guard` 已卸载，其 `undo` 工具随之消失 | 文件级靠 git 或改前先 `read`；**会话级 `/undo` 现由 `@bacnh85/pi-checkpoint` 提供**（见 §3.8；不在 git 仓库里则静默 no-op） |
+| agent 没有 shell | `defaultTools` 里没有 `bash` | 写 `bash` 进两处 `defaultTools`（§3.4）；若 `extensions/pi-shell.ts` 被装回来，它会在 `session_start` 无条件隐藏 `bash` |
+| 宠物没起来 / 凭空消失，`log.txt` 里每行都是 `窗客户端 0` | 窗进程活着但渲染进程崩了 = 僵窗；上游旧版 `needsRelaunch()` 只认「pid 死了」 | 上游已修（§7.25，`b4b779a`）；临时手动 `/pet-auto restart`；扩展那层 60s 后自己换 |
+| 压缩后首轮命中低 | 正常现象 | 「命中 0」在本机是常态（内置压缩不走前缀续写，§7.13）；`pi-cache-compact` 已于 2026-11-04 卸（§7.29） |
+| 压缩请求 `cacheRead: 0` | 内置压缩的前缀与活会话不续写，必然 0 | 正常（§7.13 实测）；要命中得重装 `pi-cache-compact` 并在刚聊完的会话里立刻 `/compact`（§3.3 已留档） |
+| ~~`pi-warm-cache` 没反应~~ | 本地代理属未注册路由 | **已卸载**（2026-10-08 死安装，见 §7.12），此行留档 |
+| 装/卸任何包时 npm 打 `EBADENGINE ... node >=24.21.0` | 本机 node 24.16.0 低于某个包声明的 engine | **可忽略**，纯警告。2026-11-04 卸 `pi-agent-browser-native` 后本机已无此警告（§7.29） |
+| ~~pi-agent-browser-native 报 `buildSessionProjection is not a function`~~ | 扩展 2026-11-04 已卸 | 重装才可能复发：`pi update npm:pi-agent-browser-native`，补丁脚本在 git 历史（§7.29） |
+| 开机 / `/reload` 弹 `[Theme conflicts] Invalid theme "…pi-one-ui\themes\cc-dark.json"`（`/colors/cwd: schema is false` 那四条），`/theme` 里找不到 cc-dark/cc-light | pi ≥1.0 主题 schema 转严格（`colors.additionalProperties=false`），而 pi-one-ui 0.9.1 把自家 `cwd`/`editorModel`/`editorBorder` 写进内置主题 → 整份主题被判非法。详见 §7.26 | `node fix-pi-one-ui-theme.mjs`（幂等，删那 3 个键）后 `/reload`；`pi update npm:pi-one-ui` 会冲掉，复发就重跑 |
+| `omnify` 搜不到 `web_search` / 每轮前缀突然被掀 | `pi-web-access` 已于 2026-11-04 卸；重装若忘写 `toolActivation: "eager"` 就退回 `web_enable` 加载器 | 见 §7.29 / §3.7 留档；掀缓存的现场见 §7.4 表 |
+| 跑完没通知 | 终端不支持（Terminal.app / Alacritty） | `pi-notify` 只覆盖 OSC 777/9/99 与 Windows Terminal；换终端，或改用 §1.2 桌宠看状态 |
+| `/pet` 提示命令不存在 | 只 `npm i -g` 装过，pi 不扫全局 `node_modules` | `pi install git:github.com/BeYourDreams/pi-dsh-pet` → `/reload`（见 §3.6） |
+| 宠物窗口不弹 | 首次要下 Electron ≈100MB；或自动启动被关了 | 看启动提示；`/pet-auto status` 看当前开关；`/pet small` 换小号试；关掉了就写回 `{"autostart": true}` |
+| pi 整个进程崩，只留 `TypeError: Proxy handler's 'get' result … should be the same value as the target's property`（frame 指向 `proper-lockfile/lib/mtime-precision.js:6:29`） | proper-lockfile 把 mtime 精度缓存挂到 fs 对象上，而 jiti interop 把它包成了 Proxy；同进程第二次加锁即触发 JSC 不变量（原来多由 subagent 跑着跑着踩到，subagent 2026-11-04 已卸） | 跑 `node fix-proper-lockfile-proxy.mjs`（幂等）；pi 升本体后若复发，重跑即可。根因与复现见 §7.14 |
+| `pi list` 里某行带 `(filtered)` | 该包在 `packages` 里写成 object form 且注明了要屏蔽的部分 | **预期**（本机只有 `git:github.com/BeYourDreams/pi-dsh-pet (filtered)`，见 §3.6） |
+| ~~subagent 调不起来~~ | 插件 2026-11-04 已卸（§7.29），无从报错 | 重装 `npm:@arhen/pi-core-subagent` + 从 git 找回 `fix-subagent-check.mjs`（根因见 §7.16） |
+| `pi --no-session -p ...` 不退出（shell 报 exit 124） | 桌宠的 `/feed` 长连接或宿主进程挂着父会话；headless 永远不会自己走完 | 用 `timeout 70 pi ...` 包一层（§7.13 已记录）；屏蔽上游扩展后刷屏的重连日志也会消失（§7.15） |
+| ~~装东西后 pi-memory 报 `Could not locate the bindings file`~~ | pi-memory 与 better-sqlite3 都已随九连卸下线（§7.29），树里已无该包 | 重装才复发：`npm install-scripts approve better-sqlite3 && npm rebuild better-sqlite3`（详见 §3.1） |
+| 输出突然变碎句 / 忽然变得啰嗦 / 开始掉冠词 | `pix-optimizer` 的 caveman 档位变了（新 caveman 是 ASD-STE100 两层，L1 选词断句 + L2 回复形状，**刻意保留冠词**，与旧 `ultracave` 碎句腔不同） | `/optimizer` 开面板调档（**只有面板，无 `/optimizer <mode>` 文本参数形**）；默认值在 `~/.pi/agent/pix.json` 的 `optimizer` 段，见 §3.15 |
+| 切了 caveman / ponytail 档位后本轮 `cacheRead: 0` | 换了 system 前缀文本，首轮必然重算 | **正常现象**，别反复切；第二轮起恢复。原理同 §2.2 的 prefix-stabilizer、§7.17 |
+| 输出突然变「懒」/ 突然开始砍功能（YAGNI 口吻） | ponytail 档位生效（本机默认就钉在 `ultra`，§3.15） | `/optimizer` 调档；持久化改 `pix.json` 的 `optimizer.ponytail`。它只管「写什么」，验证/错误处理/安全/可访问性永不裁 |
+| bash 命令前莫名多出 `rtk ` 前缀 | RTK 执行层在改写命令（模型忘了加前缀时的兜底） | **预期行为**，省的是回显 token；`/optimizer` 里 RTK 关掉即停止；二进制缺失时它不会改写（§3.15） |
+| 每条 bash 命令输出前带 `[rtk] /!\ No hook installed` | rtk 找的是 Claude 风格 `PreToolUse` hook，pi 走 pix 的 `tool_call` 改写，它看不见 | `%APPDATA%\rtk\config.toml` 的 `[hooks] suppress_hook_warning = true`（先 `rtk config --create` 再改，详见 §7.24） |
+| 第一次开 pi 时 footer 出现下载 `rtk` 二进制的一行 | RTK 开着且 PATH/`binary.json` 里都找不到 `rtk` | **预期行为**，下到 `~/.pi/agent/bin` 且用 `checksums.txt` 校验过；离线时设 `PI_OFFLINE` 跳过（届时改写也不生效） |
+| **浅色终端里 footer 的文件夹名（cwd）发白 / 颜色不对**，而其它段（token、耗时、git 分支）都正常 | **不是 pi-one-ui 写死了白色**，而是 `cwd` 是全包唯一默认用**裸 ANSI 色**的字段：`renderSourceColor(theme, config.colors.cwd, "cwd", "bold cyan", cwd)` → 主题里没有 `cwd` 这个自定义 token → 退到 `bold cyan`（SGR `1;36`，终端调色板 cyan 槽），浅色背景下就是一片惨白。详见 §7.22 | `~/.pi/agent/pi-one-ui.json` 写 `{"colors":{"cwd":"accent"}}` 然后 `/reload`。**别改主题**、别钉 hex（会把 light/dark 自动切换打死） |
+GitHub 不通时先走 `ghproxy.net` 镜像 |
+
+**磁盘布局速查**
+
+| 路径 | 内容 |
+|---|---|
+| `~/.pi/agent/settings.json` | `packages` 注册表 + `defaultTools`（含 dsh-pet 的 object form 屏蔽，见 §3.6） |
+| `~/.pi/agent/extensions/` | 本地扩展副本 + 各扩展的全局配置（如 `edit-guard-config.json`、`pi-dsh-pet.json`，**只放这里，放 agent 根下不生效**） |
+| ~~`~/.pi/agent/{web-search,cache-compact}.json`~~ | 已随 2026-11-04 九连卸删除（§7.29）；重装对应包才再写 |
+| `~/.pi/agent/mcp-onboarding.json` | 内建 MCP 引导向导的状态（见 §3.10），**勿手改** |
+| `~/.pi/agent/state/` | 跨会话记账，**2026-10-09 清理后只剩 `pi-pet-autostart.json`**（记「本 pid 已弹过窗 + 落在哪只宠物上」） |
+| `~/.pi/agent/git/` | git 源扩展（lazy-tools fork + dsh-pet，后者扩展被屏蔽，见 §3.6） |
+| `~/.pi/agent/npm/node_modules/` | npm 源扩展 |
+| `~/.pi/agent/npm/package.json` | 14 个 dep（`allowScripts` 键 2026-11-04 起已清空，§3.1） |
+| `~/.pi/agent/pix.json` | `@xynogen/pix-optimizer` 的三档状态（`optimizer.caveman` / `.rtk` / `.ponytail`），**2026-10-12 新建**，见 §3.15 |
+旧文件留 `pi-one-ui.json.bak.2026-10-18-pre-cwd`**。主题侧那三个越界色键不在这里改，走 `node fix-pi-one-ui-theme.mjs`（§7.26） |
+Search fd/rg，见 §5「全局规则」
+| `~/.pi/agent/bin/rtk` | RTK 官方二进制（2026-10-12 首次加载自动下载并校验 checksum）；`binary.json` → 本目录 → PATH，见 §3.15 |
+| `%APPDATA%\rtk\config.toml` | **rtk 二进制自己的配置**（与 pi 的配置无关）：`[hooks] suppress_hook_warning = true` 掐掉每条 bash 的 hook 提醒，见 §7.24。`rtk config` 可看默认全文 |
+| `~/.pi/agent/config/` | **已空**（smart-context 包卸载后配置已删，新装带 `startupConfig` 的包才会写） |
+本目录名写死在 `dist/config.js:403`。本仓库这份是**生成物**：canonical 在 `config/pi-project/settings.json`，跑 `node install-project-config.mjs` 拷入 |
+| `<仓库>/config/pi-project/*` | **项目级配置的 canonical 源**：`settings.json`（→ 拷进 `<仓库>/.pi/`）、`zvec.json`（留档件，不参与同步，见 §7.11） |
+| `<仓库>/config/agent/*` | **用户级配置的 canonical 源**：`AGENTS.md`（0B，§5 定案不发规则）、`settings.snapshot-2025-09-15.json`（历史快照，只留档不拷）。~~`bash-prelude.sh`~~ 已于 2026-11-03 `git rm`（§3.9 作废）。`rtk-config.json` 已于 2026-10-12 `git rm`（§3.14 / §7.20） |
+| `~/.pi/agent/sessions/**/*.jsonl` | 会话历史，算命中率的原始数据 |
+
+**生效方式**：改配置或扩展后 `/reload`（不重启会话、不丢历史）。
+
+---
+---
+
+## 9. 本轮实录：换包 + 升级 + 环境补齐（2026-09-29，`USERPROFILE=C:\Users\yxh`）
+
+在另一台机器上照本清单完整走一遍。**配置值与 §1–§7 全部一致，唯一差异是路径前缀**（本机 `yxh`，原记录机 `yinxuehao`；`compaction-cache.json` 的 `logPath` 已是本机路径）。
+
+2026-11-04 卸 `pi-mono-context-guard` 后为 **26 项**（23 npm + 3 git，§7.28）；同日再九连卸，最终 **17 项（14 npm + 3 git，§7.29）**。
+
+### 9.1 拉代码：未提交改动先备份再 fast-forward
+
+`git fetch` 后本地落后 17 个提交，工作区有两处未提交改动：
+
+| 文件 | 改动 | 处置 |
+|---|---|---|
+| `extensions/pi-lean-prompt.ts` | +146 行，在 `before_provider_request` 里压 wire system 的 `<rules>`/`<docs>`/`<skills>` | 还原（已备份） |
+| `readme.md` | 旧的 118KB 长版 | 还原（已备份） |
+
+那 146 行不是「还没提交的新活」，而是**已被远端推翻的旧路线**：远端把 wire 压缩拆成独立的 `pi-lean-sections.ts`（只压 `<docs>` + `<skills>`），且 §3.2 明确「**不要压 `<rules>`**」（与 docs/skills 同改会让 pi 把 rules 正文挪位、条目与续行错配）。仓库是 canonical 源，直接还原即正确。备份留在 `/tmp/pi-ext-backup/`（`local-work.patch` + 两个原文件）。`e1758d3 → 16c8951` fast-forward 成功。
+
+### 9.2 照清单换包：卸 3 装 3，仍是 19 个
+
+| 操作 | 包 | 版本 | 依据 |
+|---|---|---|---|
+| 卸 | `pi-edit-guard` | 0.1.5 | §7.1，与 smart-edit 争 `edit` 槽 |
+| 卸 | `pi-undo-redo` | 0.1.2 | 已弃用，连带清 `state/pi-undo-redo/`（22M 影子 worktree） |
+| 卸 | `@nguyenquangthai/pi-ask` | 0.2.0 | 换包（`ask_user_question` → `ask_question`） |
+| 装 | `@aboutlo/pi-smart-edit` | 0.4.0 | §7.1 独占 `edit` |
+| 装 | `pi-dsh-pet` | 0.0.2 | §3.6 桌面宠物 |
+
+`pi list` 实测 **19 项 = 18 npm + 1 git**，`settings.json` 的 `packages` 19 条。全程串行（§2.1 的硬规矩）。
+
+### 9.3 升级：只有 mcp-adapter 动了，fork 带上了两个修复
+
+`pi update --extensions`：
+
+- `pi-mcp-adapter` **3.1.0 → 3.2.0**（唯一升版的 npm 包，其余已是 latest）
+- fork `54bf2f2 → e972047` —— §7.3 那两个 omnify 修复已在上游，随 `git reset --hard` 一并带下来
+
+⚠ 代价照旧：`reset --hard` + `clean -fdx` 把 `fix-lazy-tools-notes.mjs` 打的 `DOCS_NOTE` 路径补丁冲掉了，`--check` 报「待修补：docs 路径」，重打即恢复（幂等，复跑 `无需改动`）。实测命中 `D:\agent\pi-windows-x64`。**该机已无 `pi-shell.ts`，脚本第 2 段（bash→shell 措辞）自动跳过。**
+
+### 9.4 配置同步
+
+| 项 | 动作 |
+|---|---|
+| 本地扩展 | 用 `--prune` 全量重同步（1 个：`pi-pet-autostart`）——仓库删掉的副本（如 2026-11-05 的 `pi-lean-prompt.ts` / `pi-lean-sections.ts`，以及 2026-11-03 的 `pi-fd.ts` / `pi-bash-guard.ts`）会自动清掉，否则残留仍被加载；`--check` 把孤儿报 `[orphan]` 并 exit 1，复跑全 `[ok]` |
+| `extensions/pi-shell.ts` | **删**。仓库已删；留在用户目录里会 `setActiveTools` 无条件隐藏 `bash`/`powershell`，与 §3.4 直接冲突 |
+| `~/.pi/lazy-tools.json` | **删**（0.4.0 死配置，只触发迁移告警） |
+| 用户级 `defaultTools` | 补 `bash`：`["read","edit","write"]` → `["read","edit","write","bash"]`，与项目级对齐（§3.5 两处必须一致） |
+| `extensions/pi-dsh-pet.json` | 新建 `{"autostart":true,"size":"normal","delayMs":400,"maxPets":1,"bridge":true}` |
+| `smart-context` / `compaction-cache` | 已合规，未动 |
+| computer-use | `allowScripts` 早已批准；`setup-helper.mjs --postinstall` → `already up to date` |
+
+> `npm install-scripts approve better-sqlite3` 报 `ENOMATCH` —— **属预期**，该依赖早被两包移除；§3.1 那行命令在本机实际等于只批准 computer-use。
+
+### 9.5 体检结果
+
+| 检查 | 结果 |
+|---|---|
+| `check-ext-errors.mjs` | `extension_error` **0**、stderr 命中 **0**（smart-edit 与 edit-guard 的 `edit` 冲突已随卸载消失） |
+| `install-local-extensions.mjs --check` | 5 个全 `[ok]`，exit 0 |
+| `fix-browser-native-compat.mjs` | `[skip]`（双路回退仍在，0.87.1 本就不需要） |
+| `fix-lazy-tools-notes.mjs --check` | 重打后 `无需改动` |
+
+### 9.6 本机新发现
+
+**② 中途改 `defaultTools` 而不 `/reload`，等于把自己锁在门外。**
+本轮前半段按 §3.4 往 `defaultTools` 补了 `bash`（两处都写好了）。但**本会话是在改之前启动的**，工具集在启动时定死，改完没跑 `/reload`——于是后半段要执行 `git push` 时，手上只剩 `read`/`write`/`edit`/`web_enable`/`omnify`。`omnify` 兜底调 `bash`、`powershell`、`read` 全部被拒：
+
+```
+builtin工具（sourceInfo=<builtin:bash>，由 pi 内部工厂生成、
+没有可 import 的源码）→ omnify 执行不了
+```
+
+这正是 §3.4 那条注记的实测复现（内建工具没有可 import 的源码，jiti 加载器执行不了它们）。但真正的坑在时序：**恢复 shell 的唯一动作 `/reload` 本身就需要 shell 或命令面板**。所以 §3.4「改完 `/reload` 生效」有个隐含前提——别在一个正指着 shell 干活的中途会话里改它。稳妥做法：**改 `defaultTools` 放在会话开头做，或改完立刻 `/reload` 再继续。**
+
+> 收尾：`git push` 最终由人执行。push 前用 `read` 直接读 `.git/refs/heads/master` 与 `.git/refs/remotes/origin/master`，两者同为 `16c8951`，确认是空操作——**没有 shell 也能判断有没有东西要推**。（`packed-refs` 里有条陈旧的 `8e4776b → origin/master`，loose ref 优先，不影响判定。）
+
+### 9.7 增补三扩展：联网 / 会话级撤销 / 完成通知（2026-10-06）
+
+`pi-web-access` + `@bacnh85/pi-checkpoint` + `pi-notify`，17 → **20 个在用**（18 npm + 2 git）。§3.7 / §3.8 是配置与边界，§7.4 记了 web-access 装卸两轮的理由演进，这里只留操作流水。
+
+| 步 | 动作 | 结果 |
+|---|---|---|
+| 装 | `pi install npm:pi-web-access` / `npm:@bacnh85/pi-checkpoint` / `npm:pi-notify` | **一次只能吃一条参数**（写 `pi install a b c` 报 `Unexpected argument npm:@bacnh85/pi-checkpoint`），已写进 §2.1 |
+| 配 | 新建 `~/.pi/agent/web-search.json` = `{"toolActivation":"eager"}` | 值非法扩展启动即抛，只认 `auto`/`dynamic`/`eager` |
+| 冒烟 | `pi -p` 无交互跑 | pi-notify 生效（stdout 直接打出 OSC 777 序列 `]777;notify;Pi;Ready for input`）；三个扩展均无 `extension_error` |
+| 探针 | 临时扩展打 `getAllTools()` / `getActiveTools()` | 注册表 **51** 个工具（四个 web 工具都在）；`session_start` 时全 active，`before_agent_start` 被 lazy-tools 收到 5 个。探针跑完即删 |
+| 全链路 | 让 agent `omnify` 捞 `web_search` 搜 `nodejs` | 通（provider exa），搜完再 read 一次照常 |
+| 缓存 | 见 §3.7 表 | wire 5294B、cacheRead 单调、零中途翻转 |
+| 清理 | 删仓库里的 `nul` 垃圾文件（69B） | 已删 |
+
+**未实测的**：`/undo` `/redo` 的交互式回合（非 git 仓库与 30 天剪枝路径未走）；`fetch_content` 在本机 TUN/fake-IP 下的 SSRF 表现（§3.7 留注）。
+
+---
+
+## 2026-11-05 卸载 pi-checkpoint / pi-meter / pi-notify
+
+用户反馈三者"好像没作用"，卸载。计数 12 → 9（6 npm + 3 git）。
+
+- `@bacnh85/pi-checkpoint`：会话级快照/撤销（git ref 存储）→ 文件级靠 git
+- `pi-meter`：花费账单 + 预算 + 自动降级 → provider 面板
+- `pi-notify`：完成通知（toast/OSC）→ 无
+
+无专门配置文件残留（pi-checkpoint 的 git ref 留在仓库）。README §1/§2.1/§3.8/§4/§8 同步。
