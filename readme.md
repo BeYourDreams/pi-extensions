@@ -98,8 +98,6 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 
 | 文件 | 作用 |
 |---|---|
-| `pi-lean-prompt.ts` | 裁 `payload.tools` 里 `edit`/`read` 的 description 与 schema 样板文字（**只改文字、不动字段结构**，故与 smart-edit / one-ui / undo-redo 兼容） |
-| `pi-lean-sections.ts` | 压 wire 上 system 的 `<docs>` / `<skills>` 两块（见 §6.2） |
 | `pi-pet-autostart.ts` | 让 `pi-dsh-pet` **默认常驻且整机只留一只**：TUI 会话一开就派发 `/pet`，已有宠物窗就复用不新开，跨会话/多开 pi 也只一只。不注册工具，只挂 `session_start` + `/pet-auto` 开关。配置见 §3.6 |
 | ~~`pi-no-find.ts`~~（已删，2026-11-05） | find/grep → fd/rg 改写交由 `npm:@piotr-oles/pi-reflag`；本地扩展不再维护。历史见 §7.9/§4.2 |
 
@@ -1662,7 +1660,7 @@ Search fd/rg，见 §5「全局规则」
 
 | 项 | 动作 |
 |---|---|
-| 本地扩展 | 用 `--prune` 全量重同步（3 个：`pi-lean-prompt` / `pi-lean-sections` / `pi-pet-autostart`）——仓库删掉的副本（如 2026-11-03 的 `pi-fd.ts` / `pi-bash-guard.ts`）会自动清掉，否则残留仍被加载；`--check` 把孤儿报 `[orphan]` 并 exit 1，复跑全 `[ok]` |
+| 本地扩展 | 用 `--prune` 全量重同步（1 个：`pi-pet-autostart`）——仓库删掉的副本（如 2026-11-05 的 `pi-lean-prompt.ts` / `pi-lean-sections.ts`，以及 2026-11-03 的 `pi-fd.ts` / `pi-bash-guard.ts`）会自动清掉，否则残留仍被加载；`--check` 把孤儿报 `[orphan]` 并 exit 1，复跑全 `[ok]` |
 | `extensions/pi-shell.ts` | **删**。仓库已删；留在用户目录里会 `setActiveTools` 无条件隐藏 `bash`/`powershell`，与 §3.4 直接冲突 |
 | `~/.pi/lazy-tools.json` | **删**（0.4.0 死配置，只触发迁移告警） |
 | 用户级 `defaultTools` | 补 `bash`：`["read","edit","write"]` → `["read","edit","write","bash"]`，与项目级对齐（§3.5 两处必须一致） |
