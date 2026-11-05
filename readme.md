@@ -90,6 +90,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 
 | ~~`npm:pi-smart-reader`~~ | AST 骨架视图 / 单符号抽取：`smart_read`（`skeleton` 只留签名、`symbol` 抽函数体） | **已卸载 2026-10-14**（同日装同日判断为无用，见 §3.16 / §7.23）。原记录：passive mode 是死代码；wasm 只带 TS/JS 一份语法；还要钉 `web-tree-sitter@0.24.7` 才不半残 |
 | `npm:@xynogen/pix-optimizer` | **压缩三合一**：caveman（输出，ASD-STE100 四档）+ ponytail（做法，YAGNI 三档）+ RTK（输入，bash 命令改写） | 2026-10-12 装。**取代**当天先装后卸的 `@izhimu/pi-caveman` / `pi-ponytail` / `pi-rtk`（三者功能被本包重写合并，3 → 1）。不注册任何工具；唯一入口是 `/optimizer`（**只有交互面板，无文本参数形**），状态存 `~/.pi/agent/pix.json` 的 `optimizer` 段。本机全开 **`caveman: ultra` / `rtk: on` / `ponytail: ultra`**，配置见 §3.15。RTK 首次加载时自动下 `rtk` 二进制到 `~/.pi/agent/bin`（带 checksum 校验） |
+| `npm:@piotr-oles/pi-reflag` | 透明把 bash 里的 `find`→`fd`、`grep`→`rg` 改写后执行（更快搜索，agent 行为不变） | 2026-11-05 装，取代本仓库已删的 `no-find.ts`/`pi-no-find.ts`（§7.9/§4.2）；要求 `fd`/`rg` 在 PATH |
 
 ### 1.2
 
@@ -100,7 +101,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `pi-lean-prompt.ts` | 裁 `payload.tools` 里 `edit`/`read` 的 description 与 schema 样板文字（**只改文字、不动字段结构**，故与 smart-edit / one-ui / undo-redo 兼容） |
 | `pi-lean-sections.ts` | 压 wire 上 system 的 `<docs>` / `<skills>` 两块（见 §6.2） |
 | `pi-pet-autostart.ts` | 让 `pi-dsh-pet` **默认常驻且整机只留一只**：TUI 会话一开就派发 `/pet`，已有宠物窗就复用不新开，跨会话/多开 pi 也只一只。不注册工具，只挂 `session_start` + `/pet-auto` 开关。配置见 §3.6 |
-| `pi-no-find.ts` (`no-find.ts` 同内容) | `tool_call` 钩子把 bash/powershell 里的 `find` **直接拦截**（逼用 `fd`），并拦截 pi-find 注册的 `find` 工具；`./find`、`findings.md`、管道消费位、`git grep` 等不误伤。配置 `~/.pi/agent/extensions/no-find.json`（`{"enabled":false}` 停用 / `allow` 前缀放行）。回归：`.sc-test/probe-no-find.mjs`（`node --experimental-strip-types`） |
+| ~~`pi-no-find.ts`~~（已删，2026-11-05） | find/grep → fd/rg 改写交由 `npm:@piotr-oles/pi-reflag`；本地扩展不再维护。历史见 §7.9/§4.2 |
 
 > 曾经的 `pi-plan-tools.ts`（把 lazy-tools 剥掉的 `plan_mode_*` 助手工具捞回来）**已删除**：`@narumitw/pi-plan-mode` 2026-10-13 卸载，`/plan` 在本机用不了，这个补锅扩展就没存在意义了（见 §7.21）。
 >
