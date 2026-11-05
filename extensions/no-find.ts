@@ -1,31 +1,119 @@
 /**
- * pi-find-grep-rewrite — bash 里 find/grep 自动转成 fd/rg
+ * no-find — 拦截 `find`，自动改写为 `fd` 后执行（减少模型往返请求）
  *
- * 背景：本机 find/grep 不可用（§4.2 no-find + §5 第三类），但模型仍会写 `find . -name '*.ts'`。
- * 纯文字纪律拦不住，故在 `tool_call` 上把命令改写掉：find → fd，grep/egrep/fgrep → rg。
+ * - bash/powershell 命令里出现 `find`：改写成 `fd`（find → fd、grep/egrep/fgrep → rg），
+ *   覆盖不到的参数原样保留 → 让命令自己报错，不静默猜；改写成功直接执行，不额外请求模型。
+ * - pi-find 注册的 `find` 工具：直接拦截（逼用 `fd`）。
+ * - `./find`、`findings.md`、管道消费位、`git grep` 等不误伤。
  *
- * 只改首词是这四个之一的**流水线段**（`;` `|` `&&` `||` 换行切段，引号内不切）：
- *   - `find . -name '*.ts'` → `fd -g '*.ts' .`
- *   - `find src -type d -maxdepth 2` → `fd -t d -d 2 src`
- *   - `grep -rn 'foo' .` → `rg -n 'foo' .`
- *   - `git grep foo` / `./find-helper.sh` / `findings.md` / 管道消费位 → 放行
- *
- * 翻译不了就**原样保留**（让 find 自己报错），绝不静默猜：不认的 find flag 直接放弃转译。
- *
- * 零工具注入、不动注册表、不改 active 集。回退：删本文件 + /reload。
+ * 配置：`~/.pi/agent/extensions/no-find.json`
+ *   - `{"enabled": false}` 整体停用
+ *   - `{"allow": ["find -name *.go"]}` 按「首词 + 第二个词」前缀放行个别命令（放行时不改写）
  */
-import type { BashToolCallEvent, ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import path from "node:path";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-/** 搜索命令名集合：真正要改写的那两个 GNU 名字。 */
+const CONFIG_PATH = path.join(homedir(), ".pi", "agent", "extensions", "no-find.json");
+
+const REASON = [
+	"`find` 已被全局禁用（在本机会假死：cmd/PowerShell 里命中的是 C:\\Windows\\System32\\find.exe，它会从 stdin 读；Git Bash 的 GNU find 在大目录树上极慢）。",
+	"改用 `fd`（同一底层、ignore 感知、更快）：",
+	'  - fd {pattern:"RULES", extension:"md"}        # 正则匹配整条路径 + 限定扩展名',
+	'  - fd {type:"directory", maxDepth:2}           # 只列目录、限深度',
+	'  - fd {changedWithin:"1d"}                     # 最近改过的（find 做不到）',
+	"  - bash 里直接写 fd / fdfind（等价于 find 的路径匹配，如 `fd -e ts`）",
+	"  - 找文件内容用 grep 工具，别用 find。",
+].join("\n");
+
+interface NoFindConfig {
+	enabled?: boolean;
+	allow?: string[];
+}
+
+function loadConfig(): NoFindConfig {
+	try {
+		return existsSync(CONFIG_PATH) ? (JSON.parse(readFileSync(CONFIG_PATH, "utf8")) as NoFindConfig) : {};
+	} catch {
+		return {};
+	}
+}
+
+function* commandSegments(command: string): Generator<string> {
+	const inner: string[] = [];
+	const outer = command
+		.replace(/\$\(([^()]*)\)/g, (_m, body: string) => {
+			inner.push(body);
+			return " ";
+		})
+		.replace(/`([^`]*)`/g, (_m, body: string) => {
+			inner.push(body);
+			return " ";
+		});
+	for (const body of inner) yield* commandSegments(body);
+	for (const part of outer.split(/[;\n|]|&&|\|\|/)) yield part;
+}
+
+export function detectFindCommand(command: string): string | null {
+	for (const raw of commandSegments(command)) {
+		let segment = raw.trim();
+		if (!segment) continue;
+		let guard = 0;
+		while (guard++ < 6) {
+			const before = segment;
+			segment = segment.replace(/^(&|\(|)\s*/, "");
+			segment = segment.replace(
+				/^(?:sudo|command|env|nohup|time|xargs|exec|eval|then|do|else)\b\s*(\w+=\S+\s+)*/,
+				"",
+			);
+			segment = segment.replace(/^\d*>>?\s*\S+\s*/, "");
+			if (segment === before) break;
+		}
+		segment = segment.trim();
+		if (!segment) continue;
+		const first = /^("[^"]*"|'[^']*'|\S+)/.exec(segment)?.[1]?.replace(/^["']|["']$/g, "") ?? "";
+		const base = first.split(/[\\/]/).pop() ?? "";
+		if (base !== "find" && base.toLowerCase() !== "find.exe") continue;
+		return segment.length > 120 ? `${segment.slice(0, 120)}…` : segment;
+	}
+	return null;
+}
+
+export function detectGrepCommand(command: string): string | null {
+	for (const raw of commandSegments(command)) {
+		let segment = raw.trim();
+		if (!segment) continue;
+		let guard = 0;
+		while (guard++ < 6) {
+			const before = segment;
+			segment = segment.replace(/^(&|\(|)\s*/, "");
+			segment = segment.replace(
+				/^(?:sudo|command|env|nohup|time|xargs|exec|eval|then|do|else)\b\s*(\w+=\S+\s+)*/,
+				"",
+			);
+			segment = segment.replace(/^\d*>>?\s*\S+\s*/, "");
+			if (segment === before) break;
+		}
+		segment = segment.trim();
+		if (!segment) continue;
+		const first = /^("[^"]*"|'[^']*'|\S+)/.exec(segment)?.[1]?.replace(/^["']|["']$/g, "") ?? "";
+		const base = first.split(/[\/]/).pop() ?? "";
+		if (base !== "grep" && base !== "egrep" && base !== "fgrep" && base.toLowerCase() !== "grep.exe") continue;
+		return segment.length > 120 ? `${segment.slice(0, 120)}…` : segment;
+	}
+	return null;
+}
+
+export function detectSearchCommand(command: string): string | null {
+	return detectFindCommand(command) ?? detectGrepCommand(command);
+}
+
 const SEARCH_CMDS = new Set(["find", "grep", "egrep", "fgrep"]);
-
-/** 修饰词：包在命令外面时跳过，不改变「这是 find/grep」的判定。 */
 const LEADING_NOISE = new Set([
 	"sudo", "doas", "time", "nice", "ionice", "nohup", "setsid", "stdbuf",
 	"command", "exec", "xargs", "env",
 ]);
-
-/** shell 关键字 / 括号：分号切段后仍可能残留在段首。 */
 const SHELL_KEYWORDS = new Set([
 	"if", "then", "else", "elif", "fi", "do", "done", "for", "while", "until",
 	"case", "esac", "in", "{", "}", "(", ")", "!", "function",
@@ -46,7 +134,6 @@ function isPrefixToken(t: string): boolean {
 	return false;
 }
 
-/** 段内 effective command 的下标：跳过修饰词/关键字/赋值，定位 find/grep。 */
 export function findCommandIndex(tokens: string[]): number {
 	for (let i = 0; i < tokens.length; i++) {
 		const b = baseName(tokens[i]);
@@ -56,7 +143,6 @@ export function findCommandIndex(tokens: string[]): number {
 	return -1;
 }
 
-/** 引号感知的顶层切段：返回 [段, 分隔符, 段, …]，引号内的 |;& 不切。 */
 export function splitSegments(s: string): string[] {
 	const out: string[] = [];
 	let cur = "";
@@ -74,7 +160,6 @@ export function splitSegments(s: string): string[] {
 			continue;
 		}
 		if (c === "\\" && i + 1 < s.length) {
-			// 反斜杠转义：`\;` 不是分隔符
 			cur += c + s[++i];
 			continue;
 		}
@@ -120,7 +205,6 @@ export function splitSegments(s: string): string[] {
 	return out;
 }
 
-/** 极简 shell 分词：保留引号与原始文本，不做变量展开/转义还原。 */
 export function tokenize(s: string): string[] {
 	const out: string[] = [];
 	let cur = "";
@@ -154,10 +238,6 @@ export function tokenize(s: string): string[] {
 	return out;
 }
 
-/**
- * find 参数 → fd 参数。返回 null 表示「有无法对等翻译的 flag，整条放弃」。
- * 只覆盖有把握的对等映射，其余一律拒绝，避免静默改变语义。
- */
 export function translateFindArgs(args: string[]): string[] | null {
 	const out: string[] = [];
 	const paths: string[] = [];
@@ -182,11 +262,9 @@ export function translateFindArgs(args: string[]): string[] | null {
 			if (v === undefined) return null;
 			out.push("--min-depth", v);
 		} else if (t === "-print") {
-			// fd 默认就打印
 		} else if (t === "-print0") {
 			out.push("-0");
 		} else if (t === "-exec" || t === "-execdir") {
-			// 只认「{} 在末尾或省略、以 ; 或 + 收尾」（fd -x 把匹配项附加在命令末尾）
 			const cmd: string[] = [];
 			let j = i + 1;
 			let closed = false;
@@ -205,21 +283,17 @@ export function translateFindArgs(args: string[]): string[] | null {
 		} else if (!t.startsWith("-")) {
 			paths.push(t);
 		} else {
-			return null; // 不认识的 find flag
+			return null;
 		}
 	}
 	return [...out, ...paths, ...execArgs];
 }
 
-/**
- * grep 参数 → rg 参数。
- * grep 与 rg 绝大多数选项同名；要处理的是：递归类（rg 默认递归）、正则方言差异、--include/--exclude。
- */
 export function translateGrepArgs(args: string[]): string[] {
 	const out: string[] = [];
 	for (const t of args) {
 		if (t === "-r" || t === "-R" || t === "-d" || t === "--recursive") continue;
-		if (t === "-E" || t === "-G") continue; // rg 默认扩展正则；rg -E 是 encoding，冲突
+		if (t === "-E" || t === "-G") continue;
 		if (/^-[a-zA-Z]+$/.test(t) && /[rR]/.test(t)) {
 			const chars = t.slice(1).split("").filter((c) => c !== "r" && c !== "R");
 			if (chars.length) out.push(`-${chars.join("")}`);
@@ -240,9 +314,6 @@ export function translateGrepArgs(args: string[]): string[] {
 	return out;
 }
 
-/**
- * 单个 find 段是否有显式 path 参数。
- */
 export function findHasPath(tokens: string[]): boolean {
 	let i = 1;
 	let hasPath = false;
@@ -268,12 +339,9 @@ export function findHasPath(tokens: string[]): boolean {
 	return hasPath;
 }
 
-/**
- * 单个 grep 段信息。
- */
 export function grepInfo(tokens: string[]): { recursive: boolean; hasFile: boolean } {
 	let recursive = false;
-	let patternGiven = false; // -e/-f 给了 pattern，后续非选项就是 file
+	let patternGiven = false;
 	const files: string[] = [];
 	let i = 1;
 	while (i < tokens.length) {
@@ -305,14 +373,9 @@ export function grepInfo(tokens: string[]): { recursive: boolean; hasFile: boole
 		files.push(t);
 		i++;
 	}
-	// pattern 未由 -e/-f 给出时，第一个非选项参数才是 pattern
 	return { recursive, hasFile: files.length >= (patternGiven ? 1 : 2) };
 }
 
-/**
- * 是否是「无 path 的整盘/整树扫描」命令（find 无 path，或递归 grep 无 file）。
- * 管道消费位不算。
- */
 export function isBroadScan(command: string): boolean {
 	const parts = splitSegments(command);
 	for (let i = 0; i < parts.length; i += 2) {
@@ -333,11 +396,6 @@ export function isBroadScan(command: string): boolean {
 	return false;
 }
 
-export const isBroadScanCommand = isBroadScan;
-export const isUnscopedSearch = isBroadScan;
-export const isUnscopedScan = isBroadScan;
-
-/** 单段改写：定位 find/grep（跳过修饰词/关键字）才动；翻不了就原样返回。前后空白保留。 */
 export function rewriteSegment(seg: string): string {
 	const leading = seg.match(/^\s*/)?.[0] ?? "";
 	const trailing = seg.match(/\s*$/)?.[0] ?? "";
@@ -359,26 +417,40 @@ export function rewriteSegment(seg: string): string {
 	return body === null ? seg : leading + body + trailing;
 }
 
-/** 整条 command：逐段改写，分隔符原样保留；管道消费位不转。 */
 export function rewriteCommand(command: string): string {
 	const parts = splitSegments(command);
 	for (let i = 0; i < parts.length; i += 2) {
-		if (parts[i - 1] === "|" || parts[i - 1] === "|&") continue; // 管道消费位
+		if (parts[i - 1] === "|" || parts[i - 1] === "|&") continue;
 		parts[i] = rewriteSegment(parts[i]);
 	}
 	return parts.join("");
 }
 
-export default function (pi: ExtensionAPI): void {
+export default function noFind(pi: ExtensionAPI): void {
+	const config = loadConfig();
+	if (config.enabled === false) return;
+
+	const allowed = (config.allow ?? []).map((rule) => rule.trim()).filter(Boolean);
+	const isAllowed = (segment: string): boolean => {
+		const key = segment.split(/\s+/).slice(0, 2).join(" ").replace(/^["']|["']$/g, "");
+		return allowed.some((rule) => key === rule || key.startsWith(`${rule} `));
+	};
+
 	pi.on("tool_call", (event) => {
-		if (event.toolName !== "bash") return;
-		const e = event as BashToolCallEvent;
-		const command = e.input?.command;
-		if (typeof command !== "string" || !command) return;
-		if (isBroadScan(command)) {
-			return { block: true, reason: "find/grep 无 path 参数会整树/整盘扫描，请显式给出 path/glob 范围" };
+		if (event.toolName === "find") {
+			return { block: true, reason: REASON };
 		}
+		if (event.toolName !== "bash" && event.toolName !== "powershell") return;
+		const command = String((event.input as { command?: unknown }).command ?? "");
+		if (!command) return;
+		const hit = detectSearchCommand(command);
+		if (hit && isAllowed(hit)) return;
+		if (!hit) return;
 		const next = rewriteCommand(command);
-		if (next !== command) e.input.command = next;
+		if (next !== command) {
+			(event.input as { command: string }).command = next;
+			return;
+		}
+		return { block: true, reason: `${REASON}\n\n被拦的命令：${hit}` };
 	});
 }

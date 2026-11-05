@@ -100,7 +100,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `pi-lean-prompt.ts` | 裁 `payload.tools` 里 `edit`/`read` 的 description 与 schema 样板文字（**只改文字、不动字段结构**，故与 smart-edit / one-ui / undo-redo 兼容） |
 | `pi-lean-sections.ts` | 压 wire 上 system 的 `<docs>` / `<skills>` 两块（见 §6.2） |
 | `pi-pet-autostart.ts` | 让 `pi-dsh-pet` **默认常驻且整机只留一只**：TUI 会话一开就派发 `/pet`，已有宠物窗就复用不新开，跨会话/多开 pi 也只一只。不注册工具，只挂 `session_start` + `/pet-auto` 开关。配置见 §3.6 |
-| `pi-find-grep-rewrite.ts` | `tool_call` 钩子把 bash 命令里的 `find`/`grep` **自动改写成 `fd`/`rg`**（覆盖不到的参数原样保留让 find/grep 报错，不静默猜）。只认流水线首段首词，引号感知；不注册工具、不切 active 集。回归：`.sc-test/probe-find-grep-rewrite.mjs`（`node --experimental-strip-types`） |
+| `pi-no-find.ts` (`no-find.ts` 同内容) | `tool_call` 钩子把 bash/powershell 里的 `find` **直接拦截**（逼用 `fd`），并拦截 pi-find 注册的 `find` 工具；`./find`、`findings.md`、管道消费位、`git grep` 等不误伤。配置 `~/.pi/agent/extensions/no-find.json`（`{"enabled":false}` 停用 / `allow` 前缀放行）。回归：`.sc-test/probe-no-find.mjs`（`node --experimental-strip-types`） |
 
 > 曾经的 `pi-plan-tools.ts`（把 lazy-tools 剥掉的 `plan_mode_*` 助手工具捞回来）**已删除**：`@narumitw/pi-plan-mode` 2026-10-13 卸载，`/plan` 在本机用不了，这个补锅扩展就没存在意义了（见 §7.21）。
 >
@@ -750,7 +750,7 @@ pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传
 编辑器（`vim` `nano` `emacs`…）、分页器/监视器（`less` `top` `watch` `tail -f` `journalctl -f`…）、交互客户端（`ssh` `mysql` `psql` `sqlite3`…）、光杆 REPL（`python` / `node` 不带参数）、前台服务（`npm run dev|start|serve|preview`、`python -m http.server`、不带 `-d`/`--rm` 的 `docker run`）。
 替代写法：把有产出的部分放前台跑（先 build/test，再查结果）；真需要常驻进程就显式 `… &` 起来、之后用另一条命令轮询。
 
-**第三类：`find`/`grep` 当搜索生产者 → 自动改写成 `fd`/`rg`（`extensions/pi-find-grep-rewrite.ts`，2026-11-04）**。
+**第三类：`find`/`grep` 当搜索生产者 → 自动改写成 `fd`/`rg`（`extensions/no-find.ts`，2026-11-04）**。
 纯文字纪律（`promptGuidelines` + AGENTS.md）实测拦不住：模型照样写 `find . -name x`。
 
 以前是 block（`LEGACY_SEARCH_BINARIES`，2026-11-01 恢复，2026-11-03 取消），现在是**转译而不是拒答**：`tool_call` 钩子改 `input.command`，find 能翻译的参数映射到 fd，翻不了的**整条原样保留**（让 find 自己报错，不静默猜）。
@@ -765,7 +765,7 @@ pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传
 | 出口 | 翻译不了的 find flag 原样保留（不再 block），要 GNU 独占 flag 就自己用 `/usr/bin/find` |
 | 拦截 | 无 path 的 `find`，或递归 `grep` 无 file → block（避免整盘/整树扫描）；切段额外处理 `&` / `\|&` |
 
-回归：`.sc-test/probe-find-grep-rewrite.mjs`（`node --experimental-strip-types`，25 例 + 7 条 broad-scan）。回退：删 `extensions/pi-find-grep-rewrite.ts` + 删 `~/.pi/agent/extensions/` 同名副本 + `/reload`。
+回归：`.sc-test/probe-no-find.mjs`（`node --experimental-strip-types`，25 例 + 7 条 broad-scan）。回退：删 `extensions/no-find.ts` + 删 `~/.pi/agent/extensions/` 同名副本 + `/reload`。
 
 > 旧版的**量级证据仍然成立**（AppData/Local 194,968 文件、系统盘 345,409 文件 / fd 16.2s、
 > `find ~ -maxdepth 6` 60s 跑不完；fd 的 `.gitignore` 规则在非仓库目录同样失效），只是**执法点从
@@ -808,7 +808,7 @@ pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传
 |---|---|
 | Think: minimal sufficient reasoning… | 交给模型自己；pix-optimizer 的 caveman 管输出形状（§3.15） |
 | Read files: no full reads by default… | 交给模型自己；常驻工具只留 `read edit write bash`（§3.4），长文件整读的代价由上下文窗口自己反馈 |
-| Search: 优先 fd/rg | 已经**机器强制**：`extensions/pi-find-grep-rewrite.ts` 在 `tool_call` 上把 `find`/`grep` 转成 `fd`/`rg`（§5），比求模型有效 |
+| Search: 优先 fd/rg | 已经**机器强制**：`extensions/no-find.ts` 在 `tool_call` 上把 `find`/`grep` 转成 `fd`/`rg`（§5），比求模型有效 |
 
 - **canonical 是本仓库 `config/agent/AGENTS.md`，内容 0B**：`node install-project-config.mjs` 仍会把它拷进 `~/.pi/agent/AGENTS.md`，`--check` 比对 0B ↔ 0B。想重新加规则就写这个文件，别手改盘上那份。
 - 它进的是**每轮 system 前缀**，所以**空文件本身就是收益**：system 少一段 = 每轮省 token，且少一个会漂的前缀源（原理同 §2.2 / §7.17）。
@@ -1454,7 +1454,7 @@ Other errors:
 
 **还有一层**：`DEFAULTS` 在 `index.ts` 里硬编码（`readLimit: 120` / `rgHeadLimit: 60` / 三个开关），`settings.json` 没有覆盖入口（装完不 merge 配置），想调只能改 `node_modules`，`pi update` 一升就冲掉。
 
-**卸载代价（明说）**：① 重复读同一段不再有 stub 兜底——长会话里手滑重读会白付一次全文件 token；② 大 `rg` 输出不再被自动砍——**这条本身是好事**，但意味着 `rg` 必须自己带 path/glob 收窄（`pi-find-grep-rewrite` 已在 `tool_call` 上拦「无 path 的 find/递归 grep」，见该扩展头注释），输出自己配 `| head`。
+**卸载代价（明说）**：① 重复读同一段不再有 stub 兜底——长会话里手滑重读会白付一次全文件 token；② 大 `rg` 输出不再被自动砍——**这条本身是好事**，但意味着 `rg` 必须自己带 path/glob 收窄（`no-find` 已在 `tool_call` 上拦「无 path 的 find/递归 grep」，见该扩展头注释），输出自己配 `| head`。
 
 `pi list` 26 项（23 npm + 3 git）。§1 表、§1 changelog、§2.1 循环与计数、§4 工具表、§9 计数同步。
 
@@ -1511,11 +1511,11 @@ Other errors:
 | 方案 | 成本 | 结论 |
 |---|---|---|
 | `shellCommandPrefix` + `source bash-prelude.sh` | **每条** bash 命令多一次 `source`（fork 不省，但每条都有固定开销）+ 一个新维护点 | 不选 |
-| 本地扩展挂 `tool_call` 改写 `cd /d` → `cd` | 比 `pi-find-grep-rewrite.ts` 多一个文件、多一份回归用例 | **不选**（收益比太低：只在人自己写错时省掉一次报错） |
+| 本地扩展挂 `tool_call` 改写 `cd /d` → `cd` | 比 `no-find.ts` 多一个文件、多一份回归用例 | **不选**（收益比太低：只在人自己写错时省掉一次报错） |
 | **纪律：不写 `/d`** | 0 | ✅ 选这个 |
 
 - 生效方式是**模型自己看报错改正**，不设提示词层：`AGENTS.md` 0B 且定案不恢复（§5），这条纪律只活在本 readme 里。实测一次报错就够：`bash: cd: too many arguments` 指向明确，下一轮自动写成 `cd D:/x`。
-- 同一件事的**机器可判形态**已经在跑：`pi-find-grep-rewrite.ts` 只转译「`find`/`grep` 当搜索生产者」这种**有确定等价物**的命令；`cd /d` 没有等价物（要么丢掉 `/d`，要么当路径），猜错比报错贵——所以它是**故意不转的**。
+- 同一件事的**机器可判形态**已经在跑：`no-find.ts` 只转译「`find`/`grep` 当搜索生产者」这种**有确定等价物**的命令；`cd /d` 没有等价物（要么丢掉 `/d`，要么当路径），猜错比报错贵——所以它是**故意不转的**。
 - 想加回来（不推荐）：`git show e9c4132^:config/agent/bash-prelude.sh > config/agent/bash-prelude.sh` + `node install-project-config.mjs` + `settings.json` 写 `"shellCommandPrefix": "source ~/.pi/agent/bash-prelude.sh"`。
 
 ### 7.32 六连卸：按工具清单卸载（2026-11-04 晚，17 → 11）
@@ -1537,7 +1537,7 @@ Other errors:
 
 **验证**：`pi list` = 11 条（8 npm + 3 git），与 `settings.json` 的 `packages` 逐条一致；`settings.json` JSON 合法。
 
-**不受影响**：`extensions/pi-find-grep-rewrite.ts`（把 **bash 命令**里的 `find`/`grep` 改写成 `fd`/`rg`）与 `pi-find` 包无关，仍生效。
+**不受影响**：`extensions/no-find.ts`（把 **bash 命令**里的 `find`/`grep` 改写成 `fd`/`rg`）与 `pi-find` 包无关，仍生效。
 
 ## 8. 体检与排障
 
