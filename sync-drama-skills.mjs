@@ -26,17 +26,7 @@ import os from "node:os";
 const PROJECT_SKILLS = path.join(import.meta.dirname, "skills");
 const GLOBAL_SKILLS = path.join(os.homedir(), ".pi", "agent", "skills");
 // 与全局安装存在双源、由本脚本守护的技能（drama 线全部九件）：
-const CUSTOM = [
-  "short-drama",
-  "short-drama-assets",
-  "short-drama-develop",
-  "short-drama-edit",
-  "short-drama-image-prompts",
-  "short-drama-novel-analyze",
-  "short-drama-pro",
-  "short-drama-produce",
-  "short-drama-review",
-];
+const CUSTOM = []; // 当前短剧技能已移除，改用 400-duanju-shuangdian + short-drama-factory
 // 已卸载（内容并入 short-drama-pro）：安装器若把它们装回来，install 会删掉；
 // 这里额外守一道，防止它们被误装成第十、十一件。
 const RETIRED = [
