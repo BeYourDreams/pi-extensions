@@ -842,3 +842,442 @@ builtin工具（sourceInfo=<builtin:bash>，由 pi 内部工厂生成、
 - `pi-notify`：完成通知（toast/OSC）→ 无
 
 无专门配置文件残留（pi-checkpoint 的 git ref 留在仓库）。README §1/§2.1/§3.8/§4/§8 同步。
+
+## 10. 已失效的必做配置（原 README §3，2026-11-07 迁入）
+
+下列小节在 README 里已无对象（包已卸 / 键已删），移到这里留档。README §3 只保留**当前还需要配的**。包装回来时照此照做，§x.y 编号沿用原 README 编号以便对账。
+
+#### 3.1 ~~批准 install 脚本~~（**2026-11-04 起无对象**：`allowScripts` 里那两条的宿主 `@injaneity/pi-computer-use` 与 `@chendpoc/pi-memory` 随九连卸下线，`~/.pi/agent/npm/package.json` 已无 `allowScripts` 键。以下为历史留档，两者装回来时照做）
+
+```bash
+cd ~/.pi/agent/npm          # 必须在含 package.json 的目录里跑
+npm install-scripts approve @injaneity/pi-computer-use better-sqlite3
+npm rebuild better-sqlite3  # 批完必须重编，批准本身不建原生 binding
+```
+
+当下 `~/.pi/agent/npm/package.json` 的 `allowScripts`：
+
+```json
+{
+  "@injaneity/pi-computer-use@0.5.1": true,
+  "better-sqlite3@12.11.1": true
+}
+```
+
+- **`better-sqlite3` 是 `@chendpoc/pi-memory` 带来的**（`dependencies: {"better-sqlite3": "^12.10.0"}` → 树内 **12.11.1**；`@injaneity/pi-computer-use` 现在**不**依赖它，它的 postinstall 只是 `scripts/setup-helper.mjs` 装原生辅助程序）。用途是 pi-memory 的向量索引：`dist/sidecar/server/vec/store.js:11` 的 `require("better-sqlite3")`。
+- ⚠️ **版本号会随依赖重解析漂移**（本机就踩过：`allowScripts` 里写的是 `better-sqlite3@13.0.3`，树里实际是 12.11.1 → npm 视为「未覆盖」→ binding 不建 → 加载 pi-memory 报 `Could not locate the bindings file. Tried:`）。所以：
+  1. 批准时**写不带版本号的包名**，让 npm 自己把树内版本写进 `allowScripts`（输出会打 `removed-stale ...@13.0.3` / `added ...@12.11.1`）；
+  2. 安装/卸载**任何一个**扩展后（npm 会重解析整棵树）都复验一次：`node -e "console.log(require('better-sqlite3')(':memory:').prepare('select 1 as x').get())"` 应打印 `{ x: 1 }`；报 `Could not locate the bindings file` 就重跑上面两条。
+  3. 重编需要 MSVC：本机 `cl.exe` 不在 PATH，但 `C:\Program Files (x86)\Microsoft Visual Studio\2022` 在位，node-gyp 经 vswhere 能找到 → `rebuilt dependencies successfully`。
+- `~/.pi/agent/npm/package-lock.json` 会被 npm 重写（本机 68KB → 222KB，npm 12 的 v3 格式更啰嗦），**属正常，不必回滚**。
+- **`@chendpoc/pi-memory@0.3.2` 的 postinstall 是有意不批的**（`npm install-scripts ls` 会一直报它 `blocked`）：该脚本只跑 `pi-memory init` + `scheduler sync`，**best-effort、不是加载必需**（实测不批照样加载，`~/.pi/pi-memory-data/` 下有 `MEMORY.md` + `logs`；该目录已于 2026-11-04 随包卸载清理，§7.29），符合「只批必需」的纪律。要批就 `npm install-scripts approve @chendpoc/pi-memory`（会写 `~/.pi/pi-memory-data` 与调度任务，自行取舍）。
+- 其余包实测均无 install 脚本。
+
+#### 3.2 ~~smart-context~~（已卸载 2026-10-02，配置一并作废）
+
+原配置位置 `~/.pi/agent/config/smart-context-ext-config.json` 已删（包没了，文件是死配置；重装同版本会自动重建）。当时值留档：
+
+```json
+{ "enabled": true, "compactModel": { "type": "ref", "ref": "" }, "reminderThresholds": [60000, 75000, 90000], "excludedModels": [] }
+```
+
+**卸载理由**（实测，不是猜）：
+
+| 事实 | 证据 |
+|---|---|
+| 阈值提醒确实触发过 | `~/.pi/agent/sessions/--D--AI-pi-dsh-pet--/2026-10-02T12-29-47-157Z_*.jsonl` 两条 `smart-context:fired`：`{"tiers":[60000,75000],"tokens":89456}`、`{"tiers":[90000],"tokens":91855}`，各跟一条 `custom_message` 提醒（89.5K/128K 69.9%、91.9K/128K 71.8%） |
+| `compact_context` 一次没被调 | 全 `sessions/` grep `toolName/name = compact_context`，0 命中（唯一匹配是 system prompt 的工具清单） |
+| 所以净收益 = 0 | 多两个包（5 个依赖）+ 一份配置 + 一次提醒往返，换来 0 次压缩 |
+
+**根因**（三条，叠加后基本不可能触发）：
+
+1. 提醒**是数据不是指令**。文案原文：「达阶段边界……时才调用 `compact_context`；**否则忽略本提示继续工作**」。「阶段边界」这个条件模型几乎永不判定成立，于是永远忽略。
+2. `compactModel.ref` 是空串 → `pickMode` 只能走 same-model，拿不到 cross-model 的廉价模型收益。
+3. 阈值 60K/75K/90K 对 128K 窗 = 47%/59%/70%，**比内建 auto 压缩的触发点还晚**，插件还没等到动手，内建 `/compact` 已经压完了。
+
+**留个教训**：阈值类扩展的价值全在「agent 真的执行」上。提醒送到 ≠ 模型动手。要这类功能，先 grep session 确认 toolCall 真发生过，再决定留不留。
+
+> §2.2 原本那条「compaction-cache 必须在 smart-context 之后」的硬顺序随之作废；2026-10-09 后压缩侧只剩 prefix-stabilizer → cache-compact 一条（§7.13）。
+
+#### 3.3 ~~pi-cache-compact~~（**已卸载 2026-11-04，见 §7.29**；`~/.pi/agent/cache-compact.json` 已随卸删除。压缩回到 Pi 内置默认路径，本机默认压缩必 `cacheRead: 0`（§7.13 取证），即重装意义不大。以下为历史留档）
+
+**本机生产配置（2026-10-09 定稿）**：`~/.pi/agent/cache-compact.json` = `{"models": ["1/1"]}`
+
+```json
+{ "models": ["1/1"] }
+```
+
+- 写白名单而不是不写文件，是为了让**「只对当前 provider/model 生效」这件事显式可见**（本机只有一个 provider「1」、模型 `1`，`1/1` 即命中），避免以后换 provider 后默默全量生效。
+- ⚠️ **千万别开 `debug`/`debugPayloads`**：`cache-compact-debug.jsonl` 会 dump 全量 payload（**含完整对话内容**），本机已开过又删（1.1MB）。取证写法见下方「临时取证」，**测完即删**：
+
+```json
+{ "debug": true, "debugFile": "C:/Users/yinxuehao/.pi/agent/cache-compact-debug.jsonl" }
+```
+
+- **机制**：拦截 `session_before_compact`，把摘要请求拼成活会话的**严格续写**（同 system prompt + tools + 全部 messages + 追加一问 "The messages above are a conversation to summarize. Create a structured context checkpoint summary…"），因此任意支持前缀缓存的服务端都能命中。**手动 `/compact` 与自动压缩同钩子，都走这条路径。**
+- **fail-safe 是它最大的优点**：摘要为空 / 被 `length` 截断 / 夹带工具调用 → 返回 nothing，回落 Pi 默认压缩，绝不给出坏摘要。
+- 常用选项：`models`（限定 provider/model，默认全放行）、`continuation: true`（前向续写；append-only 缓存会把短前缀当全量重预填，故别关）、`deferAfterCacheMiss: true`（冷 miss 后 15 分钟内把压缩让回 Pi，不烧第二次冷 prefill）、`summaryMaxTokens`（默认取 Pi 自身上限）、`debugPayloads`（dump 全量 payload，**含完整对话，测完即关**）。
+- **取证读法**：debug JSONL 里 `"summary": true` 的 `provider_request` / `provider_response` 是扩展的续写请求；命中数看 `summary_result` / `wrote cache-friendly summary` 记录的 `cacheRead`；摘要不可用时终端直接打 `[cache-compact] summary rejected … usage:{…}`。
+- ⚠️ **热前缀才可能命中**：上游（mimo 免费端点）缓存几分钟就过期，隔夜压缩必 `cacheRead: 0`（此时 `deferAfterCacheMiss` 自动让位，属正常）。
+- ~~原 `pi-compaction-cache` 的必做配置（已随卸载删除，留档）~~：`~/.pi/agent/compaction-cache.json` = `{"models": ["1", "1/1"], "scope": "boundary", "logPath": "C:/Users/yinxuehao/.pi/agent/logs/compaction-cache.log", "debug": false}`，配 `/compaction-cache-status` 与该日志。**勿再写回**（§7.13）。
+
+#### 3.12 ~~`pi-caveman`~~（**已卸载 2026-10-12**，能力并入 `pix-optimizer`，见 §3.15）
+
+原输出压缩层，三模式 `caveman` / `ultracave` / `megacave`。两个落盘点 `%APPDATA%\caveman\config.json` 与会话 flag `~/.pi/.caveman-active` **已随卸载删除**。等级语义也在新包里换了名字：现在是 `lite|full|ultra|micro`，不再有 `caveman|ultracave|megacave`。
+
+#### 3.13 ~~`pi-ponytail`~~（**已卸载 2026-10-12**，能力并入 `pix-optimizer`，见 §3.15）
+
+原懒扩展打法层，自带 5 个 skill（`ponytail` / `-review` / `-audit` / `-debt` / `-help`）。落盘点 `~/.config/ponytail/config.json` **已删**。新包同名档位 `lite|full|ultra`，但**不再有 skill**，规则是 system prompt 片段。
+
+#### 3.14 ~~`pi-rtk`~~（**已卸载 2026-10-12**，能力并入 `pix-optimizer`，见 §3.15）
+
+**两者机制不同，别照搬旧结论**：本包是纯 JS 的「拦 `tool_result` 过滤内容」实现（`~/.pi/agent/rtk-config.json` + `rtk_configure` 工具 + `/rtk-*` 一堆命令），**不依赖 `rtk` 二进制**；`pix-optimizer` 的 RTK 是「注入 prompt + 改写 bash 命令加 `rtk` 前缀」，**用官方 Rust 二进制**。所以「源码去注释导致 `edit` 报 old text 不匹配」「`/rtk-what` 看开关」「`rtk_configure` 应急」那一整套连同它的问题**全部随卸载消失**。仓库 `config/agent/rtk-config.json`（已 `git rm`）与 `~/.pi/agent/rtk-config.json` 均已删（§2.4 纪律）。
+
+#### 3.7 ~~`pi-web-access`~~（**已卸载 2026-11-04，见 §7.29**；`~/.pi/agent/web-search.json` 已随卸删除。重装时第一件事必须写回 `toolActivation: "eager"`，否则 `web_enable` 中途掀前缀缓存。以下为历史留档）
+
+```json
+{ "toolActivation": "eager" }
+```
+
+**只有一个键，但少写就退化成 §7.4 那个坑。** 取值只有三种（写错值扩展启动即抛）：
+
+| 值 | 行为 | 本机为什么用 |
+|---|---|---|
+| `eager`（本机） | 四工具从会话第一轮就 active，全程**没有** `web_enable` 加载器，也就不会中途改 active 集 | ✅ |
+| `auto`（默认） | 看模型：模型没有「会话中途加工具免重算」的 compat 标记 → 走 eager 分支 | 行为随模型/provider 变，不确定 |
+| `dynamic` | 永远先给一个 `web_enable` 加载器，模型调它才 `setActiveTools` | ❌ 就是 §7.4 卸掉它的原因 |
+
+**别担心「eager = 每轮多背 11KB」** —— 本机 lazy-tools 会接手（2026-10-06 探针实测）：
+
+| 时点 | active 工具集 |
+|---|---|
+| `session_start` | 51 个注册工具**全部**在列，含 `web_search` `source_check` `fetch_content` `get_search_content` |
+| `before_agent_start`（lazy-tools 跑完） | `read,edit,write,bash,omnify` |
+
+即：eager 保证了**不会出现 `web_enable`**（前缀掀不掀）；lazy-tools 保证它们**不上 wire**（§6.3 的瘦身取向不受影响）；要用时 `omnify` 按名捞回来代理执行。**实测全链路通**：新会话里 `omnify` 搜到 `web_search` 并执行，查 `pi.dev` 返回标题 `Pi.dev`。
+
+**缓存实测（2026-10-06，eager 启用后）**：
+
+| 指标 | 结果 |
+|---|---|
+| wire 体积（`before_provider_request` 实测） | system 2804B + tools 2490B = **5294B**，tools 只有 `read,edit,write,bash,omnify`，**四个 web 工具一个都不在 wire 上** |
+| 中途 active 集变化（transcript `toolsAdded`） | 全会话**仅 1 条**（session_start 那次），用完 `web_search` 之后**没有第二条** |
+| cacheRead 序列（read → omnify 搜 nodejs → read，4 个请求） | 143 → 2679 → 2953 → 3640，**单调上升，无塌方**（对比 §7.4 旧版：86016 → 1152） |
+
+结论：eager 模式下缓存**没有**问题——掀缓存需要「会话中途换工具集」，而 eager + lazy-tools 的组合里根本不存在这个动作。
+
+搜索源共 26 个（brave / tavily / exa / kimi / firecrawl / … / duckduckgo），**duckduckgo 无需 key**，其余在同一个 `web-search.json` 里填 key。命令：`/websearch` 走 provider 选择面板、`/search` 直搜、`/curator` 批量检索、`/google-account` 管 Google 登录态。
+
+> ⚠️ **SSRF 与本机 TUN/fake-IP 代理的旧账**（2026-09-30 实测）：fake-IP 把 `github.com` 解析成 `127.0.0.1`，`fetch_content` 直接报 `Blocked internal address for github.com: 127.0.0.1`。要抓这类站需在配置里放 `ssrf.allowRanges`。本机复装后**未复测出网**（只验证了加载不报错）。
+
+#### 3.8 ~~`pi-checkpoint`~~（**2026-11-05 卸载**，会话级 `/undo` 不再可用；文件级靠 git）
+
+
+| 边界 | 后果 | 对策 |
+|---|---|---|
+| 快照在内存，非 git 里的栈 | 重启 pi 后 `/checkpoint` 栈空（git ref 还在） | 同一 sessionId 恢复会话时编号从最高 ref 续，不会覆盖旧点 |
+| `/undo` 走 `git checkout <ref> -- .` | **只还原已跟踪文件**；该轮新增的未跟踪文件会留在原地，该轮新 `git add` 进索引的文件也留在原地 | undo 后自己扫一眼 `git status` |
+| ref 按 commit date 剪 | 超过 **30 天**的快照被永久删 | 跨月的事别指望 `/undo` |
+
+非 git 仓库里三个命令静默 no-op + 一条通知。另外它会写 `refs/pi-checkpoints/*`，不碰你的分支、tag、stash —— `git for-each-ref refs/pi-checkpoints` 可见。
+
+#### 3.9 ~~`bash-prelude.sh`~~（**已作废**：脚本随 `e9c4132` 于 2026-11-03 `git rm`，`shellCommandPrefix` 本机从未写过；2026-11-04 确认「用不到」后定为**不恢复**。以下为历史留档，勿再照着补）
+
+`~/.pi/agent/settings.json` 里：
+
+```json
+"shellCommandPrefix": "source ~/.pi/agent/bash-prelude.sh"
+```
+
+~~`~/.pi/agent/bash-prelude.sh`（canonical 在仓库 `config/agent/bash-prelude.sh`，393B）~~ —— **该文件已随 `e9c4132` 从仓库删除、本机也不存在**；下面只是原文留档，不再拷入：
+
+```bash
+# pi 的 Bash 工具用 `bash -c` 跑，不加载任何交互式启动文件；cmd.exe 习惯写的
+# `cd /d D:/path` 到 bash 里是「内建 cd 收到两个参数」→ bash: cd: too many arguments。
+# MSYS/MINGW64 下那个 /d 是 drive-D 挂载点而非 /d 开关，所以丢掉它永远是对的意图。
+cd() {
+	if [ "$#" -gt 1 ] && [ "$1" = "/d" ]; then
+		shift
+	fi
+	builtin cd "$@"
+}
+```
+
+- 只处理**独立**的 `/d` token：`cd /d/AI`（真路径）原样不动。
+- **双向兼容 cmd 习惯**：既让 `cd /d D:/path` 能用，也不碰 bash 自己的 `cd` 语义（`builtin cd` 转发）。
+- ~~**别删**~~ —— **已删且不恢复**。现状：bash 里写 `cd /d D:/x` 报 `bash: cd: too many arguments`，**改用 `cd D:/x` 或 `cd /d/AI/...`**（正斜杠路径一直正常）。原文「必须跟本机 bash-guard 扩展的路径约定配套」的前提也已消失——bash-guard 2026-11-03 一并卸了。
+- 写新前缀时的纪律：**保持快、无交互、不输出**（它在**每一条**命令前执行；`cd` 别加 echo）。
+
+#### 3.10 关闭内建 MCP：`"extensions": ["-builtin:mcp"]`（**2026-11-04 晚已作废**）
+
+- 历史做法：`"extensions": ["-builtin:mcp"]` 关掉内建 `mcp` 工具，让 `pi-mcp-adapter` 独占 MCP 生命周期。
+- **2026-11-04 晚 `pi-mcp-adapter` 已卸（见 §7.32）**，本机不再有任何 MCP 工具，这条禁用也就没有对象了：`settings.json` 已**删除** `extensions` 键（清空后整个键移除）。
+- 如果将来重装某个 MCP 适配器，再按原样写回这条；单纯用内建 `mcp` 就不需要它。
+- 留档：`~/.pi/agent/mcp-onboarding.json`（内建 MCP 引导向导的完成标记）仍在盘上，**勿手改**，由向导自己维护。
+
+#### 3.16 ~~`pi-smart-reader`~~（**已卸载 2026-10-14**；下面的钉版配置一并作废）
+
+**卸载理由**：唯一能用的 `smart_read` 只支持 TS/JS（只带一份 `tree-sitter-typescript.wasm`），而本机长文任务以 md/配置为主——大 md 走 `md_inspect` + 段落 `read`，源码用 `rg` 定位后按需读，`smart_read` 覆盖不到；passive mode 又是死代码（§7.23）。**留着只是每次安装都要维护 `web-tree-sitter` 钉版**（2026-10-13 → 2026-10-14 共 1 天，净亏）。若日后 TS 大文件确实读不动再装回来，配 `web-tree-sitter@0.24.7` 钉版。
+
+~~`pi-smart-reader` 声明的依赖是 `"web-tree-sitter": "latest"`。0.25 起上游改成**只有具名导出**
+
+```
+[pi-smart-reader] Initialization failed: TypeError: _webTreeSitter.default.init is not a function
+[pi-smart-reader] Failed to initialize parser. Passive mode disabled.
+```
+
+**0.24.7 是最后一个有默认导出的版本**，且实测能吃下它自带的 `wasm/tree-sitter-typescript.wasm`（0.25+ 的 API 能吃、0.24.7 也能吃，grammar ABI 没问题）。修法写进 `~/.pi/agent/npm/package.json` 的 `overrides`（这样 `pi update --extensions` 也带着）：
+
+```json
+"overrides": {
+  "pi-smart-reader":   { "web-tree-sitter": "0.24.7" },
+  "pi-impact-analyzer": { "web-tree-sitter": "0.24.7" }
+}
+```
+
+生效要三步，**少一步都是 "invalid" 空转**（npm 对已存在的 override 目标不会自己重新解析）：
+
+```bash
+cd ~/.pi/agent/npm
+# ① 剪掉 lockfile 里这两个条目，否则 npm 报 "up to date"
+node -e "const fs=require('fs'),f='./package-lock.json',l=JSON.parse(fs.readFileSync(f,'utf8'));
+for(const k of Object.keys(l.packages)) if(/web-tree-sitter\$/.test(k)) delete l.packages[k];
+fs.writeFileSync(f,JSON.stringify(l,null,2))"
+# ② 删掉盘上的旧副本
+rm -rf node_modules/web-tree-sitter node_modules/pi-smart-reader/node_modules/web-tree-sitter node_modules/pi-impact-analyzer/node_modules/web-tree-sitter
+# ③ 重装（这棵树必须 --legacy-peer-deps，理由同 §7.11）
+npm install --legacy-peer-deps
+npm ls web-tree-sitter   # 应为 0.24.7 deduped，无 invalid
+```
+
+验收：`pi --no-session -p "reply with: ok"` 输出里**没有** `[pi-smart-reader] Initialization failed`；再让agent 跑一次 `smart_read`（`mode: skeleton`）能返回签名。
+
+> **钉了也不等于它有用**：passive mode 在本机是死代码，详见 §7.23。装它的唯一收益是 `smart_read` 这个工具。
+## 11. 已删除的本地扩展与全局封锁（原 README §4.1 / §4.2，2026-11-07 迁入）
+
+`extensions/pi-fd.ts` 与四层 `find` 封锁均已不存在；下面只在想重建 `fd` 工具或重新封锁 `find` 时参考。
+
+#### 4.1 `find` → `fd`（本仓库 `extensions/pi-fd.ts`）
+
+`@tian.zuo/pi-find` 的 `find` **底层本来就是 fd**（`lib/tools.ts` 里 exec `fd`），但只开了 glob 模式的一层薄壳：`pattern` + `path` 两个参数。于是这些都做不到，而它们在 fd 里都是一行参数：
+
+| 需求 | `find`（旧） | `fd`（现） |
+|---|---|---|
+| 列出全部 `.ts` | 必须编个 glob | `{type:"file", extension:"ts"}`（**pattern 可省略**） |
+| 最近改过的 | 做不到 | `{changedWithin:"1d"}` |
+| 区分文件/目录/可执行文件 | 做不到 | `{type:"directory"}` 等 |
+| 正则匹配路径 | 做不到（只有 glob） | pattern 即正则，且 smart case |
+| 限深度 | 做不到 | `{maxDepth:2}` |
+
+**接线**：`fd` 不写进 `defaultTools`（与 `grep` 一样走懒加载，需要时 `omnify` 一步激活）；项目级与用户级两处都只保留内建默认 4 个。~~`pi-find` 仍在装（提供 `grep`），它的 `find` 作为 `fd` 的 glob 版兜底~~ —— **2026-11-04 晚 `pi-find` 已卸（§7.32）**，`grep`/`find` 回到内建，`fd` 只与本机扩展共存。
+
+**超时参数（2026-10-09 加，§5 铁律二）**：`fd` 多一个 `timeoutMs`，默认 30s、硬上限 120s（`resolveTimeoutMs()` 夹取，非法值回落默认）；schema 的 `minimum`/`maximum`、参数描述、`promptGuidelines` 三处都写了「必须显式传」。超时按部分结果处理（kill + 附 `[Search timed out …]` 提示），不静默截断。上游 pi-find 的 `find`/`grep` 是写死 30s，所以三家口径一致。
+
+**常驻 vs 懒加载的代价（实测）**：`fd` 若常驻，单它就 1280B + system 多一行简介与 guideline；若懒加载，0 upfront。**本机选懒加载**（`fd` 与 `grep` 都不在名单里），见 §3.4 / §6.3。
+
+**fd 的两个反直觉点（已踩，代码里有注释）**：
+
+1. **省略 pattern 时必须显式传空串**。否则唯一的 position 会被 fd 当成 pattern（`fd -t d .git` 返回空，`fd -t d "" .git` 才出结果）——「列出全部」是这个工具的主卖点。
+2. **`--glob` 是「把 pattern 换成 glob」，不是额外过滤器**。glob 模式下再传位置 pattern 会被 fd 当成第二个搜索路径（报 `Search path 'capture' is not a directory`）。故工具里 `glob` 与 `pattern` 互斥。
+
+**默认排除编译目录（2026-10-10 加）**：`node_modules dist build out target coverage __pycache__ vendor venv Pods DerivedData bower_components cmake-build-debug cmake-build-release`。
+起因：fd 默认只做两件事（尊重 `.gitignore`、跳 hidden），而这两条**盖不住编译目录**——它们既不是 hidden，也常常不在 `.gitignore` 里（本仓库的 `.gitignore` 就只写了 `.sc-test/` `.zvec-grep/` `.pi/`），于是照样一层层往下爬。
+**实测 28 → 12 条**。新增 `exclude`（追加）与 `noDefaultExcludes`（整体关闭）。
+> **正确性保证（已实测）**：`--exclude` **只剪枝遍历、不剪搜索根**——`{path:"dist"}` 仍能搜出 `dist/static/s.css`。所以「进 dist 里找文件」这种正当需求不会被误伤；真要按名字找编译目录本身、或彻底关掉，用 `noDefaultExcludes`。
+> **只列非 hidden**：`.next/.nuxt/.venv/.turbo` 这些 fd 本就跳（除非 `hidden:true`），列进来是冗余。
+
+**另建 fd 全局 ignore 文件 `%APPDATA%\fd\ignore`**（`~/.config/fd/ignore` 是 POSIX 写法），内容与上表一致。好处：手工敲的 `fd`、以及 `~/.bashrc` 里 `alias find='fd'` 的交互式 shell 都自动生效，不依赖本扩展。
+> ⚠️ 但它**只在 fd 被调用时生效**，且同样**只在 git 仓库内认 `.gitignore`**——家目录 / `C:\Windows` 下依旧无效（这类根已不再硬拦，见 §4.2 末）。
+
+**验证**：`/fd-check`（fd 可执行文件解析）。回归：`.sc-test/probe-fd.mjs`。回退：删 `extensions/pi-fd.ts` 再 `/reload`（`fd` 懒加载与否都不影响其余工具）。
+
+---
+
+#### 4.2 ~~全局禁用 `find`~~（**已卸载 2026-10-08**：本机恢复 `find`，4 层封锁全撤；卸载记录见 §7.9，以下为历史留档，勿再照着启用）
+
+> **2026-11-03 更新**：本节四层封锁仍卸着；`find`/`grep` 不再拦截/不全局指向，仅提示词限制优先 fd/rg。口径见 §5 第三类。
+
+**为什么要禁**（⚠️ 下方第一条已被 2026-10-10 实测推翻，保留原文以备查）：本机 `find` 有两个不同的东西，症状都是「卡死」：
+- ~~`C:\Windows\System32\find.exe`（cmd/PowerShell 里的 FIND.EXE）：语法与 GNU find 完全不同，`find . -name x` 被当成「pattern + 无文件名」→ **从 stdin 读**，表现就是永远不返回；~~
+  > **2026-10-10 实测纠正：本机这条不成立。** PowerShell 的 PATH 顺序是 `C:\Program Files\Git\usr\bin` **排在** `C:\Windows\system32` **前面**，
+  > 所以 `powershell` 里的 `find` 解析到的是 **Git 的 GNU find**（`Get-Command find` 实测 `Source = C:\Program Files\Git\usr\bin\find.exe`）。
+  > 裸 `find` 实测立即返回（打印 490 行），**不挂 stdin**。真正的真凶是另一个东西——见下方「几小时的真凶」。
+- Git Bash 的 `/usr/bin/find`：语法对，但没有 ignore/类型/深度过滤，在大目录树上能跑几分钟（`find .` 从家目录起步就够呛）。
+
+**⚠️ 几小时的真凶（2026-10-10 定位，与上面的猜测不同）**：不是「System32 find 读 stdin」，而是
+**`powershell` 工具没有 `timeout` 参数**（§5 表里已记「注入不了」）。裸 `find` = `find .` = 从当前目录
+**递归打印整棵树**，无任何剪枝；放到大仓 / 家目录 / 系统盘就是几小时。bash 侧没这问题——守卫会把
+`find`/`find.exe` 归入搜索档、30s 默认超时（实测 `judgeBashCommand("find.exe . -maxdepth 6") → 30`）。
+**换 fd 也不会自动好**：见 §4.1 尾注——fd 的 ignore 规则在非 git 目录同样失效。**2026-10-13 已撤「按搜索根硬拦」的规则 E**（误伤远多于收益：`cd <项目> && find .` 里 `cd` 的实参被当成搜索根）；**2026-11-01 换成按命令名拦回来**（只认流水线首段首词，管道消费位与 `git grep` 不拦）；**2026-11-03 取消拦截/全局指向**，仅提示词限制优先 fd/rg——见 §5 第三类。30s 超时兜底照旧。
+
+**四层封锁**（前两层管模型，后两层管你自己）：
+
+| 层 | 位置 | 覆盖 | 实测 |
+|---|---|---|---|
+管道后 `\| find`）
+| bash（全局） | 用户环境变量 `BASH_ENV=C:\Users\yinxuehao\bin\no-find.sh`（非交互 `bash -c`）+ `~/.bashrc` 同款函数（交互） | 任何 bash，包括脚本 | `find` → 拒答 + exit 127；`fd` 正常 |
+| cmd（交互） | `HKCU\...\Command Processor\AutoRun` 里的 doskey 宏 | 交互式 cmd 提示符 | doskey 宏**只在交互命令行展开**，`cmd /c` 不受影响 |
+| PowerShell（交互） | `Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1` 里的 `function find` | 交互式 PowerShell | **本机没生效**：执行策略全是 `Undefined`（= 默认 `Restricted`），profile 根本不加载；要生效得 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`（安全策略变更，**没擅自改**） |
+
+> `find.cmd`（`~/bin/find.cmd`）也备好了，但**默认盖不住 System32**：Windows 合并 PATH 是「机器 PATH 在前、用户 PATH 在后」，`~/bin` 在用户 PATH 里 → 只有当 `~/bin` 被排到 System32 之前（改机器 PATH，需管理员）才生效。要真在 `cmd /c` 里也拦，只能动机器 PATH 或改 System32 文件，**都没做**。
+
+**判定规则**（`detectFindCommand`，可单测）：按 `;` `|` `&&` `||` 换行切段，递归摊开 `$( )` 与反引号，再剥掉 `sudo` / `env FOO=1` / `xargs` / `nohup` / 前置重定向，看每段**首词的 basename** 是否等于 `find` / `find.exe`。所以 `./find-helper.sh`、`findings.md`、`grep -rn "find me"`、`node scripts/find-them.js`、`fd`、`fdfind` 一律放行。
+
+**开关**：`~/.pi/agent/extensions/no-find.json` → `{"enabled": false}` 整体停用；`{"allow": ["find -name *.go"]}` 按「首词 + 第二个词」前缀放行个别命令。配置坏了按「启用」处理（宁可多拦，不静默失效）。
+
+~~**回退**…~~（已于 2026-10-08 执行：pi 内那层删扩展文件；全局那层按备份还原 `PATH` / `BASH_ENV`，见 §7.9）
+
+**现状（2026-10-09，替代封锁的轻量做法）**：不再拦 `find`，改为 `~/.bashrc` 末尾一行 `alias find='fd'`——交互式 Git Bash 里 `find` 直接走 fd（尊重 `.gitignore`、默认排除 `.git`/`node_modules`，大目录树上快一个量级）。fd 用 pi 自带的 `C:\Users\yinxuehao\.pi\agent\bin\fd`（10.3.0），零安装。真 find 仍可 `/usr/bin/find` 调用；**脚本/CI 不受 alias 影响**（alias 只在交互 shell 展开），要快就在脚本里显式写 `fd`。非交互场景的慢 find 依旧存在——优化靠 `-maxdepth` / `-prune` / `-xdev`（见对话记录），不做全局封锁。
+
+---
+
+## 12. 已删除的 bash 守卫（原 README §5 铁律二 / 第三类，2026-11-07 迁入）
+
+`extensions/pi-bash-guard.ts` / `extensions/no-find.ts` 已删（2026-11-03 `e9c4132`；2026-11-04 确认不恢复）。当时它们提供的「三档超时注入」「find/grep 转译 → fd/rg」「永不返回的命令 block」全部失效，现由 `@piotr-oles/pi-reflag`（只做改写）与提示词纪律承担。下面只在想重建守卫时参考，`§4.1`/`§4.2`/`§5` 均指原 README 编号。
+
+### 原 README §5 全文（含已失效的守卫描述与常驻集纪律）
+
+**铁律：装机前先审「它运行时会不会动 active 工具集」。** 只要扩展在会话中途调 `pi.setActiveTools`（典型是 `pi-web-access` 的 `web_enable` 这类空参激活器），工具集一变，请求前缀从第 0 个 token 起整段作废——本机实测 `cacheRead` 从 86016 掉到 1152，等于每次首次激活都吃一发全量 prefill（CHANGELOG §7.4）。所以只接受两种接入方式：① 常驻进 `defaultTools`（前缀恒定）；② 懒加载由 `omnify` 代理执行（只在 `session_start` 隐藏一次，全程不切 active 集，CHANGELOG §7.4 尾注）。
+- **凡「运行时增删工具」的扩展一律不装、不启用、不写进 `defaultTools`**——哪怕它的工具本身很有用（要联网搜就换 `agent_browser*` / `mcp` / `bash`，别为它掀缓存）。
+- 审法：`read` 扩展源码搜 `setActiveTools` / `activeTools`；装完对比首请求的工具字节（口径见 §6），不一致就是它在散缓存。
+
+**铁律二：所有命令都带超时**（2026-10-09 加，防止一条命令把会话卡几分钟）。
+
+pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传就是永远跑。本机用 `extensions/pi-bash-guard.ts`（只挂 `tool_call`，不注册工具）把它变成强制：按命令分档注入上限。
+
+| 档 | 命中什么 | 默认 | 上限 |
+|---|---|---|---|
+| 搜索 | `find` `grep` `egrep` `fgrep` `rg` `ag` `ack` `fd` `fdfind`（按**流水线生产者**判，`find … \| head` 算搜索、`python x.py \| grep` 不算） | 30s | 120s |
+| 构建 | `npm` `pnpm` `yarn` `pip` `cargo` `go` `make` `cmake` `docker` `tsc` `pytest` `jest` … 共约 70 个首词 | 1800s | 3600s |
+| 其余 | 兜底一切（`ls` `cat` `git clone` `python x.py` …） | 300s | 3600s |
+
+- **注入的是上限不是等待时间**，所以给大不亏；混合命令取最宽松那档（`npm run build && find dist -type f` → 1800s）。
+- 模型自己显式传的 `timeout` 会被尊重，只夹到该档上限（`timeout: 600` 的 `find` → 120；`timeout: 7200` 的 `npm ci` → 3600）。**单位是秒**。
+- 整条都被 coreutils `timeout` 包住时守卫不插手（作者自己管了）。要包就写 `timeout -k 2s 30s …`：只 TERM 直接子进程，不 `-k` 可能被抗住，且绕开 pi 的 killProcessTree。
+- 搜索类被后台化（`&` / `nohup` / `setsid`）→ **block**：它本该秒回，却能活过超时（见下表最后一行）。
+
+**另一类不是「太久」而是「永远不返回」→ 直接 block**（给 timeout 也只是白等一个上限，期间零输出）：
+编辑器（`vim` `nano` `emacs`…）、分页器/监视器（`less` `top` `watch` `tail -f` `journalctl -f`…）、交互客户端（`ssh` `mysql` `psql` `sqlite3`…）、光杆 REPL（`python` / `node` 不带参数）、前台服务（`npm run dev|start|serve|preview`、`python -m http.server`、不带 `-d`/`--rm` 的 `docker run`）。
+替代写法：把有产出的部分放前台跑（先 build/test，再查结果）；真需要常驻进程就显式 `… &` 起来、之后用另一条命令轮询。
+
+**第三类：`find`/`grep` 当搜索生产者 → 自动改写成 `fd`/`rg`（`extensions/no-find.ts`，2026-11-04）**。
+纯文字纪律（`promptGuidelines` + AGENTS.md）实测拦不住：模型照样写 `find . -name x`。
+
+以前是 block（`LEGACY_SEARCH_BINARIES`，2026-11-01 恢复，2026-11-03 取消），现在是**转译而不是拒答**：`tool_call` 钩子改 `input.command`，find 能翻译的参数映射到 fd，翻不了的**整条原样保留**（让 find 自己报错，不静默猜）。
+
+| 点 | 现在的行为 |
+|---|---|
+| 改什么 | 每条**流水线首段**的首词（引号感知切段，`\;` 不算分隔符）是 `find` `grep` `egrep` `fgrep` 之一 |
+| find → fd | `-name/-iname` → `-g`（`-iname` 加 `-i`）、`-type f/d/l` → `-t`、`-maxdepth` → `-d`、`-mindepth` → `--min-depth`、`-newer` → `--changed-after`、`-print0` → `-0`、`-exec CMD … \;` → `-x CMD`（`{}` 只在末尾时）；位置参数作 path。不认的 flag → 不转 |
+| grep → rg | 去掉 `-r/-R/-d/-E/-G`（rg 默认递归、默认扩展正则；`rg -E` 是 encoding 会冲突），组合参数 `-rn` → `-n`，`--include=G` → `-g G`，`--exclude=G` → `-g !G`；其余同名透传 |
+| 不改什么 | 管道消费位（`ls -la` 的输出交给 `grep foo`）、`git grep`（首词是 git）、`./find-helper.sh`、`findings.md`、`fd` / `fdfind` / `rg` / `ag` / `ack` |
+| 看不看搜索根 | **不看**，只认命令名。根选错交给 `fd` 的 `path` 参数与 §4.1 的超时兜底处理 |
+| 出口 | 翻译不了的 find flag 原样保留（不再 block），要 GNU 独占 flag 就自己用 `/usr/bin/find` |
+| 拦截 | 无 path 的 `find`，或递归 `grep` 无 file → block（避免整盘/整树扫描）；切段额外处理 `&` / `\|&` |
+
+回归：`.sc-test/probe-no-find.mjs`（`node --experimental-strip-types`，25 例 + 7 条 broad-scan）。回退：删 `extensions/no-find.ts` + 删 `~/.pi/agent/extensions/` 同名副本 + `/reload`。
+
+> 旧版的**量级证据仍然成立**（AppData/Local 194,968 文件、系统盘 345,409 文件 / fd 16.2s、
+> `find ~ -maxdepth 6` 60s 跑不完；fd 的 `.gitignore` 规则在非仓库目录同样失效），只是**执法点从
+> 「搜索根」挪到了「命令名」**：根选错交给 `fd` 的 `path` 参数与 §4.1 的超时兜底处理，不靠名字之外的判断。
+
+配套实验（§4.1 尾注）证明了另一件事：**`-maxdepth` 不但没加速，还会让 find 答错**。node_modules 嵌 12 层的树上，`find . -maxdepth 6 -name '*.ts'` 返回 **0 条**（深度全花在爬 node_modules），`fd -t f -e ts .` 返回 **50 条**——所以「用 maxdepth 治慢」是饮鸩止渴。
+
+**超时之后命令真的结束了吗（这一层的机制，2026-10-09 实测源码）**：
+
+| 问题 | 答案 |
+|---|---|
+| pi 超时后会不会 kill？ | 会。`dist/core/tools/bash.js` 在 `timeout` 到点 / `signal` abort 时都调 `killProcessTree(pid)` |
+| 杀的范围？ | Windows：`System32/taskkill.exe /F /T /PID`（整棵子进程树，强杀）；POSIX：`kill(-pid, "SIGKILL")`（bash 是 `detached` 的进程组，整组） |
+| 默认有超时吗？ | **没有**。`timeout: Type.Optional(... "optional, no default timeout")`——这就是守卫存在的全部理由 |
+| 什么会逃掉 kill？ | 只有 `cmd &` / `nohup` / `setsid`：shell 立即返回 → pi 清掉 timeout 计时器并注销 pid 追踪，命令在工具返回后继续跑，没人再管。故搜索类这么写直接 block |
+| `fd` 工具超时？ | 自己的 `execFile({timeout})`，无子进程所以 kill 即干净；漏传 `timeoutMs` 时守卫会补 30_000 |
+| `powershell` 工具超时？ | **无此参数**，注入不了。里面的 `find` 实测是 Git 的 GNU find（§4.2 纠正），不是 System32 那个读 stdin 的 → **唯一的治法是别裸跑 `find`**，硬约束只能靠文字纪律 |
+
+搜文件的其余三条路（与超时无关，但同一节纪律）：`fd` 工具每次显式传 `timeoutMs`（毫秒，1s–120s，默认 30s，见 §4.1）；`find`/`grep` **2026-11-04 晚起回到内建实现**（`pi-find` 已卸，CHANGELOG §7.32），没有 30s 硬超时，**必须自己缩范围**（`path`/`glob`，必要时 `-maxdepth`）；大目录树先 `-maxdepth`/`-prune`/`-xdev`，别裸跑整盘。
+
+回归用例在 `.sc-test/probe-bash-guard.mjs`（**不入库**，`node .sc-test/probe-bash-guard.mjs` 直接跑）：三档默认值与上限、显式值夹取、管道生产者、`sudo`/`&&`/重定向、自带 timeout、永不返回的 block、`docker run --rm` 不误伤，以及规则 E 的正反两组——后台化搜索拦，`git grep` / `./find-helper.sh` / `findings.md` / `awk` / `git status` / 管道消费位的 `grep` 不误伤。
+
+
+0. **新装扩展一律不进常驻集**（硬规则）
+   - 理由：常驻集每轮都进 prompt（`grep`+`find` 就要 +1350B ≈ 350 tok），而多数扩展一天用不到几次。
+   - **只有这三类才加常驻**：① 高频工具（见 §6.3 的取舍）；② 覆盖内建工具的（`grep`/`find`/`edit` 需先过 `defaultTools` 闸）；③ 缺失后 agent 会“瘫”的（如 `bash`）。
+   - 例外：无。`grep` / `fd` 也只是「需要时 `omnify` 激活」，不进名单（§6.3）。
+- 验证新装扩展是否真的零开销：看首请求的工具字节是否与基线一致（口径见 §6）。
+1. **首字成本**：常驻集每轮都进 prompt；不在名单的工具靠 `omnify` 检索命中后**代理执行**（不把 schema 注入 active 集，见上面铁律）。
+2. **激活往返**：0.86+ 流程是 `omnify`/`load_tools` → `call_tool` → 执行，多 1–2 个模型轮次。搜索类工具建议常驻（见 §6.3）。
+3. **大输出工具**（`agent_browser*`，或 bash 直接抓页面）原始 HTML/JSON 全量进历史，会把前缀命中率打崩；用前先想清楚要不要落历史。`mcp` 工具已于 2026-11-04 晚随 `pi-mcp-adapter` 卸载（CHANGELOG §7.32）。
+4. **改 `.md` 优先用 `edit` 精确替换**：`md_edit` 已于 2026-11-04 晚随 `pi-mdiff` 卸载（CHANGELOG §7.32）。现状是散文/列表/代码块一律用 `pi-smart-edit` 的 `edit`（容忍引号/空白差异），改动尽量带足上下文行以锚定位置。
+~~`pi-deepseek-cache`（绑定 DeepSeek）~~ **2026-10-09 已卸**（§7.13）：实测遥测半边可用、压缩半边必败（接管条件 `ctx.modelRegistry.find("deepseek", …)` 在本机注册表里根本没有 deepseek provider，代理也拒 `deepseek-flash` 这个模型 ID），按 DeepSeek 价格表换算的「省钱估算」属虚构。**要压缩缓存就装 `pi-cache-compact`**（provider 无关，CHANGELOG §7.13 实测命中 68.6%）。
+6. **纯 UI 类扩展可以放心装**：`pi-tps` / `pi-one-ui` / `pi-dsh-pet` / `pi-pet-autostart` 这类只挂事件钩子、只注册命令的扩展，**不注册任何工具**，不进 `defaultTools`，wire 字节不变（§3.3 有 bench 实测：装宠物前后都是 5664B）。反过来，任何**注册工具**的扩展都要重新算 §6.3 那笔账。
+**全局规则：本机不发任何提示词层规则（2026-11-04 定案）**
+
+`~/.pi/agent/AGENTS.md` 与仓库 `config/agent/AGENTS.md` **都是 0B**（`07f27cf` 2026-11-04 11:33 清空）。**定案：不再恢复**——命令怎么写、文件怎么读，交给模型自己按当下的报错与上下文判断，不靠一段常驻 system 前缀去求它照做。
+
+| 曾经的规则块 | 现在的替代 |
+|---|---|
+| Think: minimal sufficient reasoning… | 交给模型自己；pix-optimizer 的 caveman 管输出形状（§3.5） |
+| Read files: no full reads by default… | 交给模型自己；常驻工具只留 `read edit write bash`（§3.4），长文件整读的代价由上下文窗口自己反馈 |
+| Search: 优先 fd/rg | 已经**机器强制**：`extensions/no-find.ts` 在 `tool_call` 上把 `find`/`grep` 转成 `fd`/`rg`（§5），比求模型有效 |
+
+- **canonical 是本仓库 `config/agent/AGENTS.md`，内容 0B**：`node install-project-config.mjs` 仍会把它拷进 `~/.pi/agent/AGENTS.md`，`--check` 比对 0B ↔ 0B。想重新加规则就写这个文件，别手改盘上那份。
+- 它进的是**每轮 system 前缀**，所以**空文件本身就是收益**：system 少一段 = 每轮省 token，且少一个会漂的前缀源（原理同 `pi-prefix-stabilizer` / CHANGELOG §7.17）。
+- 与扩展注入的规则是叠加关系、互不覆盖：现在 system 里只剩 pix-optimizer 的 caveman/ponytail 档位规则（§3.5）。
+
+
+---
+## 13. 首字 token 优化实测（原 README §6，2026-11-07 迁入；0.87.1 快照，pi 1.3.0 未复测）
+
+测量方式：沙箱（`PI_CODING_AGENT_DIR` 隔离 + junction 复用 npm/git/skills）+ mock OpenAI provider 抓**真实首请求字节**，再用真网关取 token 计数交叉验证。校准：**1 token ≈ 3.85B**。
+
+### 6.1 手册「三步优化」在 0.87.1 上的真实收益
+
+| 场景 | system | tools | 合计 | vs 基线 |
+|---|---|---|---|---|
+| 基线（5 工具） | 6758B | 4593B | 11351B | — |
+| 只上 `pi-lean-prompt` | 6758B | 3043B | 9801B | **−1550B** |
+| 只上 `pi-shell`（**已删除**） | 6794B | 4713B | 11507B | **+156B**（反而变大） |
+| 手册全套（lean + shell） | 6794B | 3163B | 9957B | **−1394B / −12.3%**（≈ −362 tok/请求） |
+
+- **第一步（压 Guidelines / Pi documentation）是 no-op**：`pi-lean-prompt` 见 `sections` 存在就 return（0.86+ 让路）；且其正则找的是 0.85 版那两个独立段落，0.87 的提示词里已不存在。
+- **第三步单独是负收益**：`bash` 543B → `shell` 663B。只在与第二步叠加后才净赚 → **结论：这一步不做**，`pi-shell.ts` 已删（2026-09-28 五次），改用内建 `bash`。
+- **真正有效的是第二步**（`edit` 2030→646B、`read` 684→518B），且只改文字不动结构，零副作用。
+
+### 6.2 大头在 system：`<docs>` + `<skills>` 压缩（`pi-lean-sections.ts`）
+
+| 改动 | wire system |
+|---|---|
+| 基线 | 6897B |
+| 压 `<skills>`（2655B → 99B，单行改用 omnify 检索） | 4255B |
+| 压 `<docs>`（655B → 256B，从原文抽路径重排） | 5869B |
+| **两者都压（本机现状）** | **3556B（−3341B / −48%）** |
+
+> **本机现状（2026-09-30，卸载 `pi-web-access` 后重测）**：常驻集 = pi 内置默认 4 个（§3.1）→ wire 上 **5 个工具** `bash edit omnify read write`，system **3026B** + tools **2638B** = **5664B ≈ 1573 tok/请求**（vs 优化前 11351B ≈ 2948 tok，**累计 −5687B ≈ −1477 tok / −50%**）。`grep` / `fd` 仍注册，按需 `omnify` **代理执行**——omnify 走 jiti 直接执行、**不切 active 集**，所以不会像 `web_enable` 那样掀前缀缓存（CHANGELOG §7.4）。
+
+连续 3 轮字节完全一致（轮间稳定，不散前缀缓存）。
+
+**踩过的坑，写在这里免得重蹈**：
+
+- **`before_agent_start` 的 `sections` 只有第一个注册的 handler 改得动。** 实测：先注册的探针看到空对象且它的赋值进 wire；后注册的拿到的是**已填充的独立副本**，改它无效、`return { systemPrompt }` 也无效。`pi-lazy-tools` fork 正占着「第一个」的位置（packages 源先于用户目录加载），所以它写在 `sections` 里的压缩**从未生效**——这就是本机 system 长期 6.9KB 的根因。
+- **`before_provider_request` 的 `payload` 是共享可变的**（system 消息就在 `payload.messages` 里，`{role:"system", content:"<整串>"}`），在 wire 上改与加载顺序无关 → 本扩展走这条路。
+- **不要压 `<rules>`**：单改 rules 块时落位正确（6897→5536B），但一旦与 docs/skills 同时改，pi 会把 rules 正文挪进 agent 文件段、把工具一行式塞进 `<rules>`，条目与续行错配。基线本身也有块间重排（`<tools>`/`<rules>` 内容逐轮互换、工具一行式本来就混在 agent 段里），属 pi 侧不确定性，不去碰它。
+- **不要压 `<tools>`**：那段由 pi 按当前 active 工具动态生成，压它就得自己重建工具表，容易与实际 active 集脱节。
+
+### 6.3 搜索类工具常驻的代价
+
+| 场景 | system | tools | 合计 | vs 同基线 |
+|---|---|---|---|---|
+| 手册全套 + 常驻 grep/find/ls | 6897B | 4988B（9 个） | 11885B | **+1928B ≈ +500 tok/请求** |
+| 常驻 grep+find（`ls` 懒加载，内建 `bash`） | 3050B | 4336B（8 个） | 7386B | vs 本机 **+1722B ≈ +447 tok/请求** |
+| 常驻 grep+fd | 3205B | 5112B（8 个） | 8317B | vs 本机 **+2653B ≈ +689 tok/请求** |
+| **本机现状**（只留内建默认 4 个） | 3026B | 2638B（5 个） | 5664B | — |
+
+单工具 wire 字节：`grep` 846B、`fd` 1280B、`ls` 472B（`find` 若常驻是 504B）。
+
+- **常驻**：每请求 +473 tok（首请求全价，之后走 cacheRead，本机本地端点基本免费），换搜索工具**直接可调、0 额外往返**。
+- **懒加载**：0 upfront；要用时多 1–2 个模型轮次，并把同样的字节永久注入历史。
+- **本机取舍（最终：只留内建默认 4 个）**：`defaultTools` 就是 `read edit write bash`，`grep` / `fd` / `ls` / `find` 全部懒加载，搜文件先 `omnify` 一步代理执行。**省 2653B ≈ 689 tok/请求**，代价是每次搜索多 1–2 个往返轮次（本机本地端点，这些轮次几乎不花钱，只花时间）。
+  - 曾经选过方案 B（`grep` + `fd` 都常驻，8317B）：那时判断「搜索是编码高频操作，省轮次比省字节值」；现按「只保留默认」收敛，**要回退就把 `"grep"` / `"fd"` 加回两处 `defaultTools` 即可**（+2653B）。
+  - `fd` 的能力远胜内建 `find`（§4.1 五项），常驻与否只影响字节与往返，不影响能力。（`pi-find` 已于 2026-11-04 晚卸，CHANGELOG §7.32。）
+
+### 6.4 优化后的静态前缀总账
