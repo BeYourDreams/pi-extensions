@@ -27,11 +27,11 @@
 
 ### 6.4 `codemode` 常驻：结论与配置（2026-11-13）
 
-**结论：与 `pi-lazy-tools` 不冲突，可共存；启用方式只有一种（常驻裸名），且 `+` 前缀写法对它无效。本机模式选 `"only"`。**
+**结论：与 `pi-lazy-tools` 不冲突，可共存；配置一律写完整裸名（`+codemode` 也能让 codemode 上场，但不会 pin 其余工具）。本机模式选 `"only"`。**
 
-**为什么 `+codemode` 无效（关键）**：lazy-tools 的 `resolveDefaultTools()` 只 `extractStringArray()`，**原样保留 `+`/`-` 前缀不去符号**，把 `"+codemode"` 当字面量放进 resident 名单，再 `allToolNames.filter(name => !resident.has(name))` 算 lazy 集。而 `allToolNames` 里只有裸名 `codemode`（工具名不带 `+`），`"+codemode"` 永远不命中 → **codemode 照样被隐藏**。pi 侧的 `+name` 相对写法只有 pi 自己解析，lazy-tools 不认。
+**`+codemode` 的真实行为（2026-11-13 二次实测更正）**：lazy-tools 的 `resolveDefaultTools()` 只 `extractStringArray()`，**原样保留 `+`/`-` 前缀不去符号**，把 `"+codemode"` 当字面量放进 resident 名单，再 `allToolNames.filter(name => !resident.has(name))` 算 lazy 集；`allToolNames` 里只有裸名，`"+codemode"` 命中 0 个。**但它不会把 codemode 隐藏**——codemode 是合成 `builtin:` 源码，进 `nonOmnifiable` 集合，`session_start` 里 `resident = {omnify, ...resolved.resident, ...baselineFallback, ...nonOmnifiable}` 无条件常驻、不进 lazy 集，pi 侧再用 `+name` 激活它，故照常可用（本机实测正是在这种配置下跑通的）。**真实代价**：resident 命中 0 个 → `edit`/`write` 这些可代理的扩展工具全落 lazy 集被隐藏，只剩 `omnify` 一条路（实测 `ALL_TOOLS` 退化为 `read, bash, omnify`）。
 
-**所以必须写完整裸名**：`"defaultTools": ["read","edit","write","bash","codemode"]`（绝对写法 = pi 整体替换选择，两边语义一致）。`pi --tools +codemode` 只在单次启动有效，持久配置一律写裸名。
+**所以要写完整裸名**：`"defaultTools": ["read","edit","write","bash","codemode"]`（绝对写法 = pi 整体替换选择，两边语义一致）。`pi --tools +codemode` 只在单次启动有效，持久配置一律写裸名。
 
 **为什么 codemode 必须常驻、没有第二入口**：
 - codemode 是 `builtin:codemode` 扩展，`defaultActive:false`（注册不激活）→ **不写 `defaultTools` 就永远不在 active 集**，模型看不到。
