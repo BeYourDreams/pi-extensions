@@ -50,3 +50,14 @@
 **与 MCP / deferred 的接合点（零成本组合）**：MCP 工具默认 `exposure:"deferred"`，lazy-tools 的 `isAlwaysCallableExposure()` 视 `codemode`/`deferred` 为「注册即可调、与 active 集无关」→ 不隐藏；codemode 脚本可经 `tools.<name>` 直调。这是 codemode + lazy-tools + MCP 唯一零请求侧变化的组合路径，无冲突。
 
 **与 lazy-tools 的接合点**：lazy-tools 的 `isAlwaysCallableExposure()` 把 `codemode`/`deferred` 视为「注册即可调、与 active 集无关」；且 codemode 是 builtin 合成源码（`nonLoadableSourceReason` 判不可加载）→ **lazy-tools 不会隐藏它、omnify 也代理不了它**。故 codemode 只能常驻，与 lazy-tools 无争夺；两者唯一的叠加效应是 token（§6.4 成本）。
+
+**codemode 内按需加载技能（lazy 路径，2026-11-13 实测）**：codemode 沙箱**没有** skills API（Globals 仅 `searchTools`/`describeTool`/`describeNamespace`/`ALL_TOOLS`/`models`），技能检索唯一入口是 `tools.omnify`（omnify 在 active 集，`mode:"only"` 也不砍掉）。技能全文不注入，按需 `read SKILL.md`：
+
+```js
+const r = await tools.omnify({ goal: "越级反杀 绝境翻盘" }); // goal 用触发信号词，BM25 才命中
+const p = r.match(/（([A-Za-z]:[^）]*SKILL\\.md)）/)?.[1];      // 返回含 `（盘符:\\...\\SKILL.md）`
+if (p) return await tools.read({ path: p });
+```
+
+- `goal` 太泛会返"未找到"，用技能描述里的触发信号词（如"越级反杀"）最稳。
+- 技能清单（name+desc+path）由 pi 原生常驻注入，lazy-tools 另把它剥离成一行 SKILLS_NOTE（需新会话生效）；codemode 只管工具呈现，与技能注入无关。

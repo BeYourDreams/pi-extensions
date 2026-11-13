@@ -81,6 +81,17 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 >
 > **drama 线已换代**：早期的 `short-drama-*` 九件（含自建的 `short-drama-pro`）已于 2026-11-07 从本仓库与全局删除，改为上面的 `400-duanju-shuangdian` + `short-drama-factory`。因此 `skills/` 目前只剩一份 `UPSTREAM.md`（旧 drama 线的上游快照与吸收流程留档），`sync-drama-skills.mjs` 的 `CUSTOM` 列表已清空（`check` 恒报无漂移）。原九件的定制细节（SHT-31 / PAC-01~05 / CON-08 等）见 CHANGELOG。
 
+> **codemode 内按需加载技能（lazy 路径，2026-11-13 实测）**：codemode 沙箱**没有** skills API（Globals 仅 `searchTools`/`describeTool`/`describeNamespace`/`ALL_TOOLS`/`models`），技能检索唯一入口是 `tools.omnify`。技能不注入全文，按需 `read SKILL.md`：
+>
+> ```js
+> // codemode 内懒加载：搜技能 → 提路径 → 读全文
+> const r = await tools.omnify({ goal: "越级反杀 绝境翻盘" }); // goal 用触发信号词，BM25 才命中
+> const p = r.match(/（([A-Za-z]:[^）]*SKILL\.md)）/)?.[1];      // 返回含 `（盘符:\...\SKILL.md）`
+> if (p) return await tools.read({ path: p });
+> ```
+>
+> **生效注意**：① omnify 在 active 集（lazy-tools `session_start` 无条件写回），`codemode.mode:"only"` 不会砍掉它；② `goal` 太泛会返回"未找到"，用技能描述里的触发信号词（如"越级反杀"）最稳；③ codemode 只管工具呈现，与技能注入无关——技能清单（name+desc+path）由 pi 原生常驻注入，lazy-tools 另把它剥离成一行 SKILLS_NOTE（需新会话生效）。
+
 ## 2. 安装
 
 ### 2.1 顺序循环
