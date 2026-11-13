@@ -15,7 +15,7 @@
 | 做法 | 代价 | 收益 |
 |---|---|---|
 | 搜索工具常驻（`grep` + `fd`） | tools 8317B，**比本机多 2653B ≈ 689 tok/请求** | 搜索 0 额外往返 |
-| **本机：懒加载 + codemode `"only"`** | 每次搜索多 1–2 个模型轮次；codemode 前缀顶到 `inlineBudget`（默认 3000 tok） | **省 2653B ≈ 689 tok/请求**（本地端点，轮次几乎不花钱，只花时间） |
+| **本机：懒加载 + codemode `"only"` + `inlineBudget 0`** | 每次搜索多 1–2 个模型轮次；codemode 前缀只列命名空间（`inlineBudget 0`，工具声明全走 `searchTools()` 动态发现） | **省 2653B ≈ 689 tok/请求 + 省 codemode 声明 ≈3000 tok 上限**（本地端点，轮次几乎不花钱，只花时间） |
 
 - **别压 `<rules>`**：单改 rules 块时落位正常，但与 docs/skills 同改会让 pi 把 rules 正文挪进 agent 文件段、条目与续行错配（pi 侧不确定性，不去碰）。
 - **别压 `<tools>`**：那段由 pi 按当前 active 工具动态生成，压它就得自己重建工具表，容易与实际 active 集脱节。
@@ -39,13 +39,14 @@
 - 两条合起来 = 常驻是唯一启用方式（[§5](使用纪律.md) 第 0 条破例，按「缺失即瘫」归第三类）。
 
 **模式 `"only"`（本机 2026-11-13 起选此，与 `"on"` 对照）**：
-- `"only"`：把全部工具从模型侧隐藏、全列进 codemode 描述，前缀顶到 `codemode.inlineBudget`（默认 **3000 tok**）。**代价最大，但换来「模型只认 codemode + omnify 两条入口」，工具表由 codemode 描述列出；`searchTools()`/`describeTool()`/`ALL_TOOLS` 只见 **active 集**——被 lazy 藏掉的扩展工具（`edit`/`write` 等）从 codemode 视角不存在，只能经 `omnify` 发现并代调（2026-11-13 实测：`describeTool("edit")` → `undefined`，而 omnify 名单里明列可代调）**，与 lazy-tools「隐藏 + omnify 单入口」方向一致（工具都不直接暴露）。
+- `"only"`：把全部工具从模型侧隐藏、全列进 codemode 描述，前缀顶到 `codemode.inlineBudget`（**本机 0**；默认 **3000 tok**）。**代价最大，但换来「模型只认 codemode + omnify 两条入口」，工具表由 codemode 描述列出；`searchTools()`/`describeTool()`/`ALL_TOOLS` 只见 **active 集**——被 lazy 藏掉的扩展工具（`edit`/`write` 等）从 codemode 视角不存在，只能经 `omnify` 发现并代调（2026-11-13 实测：`describeTool("edit")` → `undefined`，而 omnify 名单里明列可代调）**，与 lazy-tools「隐藏 + omnify 单入口」方向一致（工具都不直接暴露）。
 - `"on"`（默认）：codemode 描述只列 non-direct 工具；被 lazy 藏掉的不在 callable 集 → 不会重复列。每个常驻工具尾部追加一行 `Codemode: tools.x(...) resolves to ...`（约 12 tok × 5）。
 - **若嫌 `only` 太贵**（可达 3000 tok），回退到 `"on"`：删 `codemode.mode` 键（保持默认），`/reload` 生效。
+- **`only` + `inlineBudget 0`（本机 2026-11-13 起）**：codemode 描述只列命名空间名，不内联任何工具声明——模型侧对工具参数/存在的**即时可见性**下降，须先 `searchTools()`/`describeTool()` 才知道怎么调（脚本内消化，不额外产请求）。**`searchTools` 与 `omnify` 是两条路**：前者在 codemode 沙箱本地算（0 额外轮次），后者是模型侧工具（+1–2 轮）。
 
-**成本（`"only"`，实测 pi.exe 实现）**：取决于 `inlineBudget`（默认 **3000 tok** 上限）。内置工具全量声明实测约 800–1200 tok；有 MCP server 时顶到 3000。而 `"on"` 下仅 ≈+400 tok（工具描述主体 ≈355 + 常驻工具尾部备注 ≈60）。**`"only"` 是把预算从 ~400 放大到最高 3000 tok 的开关，按需取舍。**
+**成本（`"only"`，实测 pi.exe 实现）**：取决于 `inlineBudget`（**本机 0**；默认 **3000 tok** 上限）。内置工具全量声明实测约 800–1200 tok；有 MCP server 时顶到 3000。而 `"on"` 下仅 ≈+400 tok（工具描述主体 ≈355 + 常驻工具尾部备注 ≈60）。**`"only"` 是把预算从 ~400 放大到最高 3000 tok 的开关，按需取舍。**
 
-**`codemode.inlineBudget` 不写**（保持默认 3000）：改小会截断工具声明列表（改用 `searchTools()`/`describeTool()` 补齐），改大只会更贵；默认即平衡点。
+**`codemode.inlineBudget`：本机写 `0`**（2026-11-13 起）。`0` = codemode 描述只列命名空间名、不内联工具声明；声明全走 `searchTools()`/`describeTool()`/`ALL_TOOLS` 动态发现（沙箱本地，不额外产请求）。取舍：声明文本省到底，代价是模型侧对工具存在/参数的即时可见性下降，可能多试探（仍消化在同一次 codemode 调用内）。改大只会更贵；默认 3000 是「看得见全部声明」的平衡点。
 
 **与 MCP / deferred 的接合点（零成本组合）**：MCP 工具默认 `exposure:"deferred"`，lazy-tools 的 `isAlwaysCallableExposure()` 视 `codemode`/`deferred` 为「注册即可调、与 active 集无关」→ 不隐藏；codemode 脚本可经 `tools.<name>` 直调。这是 codemode + lazy-tools + MCP 唯一零请求侧变化的组合路径，无冲突。
 
