@@ -39,7 +39,7 @@
 - 两条合起来 = 常驻是唯一启用方式（[§5](使用纪律.md) 第 0 条破例，按「缺失即瘫」归第三类）。
 
 **模式 `"only"`（本机 2026-11-13 起选此，与 `"on"` 对照）**：
-- `"only"`：把全部工具从模型侧隐藏、全列进 codemode 描述，前缀顶到 `codemode.inlineBudget`（默认 **3000 tok**）。**代价最大，但换来「模型只认 codemode + omnify 两条入口」，工具表完全由 codemode 描述与脚本内 `searchTools()`/`describeTool()` 动态发现**，与 lazy-tools「隐藏 + omnify 单入口」方向一致（工具都不直接暴露）。
+- `"only"`：把全部工具从模型侧隐藏、全列进 codemode 描述，前缀顶到 `codemode.inlineBudget`（默认 **3000 tok**）。**代价最大，但换来「模型只认 codemode + omnify 两条入口」，工具表由 codemode 描述列出；`searchTools()`/`describeTool()`/`ALL_TOOLS` 只见 **active 集**——被 lazy 藏掉的扩展工具（`edit`/`write` 等）从 codemode 视角不存在，只能经 `omnify` 发现并代调（2026-11-13 实测：`describeTool("edit")` → `undefined`，而 omnify 名单里明列可代调）**，与 lazy-tools「隐藏 + omnify 单入口」方向一致（工具都不直接暴露）。
 - `"on"`（默认）：codemode 描述只列 non-direct 工具；被 lazy 藏掉的不在 callable 集 → 不会重复列。每个常驻工具尾部追加一行 `Codemode: tools.x(...) resolves to ...`（约 12 tok × 5）。
 - **若嫌 `only` 太贵**（可达 3000 tok），回退到 `"on"`：删 `codemode.mode` 键（保持默认），`/reload` 生效。
 
