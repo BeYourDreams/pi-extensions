@@ -29,10 +29,12 @@ const repo = path.dirname(fileURLToPath(import.meta.url));
 const checkOnly = process.argv.includes("--check");
 const NEVER_COPY = new Set(["settings.json"]); // config/agent 下禁止自动覆盖的名字
 /** `pi-project/` 下的留档件：放仓库只为「重装时手动拷」，不参与同步。
+ *  settings.json 自 2026-11-13 转留档：项目级 defaultTools 会**整体覆盖**用户级，
+ *  一旦某项目里有这份，全局改动就被它顶掉（「改一处生效」变成「改 N 处」）。
  *  zvec.json —— `pi-zvec` 已于 2026-10-08 卸载（readme §7.11 要求项目索引与配置全删），
  *  留着这份是为了哪天重装 zvec 时不用凭记忆重写 auto 模式。
  *  另：`settings.snapshot-*.json` 一律视为历史快照留档，不往 ~/.pi/agent/ 里拷。 */
-const ARCHIVED = { "pi-project": new Set(["zvec.json"]) };
+const ARCHIVED = { "pi-project": new Set(["zvec.json", "settings.json"]) };
 const isArchived = (dir, f) => ARCHIVED[dir]?.has(f) === true || f.startsWith("settings.snapshot-");
 /** CRLF → LF 归一：git `core.autocrlf=true` 让仓库工作区文件带 CRLF，盘上（脚本写的）是 LF，
  *  不归一的话 Windows 上这两项体检永远假红（内容其实逐字相同）。统一按 LF 比、按 LF 写。 */

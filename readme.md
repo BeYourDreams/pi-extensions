@@ -115,7 +115,7 @@ pi install git:github.com/BeYourDreams/pi-one-ui
 # ③ 本地扩展（含 pi-pet-autostart.ts，宠物默认启用就靠它）
 node install-local-extensions.mjs
 
-# ④ 项目级/用户级配置：把仓库 config/ 拷进 pi 真正读取的位置（`.pi/` 是运行时目录，仓库里整体忽略）
+# ④ 用户级配置：把仓库 config/agent/ 拷进 ~/.pi/agent/（项目级 settings.json **不**拷：会覆盖顶掉全局）
 node install-project-config.mjs
 ```
 
