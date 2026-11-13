@@ -45,6 +45,17 @@ const scopes = [
 	{ label: "用户级", src: path.join(repo, "config", "agent"), dest: path.join(os.homedir(), ".pi", "agent") },
 ];
 
+// 硬闸：项目级 `.pi/settings.json` 一出现就拒跑——它的 defaultTools 会整体覆盖用户级、
+// 顶掉全局配置（2026-11-13 定案，见仓库根 AGENTS.md）。检查与同步两种模式都不放过。
+const strayProjectSettings = path.join(repo, ".pi", "settings.json");
+if (fs.existsSync(strayProjectSettings)) {
+	console.error(
+		`[fail] 项目级 ${path.relative(repo, strayProjectSettings)} 存在：项目级 defaultTools 会整体覆盖用户级、顶掉全局配置。` +
+			`删掉它（cp AGENTS.md 才是项目级差异化该用的地方）。`,
+	);
+	process.exit(1);
+}
+
 let drift = 0;
 for (const { label, src, dest } of scopes) {
 	if (!fs.existsSync(src)) {
