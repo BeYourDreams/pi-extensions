@@ -3,7 +3,11 @@
     "read",
     "edit",
     "write",
-    "bash"
+    "bash",
+    "codemode"
   ],
+  "codemode": {
+    "mode": "only"
+  },
   "hideThinkingBlock": true
 }

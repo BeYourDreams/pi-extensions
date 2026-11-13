@@ -173,10 +173,12 @@ pi remove npm:<包名>
 // ~/.pi/agent/settings.json 与 <项目>/.pi/settings.json
 // 本仓库的项目级 canonical 源 = config/pi-project/settings.json（`.pi/` 整体 gitignore）
 // 拷进去：node install-project-config.mjs ｜ 体检：node install-project-config.mjs --check
-{ "defaultTools": ["read", "edit", "write", "bash"] }
+{ "defaultTools": ["read", "edit", "write", "bash", "codemode"] }
 ```
 
-> **本机就选 pi 的内置默认 4 个**（`dist/core/sdk.js:140` 的 `defaultActiveToolNames`），一个扩展工具都不加：搜文件名/目录、搜内容全部交给 `omnify` 按需代理执行。换来 `8317B → 5664B`（**−2653B ≈ −689 tok/请求**，见 §6.3），代价是每次搜索多 1–2 个往返轮次。
+> **`codemode` 是唯一允许进常驻集的扩展工具**（2026-11-13 起），例外说明见 §5 第 0 条 / §6.4。它与 `pi-lazy-tools` 的接合点、成本、配置约束都在 §6.4 一并写明。
+
+> **本机 = pi 的内置默认 4 个 + `codemode`**（`dist/core/sdk.js:140` 的 `defaultActiveToolNames`），**唯一加进来的扩展工具就是 codemode**（理由见 §6.4），且 `codemode.mode` = **`"only"`**（§6.4 模式对照）：搜文件名/目录、搜内容交给 `omnify` 按需代理执行；工具表由 codemode 描述 + `searchTools()`/`describeTool()` 动态发现。`"only"` 下 tools 段成本取决于 `inlineBudget`（默认 3000 tok 上限），具体账在 §6.4；`"on"` 下则约 +400 tok/请求。仍是搜索工具常驻（`8317B`）之下。
 > **`omnify` 不写进 `defaultTools`**：它由 lazy-tools 在 `session_start` 无条件写进 active 集（`setActiveTools`），写不写都一样。
 > **`grep` / `fd` 不写也会注册**（扩展注册不过内建闸），只是被 lazy 隐藏；`omnify` 能把它们搜出来并执行（已实测）。**内建的 `ls` / `powershell` 搜得出、却执行不了**（pi 用内部工厂造它们，`sourceInfo` 是合成标记 `<sdk:ls>`，没有可 import 的源码）→ 这类需求一律 `bash ls`。fork 已把这个原因写进 omnify 的失败文案（CHANGELOG §7.3）。
 > **`~/.pi/lazy-tools.json` 已删除**（2026-09-29，`pi-lazy-tools` 0.4.0 起只告警不读取；旧副本 `lazy-tools.json.bak` / `.bak2` 同日一并删掉，内容已进 `defaultTools`）。新装扩展**不要**往 `defaultTools` 里加（硬规则，见 §5 第 0 条）。
@@ -297,7 +299,8 @@ pi-pet stop → 宿主自己退出，state.json 清掉；整机无 pi.exe 野进
 | `defaultThinkingLevel` | `"high"` | 默认思考强度 |
 | ~~`shellCommandPrefix`~~ | ~~`"source ~/.pi/agent/bash-prelude.sh"`~~ | **本机从未写过此键**（CHANGELOG §10 · 原 3.9）：脚本 2026-11-03 已 `git rm`，2026-11-04 定为不恢复 |
 | ~~`extensions`~~ | ~~`["-builtin:mcp"]`~~ | **2026-11-04 晚已删**：`pi-mcp-adapter` 卸载后无对象（CHANGELOG §10 · 原 3.10 / §7.32） |
-| `defaultTools` | `["read","edit","write","bash"]` | §3.1 / §3.2（项目级同值） |
+| `defaultTools` | `["read","edit","write","bash","codemode"]` | §3.1 / §3.2（项目级同值）；`codemode` 为唯一常驻扩展工具（§6.4） |
+| `codemode.mode` | `"only"` | §6.4；`"on"`（默认）≈+400 tok，`"only"` 顶到 `inlineBudget`（默认 3000 tok） |
 | ~~`cacheWarming`~~ | ~~`"streaming"`~~ | **2026-11-04 已删**：它会在每轮之后自己追加一次 warmup 请求（CHANGELOG §7.30）。删后首 token 略慢、少一发请求 |
 | `compaction` | `{"enabled": true, "reserveTokens": 32768, "keepRecentTokens": 8000}` | 自动压缩开；预留 32K + 保留最近 8K（128K 窗下偏保守） |
 | `markdown.mermaid` | `"streaming"` | mermaid 流式渲染 |
@@ -453,7 +456,8 @@ unzip -o rtk.zip && rtk --version   # 应打版本号（本机基线 0.51.0）
 **0. 新装扩展一律不进常驻集**（硬规则）
    - 理由：常驻集每轮都进 prompt（`grep`+`find` 就要 +1350B ≈ 350 tok），而多数扩展一天用不到几次。
    - **只有这三类才加常驻**：① 高频工具（见 §6.3 的取舍）；② 覆盖内建工具的（`grep`/`find`/`edit` 需先过 `defaultTools` 闸）；③ 缺失后 agent 会“瘫”的（如 `bash`）。
-   - 例外：无。`grep` 也只是「需要时 `omnify` 激活」，不进名单（§6.3）。
+   - 例外（唯一）：**`codemode`**。它是 pi 内建扩展且 `defaultActive:false`，**必须进 `defaultTools` 才激活**；又因合成 `builtin:` 源码无法被 `omnify` 代理（`nonLoadableSourceReason`），不常驻就没有任何取用入口。故按第三类「缺失即瘫」对待，破例常驻（§6.4）。
+   - 其余：无。`grep` 也只是「需要时 `omnify` 激活」，不进名单（§6.3）。
 1. **首字成本**：常驻集每轮都进 prompt；不在名单的工具靠 `omnify` 检索命中后**代理执行**（不把 schema 注入 active 集，见铁律一）。
 2. **激活往返**：`omnify` → 执行，多 1–2 个模型轮次。搜索类工具建议常驻（见 §6.3）。
 3. **大输出**（`bash` 直接抓页面 / 原始 HTML/JSON）全量进历史，会把前缀命中率打崩；用前先想清楚要不要落历史。
@@ -481,25 +485,50 @@ unzip -o rtk.zip && rtk --version   # 应打版本号（本机基线 0.51.0）
 
 **测量方式**（原手册的做法，需要复核时才跑）：沙箱（`PI_CODING_AGENT_DIR` 隔离 + junction 复用 npm/git/skills）+ mock OpenAI provider 抓**真实首请求字节**，再用真网关取 token 计数交叉验证。校准：**1 token ≈ 3.85B**。
 
-**本机静态前缀基线**：`system 3026B + tools 2638B = 5664B ≈ 1.5k tok/请求`（5 个工具：`bash edit omnify read write`）。
+**本机静态前缀基线**：`system 3026B + tools 2638B = 5664B ≈ 1.5k tok/请求`（5 个工具：`bash edit omnify read write`，**未含 codemode**）。含 codemode 后 tools 段取决于 `codemode.mode`：`"on"` ≈6.2KB（+≈400 tok）；`"only"` 最高 3000 tok（§6.4）。
 
 > ⚠️ 这组数字是 **0.87.1 时期的实测**，pi 1.3.0 下**未复测**，按结论用、别按字节抠。完整表格、每步优化（`pi-lean-prompt` / `pi-shell` / `<docs>`+`<skills>` 压缩）、以及为什么第三类工具没有常驻，都在 CHANGELOG §13。
 
-**当前取舍：只留内建默认 4 个工具**（`read edit write bash`），`grep` / `find` / `ls` / `powershell` 全部走懒加载，搜文件用 `omnify` 一步代理执行。
+**当前取舍：内建默认 4 个 + `codemode`**（`read edit write bash codemode`），`grep` / `find` / `ls` / `powershell` 全部走懒加载，搜文件用 `omnify` 一步代理执行。
 
 | 做法 | 代价 | 收益 |
 |---|---|---|
 | 搜索工具常驻（`grep` + `fd`） | tools 8317B，**比本机多 2653B ≈ 689 tok/请求** | 搜索 0 额外往返 |
-| **本机：懒加载** | 每次搜索多 1–2 个模型轮次 | **省 2653B ≈ 689 tok/请求**（本地端点，轮次几乎不花钱，只花时间） |
+| **本机：懒加载 + codemode `"only"`** | 每次搜索多 1–2 个模型轮次；codemode 前缀顶到 `inlineBudget`（默认 3000 tok） | **省 2653B ≈ 689 tok/请求**（本地端点，轮次几乎不花钱，只花时间） |
 
-- 单工具 wire 字节：`grep` 846B、`ls` 472B、`find` 504B。
-- **要回退**：把 `"grep"` 加回两处 `defaultTools`（§3.1 / §3.2）即可，`/reload` 生效。
-- **别压 `<tools>`**：那段由 pi 按当前 active 工具动态生成，压它就得自己重建工具表，容易与实际 active 集脱节。
 - **别压 `<rules>`**：单改 rules 块时落位正常，但与 docs/skills 同改会让 pi 把 rules 正文挪进 agent 文件段、条目与续行错配（pi 侧不确定性，不去碰）。
+- **别压 `<tools>`**：那段由 pi 按当前 active 工具动态生成，压它就得自己重建工具表，容易与实际 active 集脱节。
+- **要回退**：把 `"grep"` 加回两处 `defaultTools`（§3.1 / §3.2）即可，`/reload` 生效。
+- 单工具 wire 字节：`grep` 846B、`ls` 472B、`find` 504B。
 - 原理上**空 `AGENTS.md` 本身就是收益**：system 少一段 = 每轮省 token，且少一个会漂的前缀源（§5 全局规则）。
 
 ---
 
+### 6.4 `codemode` 常驻：结论与配置（2026-11-13）
+
+**结论：与 `pi-lazy-tools` 不冲突，可共存；启用方式只有一种（常驻裸名），且 `+` 前缀写法对它无效。本机模式选 `"only"`。**
+
+**为什么 `+codemode` 无效（关键）**：lazy-tools 的 `resolveDefaultTools()` 只 `extractStringArray()`，**原样保留 `+`/`-` 前缀不去符号**，把 `"+codemode"` 当字面量放进 resident 名单，再 `allToolNames.filter(name => !resident.has(name))` 算 lazy 集。而 `allToolNames` 里只有裸名 `codemode`（工具名不带 `+`），`"+codemode"` 永远不命中 → **codemode 照样被隐藏**。pi 侧的 `+name` 相对写法只有 pi 自己解析，lazy-tools 不认。
+
+**所以必须写完整裸名**：`"defaultTools": ["read","edit","write","bash","codemode"]`（绝对写法 = pi 整体替换选择，两边语义一致）。`pi --tools +codemode` 只在单次启动有效，持久配置一律写裸名。
+
+**为什么 codemode 必须常驻、没有第二入口**：
+- codemode 是 `builtin:codemode` 扩展，`defaultActive:false`（注册不激活）→ **不写 `defaultTools` 就永远不在 active 集**，模型看不到。
+- 它的 `sourceInfo` 是合成 `builtin:` 路径（`getSyntheticPathSource` → `source:"builtin"`），被 lazy-tools 的 `nonLoadableSourceReason()` 判为不可加载 → **`omnify` 代理不了**（同 `ls`/`powershell` 一类）。
+- 两条合起来 = 常驻是唯一启用方式（§5 第 0 条破例，按「缺失即瘫」归第三类）。
+
+**模式 `"only"`（本机 2026-11-13 起选此，与 `"on"` 对照）**：
+- `"only"`：把全部工具从模型侧隐藏、全列进 codemode 描述，前缀顶到 `codemode.inlineBudget`（默认 **3000 tok**）。**代价最大，但换来「模型只认 codemode + omnify 两条入口」，工具表完全由 codemode 描述与脚本内 `searchTools()`/`describeTool()` 动态发现**，与 lazy-tools「隐藏 + omnify 单入口」方向一致（工具都不直接暴露）。
+- `"on"`（默认）：codemode 描述只列 non-direct 工具；被 lazy 藏掉的不在 callable 集 → 不会重复列。每个常驻工具尾部追加一行 `Codemode: tools.x(...) resolves to ...`（约 12 tok × 5）。
+- **若嫌 `only` 太贵**（可达 3000 tok），回退到 `"on"`：删 `codemode.mode` 键（保持默认），`/reload` 生效。
+
+**成本（`"only"`，实测 pi.exe 实现）**：取决于 `inlineBudget`（默认 **3000 tok** 上限）。内置工具全量声明实测约 800–1200 tok；有 MCP server 时顶到 3000。而 `"on"` 下仅 ≈+400 tok（工具描述主体 ≈355 + 常驻工具尾部备注 ≈60）。**`"only"` 是把预算从 ~400 放大到最高 3000 tok 的开关，按需取舍。**
+
+**`codemode.inlineBudget` 不写**（保持默认 3000）：改小会截断工具声明列表（改用 `searchTools()`/`describeTool()` 补齐），改大只会更贵；默认即平衡点。
+
+**与 MCP / deferred 的接合点（零成本组合）**：MCP 工具默认 `exposure:"deferred"`，lazy-tools 的 `isAlwaysCallableExposure()` 视 `codemode`/`deferred` 为「注册即可调、与 active 集无关」→ 不隐藏；codemode 脚本可经 `tools.<name>` 直调。这是 codemode + lazy-tools + MCP 唯一零请求侧变化的组合路径，无冲突。
+
+**与 lazy-tools 的接合点**：lazy-tools 的 `isAlwaysCallableExposure()` 把 `codemode`/`deferred` 视为「注册即可调、与 active 集无关」；且 codemode 是 builtin 合成源码（`nonLoadableSourceReason` 判不可加载）→ **lazy-tools 不会隐藏它、omnify 也代理不了它**。故 codemode 只能常驻，与 lazy-tools 无争夺；两者唯一的叠加效应是 token（§6.4 成本）。
 
 ## 7. 删改记录
 
