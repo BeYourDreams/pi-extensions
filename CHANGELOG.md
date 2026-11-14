@@ -1311,3 +1311,11 @@ pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传
   - `fd` 的能力远胜内建 `find`（§4.1 五项），常驻与否只影响字节与往返，不影响能力。（`pi-find` 已于 2026-11-04 晚卸，CHANGELOG §7.32。）
 
 ### 6.4 优化后的静态前缀总账
+
+## 2026-11-14（续）codemode 同步：inlineBudget 400 + 恢复直调拦截
+
+- 用户级 `~/.pi/agent/settings.json`：`codemode.inlineBudget` `0 → 400`（内联内建 4 件声明：`read`/`bash`/`edit`/`write`，≈304 tok）。
+- 恢复本地扩展 `extensions/codemode-only.ts`：`tool_call` 拦截非嵌套直调（放行 `codemode`/`omnify` 与脚本内嵌套调用，0 提示词开销）。
+- 当前 codemode `ALL_TOOLS` 可见：`read`、`bash`、`edit`、`write`（4 个）。
+- 同步 `readme.md`、`docs/配置.md`、`docs/token优化.md` 说明。
+
