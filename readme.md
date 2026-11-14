@@ -52,7 +52,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `git:github.com/BeYourDreams/pi-dsh-pet` | 桌面宠物：Electron 透明浮窗 + 91 个 WebM 动画 | **必须 `pi install`**（光 `npm i -g` 不加载）；上游扩展用 object form 屏蔽（[配置 §3.3](./docs/配置.md)）；**写 `extensions/pi-dsh-pet.json`** |
 | `git:github.com/BeYourDreams/pi-one-ui` | 状态栏 / 主题增强（`/colors`、`pi-one-ui.json`） | **走 git 不走 npm**（npm 0.9.1 主题过不了 pi 严格 schema）；**写 `pi-one-ui.json` 的 `colors.cwd`**（[配置 §3.8](./docs/配置.md)） |
 
-> 另：**本地扩展 1 个** `extensions/pi-pet-autostart.ts`，由 `node install-local-extensions.mjs` 同步（§1.2）。
+> 另：**本地扩展 2 个**（`extensions/pi-pet-autostart.ts`、`extensions/pi-skills-lazy.ts`），由 `node install-local-extensions.mjs` 同步（§1.2）。
 > 扩展的具体版本号不锁、不记在本清单里：安装命令一律不带 `@版本号`（取 npm 最新），要查本机实际版本跑下面那段脚本。
 
 ### 1.2 本地扩展（2 个）
@@ -62,6 +62,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | 文件 | 作用 |
 |---|---|
 | `pi-pet-autostart.ts` | 让 `pi-dsh-pet` **默认常驻且整机只留一只**：TUI 会话一开就派发 `/pet`，已有宠物窗就复用不新开，跨会话/多开 pi 也只一只。不注册工具，只挂 `session_start` + `/pet-auto` 开关。配置见 [配置 §3.3](./docs/配置.md) |
+| `pi-skills-lazy.ts` | 会话启动时自愈技能懒加载标记：扫描 `~/.pi/agent/skills/*/SKILL.md`，缺 `disable-model-invocation: true` 就自动补回（幂等）。不注册工具；手工更新脚本仍建议末尾跑 `node mark-skills-lazy.mjs`（§1.4） |
 
 > 同步是双向的：仓库删掉的本地扩展要跑 `node install-local-extensions.mjs --prune` 才能从用户目录清掉，否则残留副本仍然被加载（`--check` 会把孤儿报 `[orphan]` 并 exit 1）。
 
@@ -87,7 +88,8 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 >
 > **曾计划的换代未落地**：`400-duanju-shuangdian` + `short-drama-factory` + `code-review` 是 2026-11-07 写进手册的目标态，**本机实际没装**（`~/.pi/agent/skills/` 里没有）。要么按表里命令 clone 装上并补名单，要么把这段计划删掉——别照抄当现状。
 >
-> **新装 skill 四步**：① clone 到 `~/.pi/agent/skills/`；② `node mark-skills-lazy.mjs`（否则索引又常驻）；③ 在 `config/agent/AGENTS.md` 名单补一条 + `node install-project-config.mjs`；④ 开新会话。
+> **新装 skill 四步**：① clone 到 `~/.pi/agent/skills/`；② `node mark-skills-lazy.mjs`（否则索引又常驻）；③ 在 `config/agent/AGENTS.md` 名单补一条 + `node install-project-config.mjs`；④ 开新会话。  
+> **手工更新技能后**：在更新脚本末尾跑 `node mark-skills-lazy.mjs`；已装本地扩展 `pi-skills-lazy.ts` 时，下次 `session_start` 也会自动补回缺失标记（名单增删/改名仍需手工同步）。
 >
 > **备用加载路径（脚本侧）**：`disable-model-invocation` 只影响提示词，不影响 `options.skills` → `omnify` 仍能按 goal 检索到全部技能（含打标技能）；codemode 沙箱没有 skills API，这是唯一脚本侧入口。
 >
@@ -195,7 +197,7 @@ pi list                                # 升完核一遍实际版本
 
 **升级禁用 `pi install`**：对已装包会命中 npm 缓存、不升版本。升级一律走 `pi update --extensions`（不带版本号 = 取各包 npm 最新）。升级后跑 [体检与排障](./docs/体检排障.md)。
 
-> **skills 不走 `pi update`**：`cangjie-skill` / `goutoujunshi` 是独立 git clone，要更新就在各自目录 `git pull`；九件 `short-drama-*` 没有仓库镜像，更新靠 `sync-drama-skills.mjs save/install`（`CUSTOM` 已清空，实际等于手工维护，详见 §1.3）。打标技能升级后要重跑 `node mark-skills-lazy.mjs`。
+打标技能升级后要重跑 `node mark-skills-lazy.mjs`（或依赖本地扩展 `pi-skills-lazy.ts` 在下次启动自愈标记）。
 
 > 首次安装（§2.1）同样不带版本号，npm 自动解析 latest；**本仓库任何位置都不写死扩展版本号**。
 > **两个 git 源走同一条命令**

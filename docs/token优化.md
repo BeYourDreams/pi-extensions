@@ -78,6 +78,6 @@ if (p) return await tools.read({ path: p });
 | **frontmatter `disable-model-invocation: true` + `~/.pi/agent/AGENTS.md` 名单** | **4928 tok** | 名单 ≈180 tok，索引 0 | **采用**（0 扩展、0 新工具，`/skill:name` 与 `read` 不变） |
 | 自写扩展：清 `options.skills` + `skill(goal)` 按需检索 | 4747 tok | 一行提示 + 名单 | 弃用（只多省 180 tok，却多一个要维护的扩展；已存 `~/.pi/agent/extensions/.disabled/lazy-skills`） |
 
-**维护成本**：新装/改名技能要跑一次 `node mark-skills-lazy.mjs`，并在 `config/agent/AGENTS.md` 名单里补一条。要恢复常驻索引：删掉各 SKILL.md 的这行标记即可。
+**维护成本**：新装/改名技能要跑一次 `node mark-skills-lazy.mjs`，并在 `config/agent/AGENTS.md` 名单里补一条。手工更新脚本建议在末尾调用 `mark-skills-lazy.mjs`；本地扩展 `extensions/pi-skills-lazy.ts`（`session_start` 自愈）可作为兜底，防止遗漏导致标记回退。要恢复常驻索引：删掉各 SKILL.md 的这行标记即可。
 
 **为什么名单不能省**：`disable-model-invocation` 是「对模型不可见」，不是「可检索」。名单里那 2~4 字提示（如 `short-drama-pro=剧本+分镜+视频提示词`）是唯一路由信号；7 个 `short-drama-*` 只靠名字会串味。

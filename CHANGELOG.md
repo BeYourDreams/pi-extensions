@@ -868,6 +868,11 @@ builtin工具（sourceInfo=<builtin:bash>，由 pi 内部工厂生成、
 
 **处置**：① `codemode.inlineBudget` `0` → `400`（最小可见预算：内建四件声明 ≈304 tok）；② 新本地扩展 `extensions/codemode-only.ts`，在 `tool_call` 拦直调、放行嵌套调用，0 提示词开销。
 
+## 2026-11-14 技能懒加载：手工更新防回退（`pi-skills-lazy` 自愈）
+
+- 新增本地扩展 `extensions/pi-skills-lazy.ts`：`session_start` 扫描 `~/.pi/agent/skills/*/SKILL.md`，缺 `disable-model-invocation: true` 自动补回（幂等，不注册工具），避免手工更新脚本覆盖后索引回退常驻。
+- README §1.2/§1.4、`docs/token优化.md` §6.5 同步：本地扩展计数更新；补充“手工更新脚本末尾跑 `mark-skills-lazy.mjs` + 可选自愈兜底”的说明（路由名单增删/改名仍需手工维护）。
+
 ## 10. 已失效的必做配置（原 README §3，2026-11-07 迁入）
 
 下列小节在 README 里已无对象（包已卸 / 键已删），移到这里留档。README §3 只保留**当前还需要配的**。包装回来时照此照做，§x.y 编号沿用原 README 编号以便对账。
