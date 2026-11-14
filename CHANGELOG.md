@@ -1319,3 +1319,10 @@ pi 内建 `bash` 工具的 `timeout` 参数是**可选且无默认值**，不传
 - 当前 codemode `ALL_TOOLS` 可见：`read`、`bash`、`edit`、`write`（4 个）。
 - 同步 `readme.md`、`docs/配置.md`、`docs/token优化.md` 说明。
 
+
+## 2026-11-14（续）移除 codemode-only 拦截器
+
+- 删除 `extensions/codemode-only.ts`：避免 `tool_call` 拦截后触发额外请求。
+- 保持 `codemode.mode:"only"` + `inlineBudget:400`；`"only"` 只隐藏声明、不改 active 集，现无直调拦截器（直调若发生会执行）。
+- 同步 `readme.md`、`docs/配置.md`、`docs/token优化.md`、`CHANGELOG.md`。
+
