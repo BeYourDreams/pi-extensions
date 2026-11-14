@@ -12,12 +12,16 @@
  *
  * 上限：只覆盖内建 8 个名字；扩展工具（如 `omnify`）不在名单里，要拦就往 DIRECT 里加。
  */
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
 const DIRECT = new Set(["read", "bash", "edit", "write", "grep", "find", "ls", "powershell"]);
 
-pi.on("tool_call", async (event) => {
-	if (event.parentToolCallId || !DIRECT.has(event.toolName)) return;
-	return {
-		block: true,
-		reason: `Call it from codemode instead: const r = await tools.${event.toolName}({ ... })`,
-	};
-});
+export default function codemodeOnly(pi: ExtensionAPI): void {
+	pi.on("tool_call", async (event) => {
+		if (event.parentToolCallId || !DIRECT.has(event.toolName)) return;
+		return {
+			block: true,
+			reason: `Call it from codemode instead: const r = await tools.${event.toolName}({ ... })`,
+		};
+	});
+}
