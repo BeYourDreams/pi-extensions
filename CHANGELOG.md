@@ -675,7 +675,7 @@ Other errors:
 
 **弃用的替代方案**：自写扩展 `extensions/lazy-skills`（清 `options.skills` + `skill(goal)` 中文 bigram 检索）做到 4747 tok，只多省 180 tok，却多一个扩展 + 一套排序逻辑要维护 → 已移到 `~/.pi/agent/extensions/.disabled/lazy-skills`（目录名以 `.` 开头，pi 不加载，留档可捡回）。
 
-**顺带记录**：本地 `~/.pi/agent/skills` 仍是老的 `short-drama-*` 九件 + `cangjie-skill` + `goutoujunshi`，与 README §1.3 写的「drama 线已换代」不符（手册与实际装机有漂移）；名单按**实际装机**写。
+**同步收尾（同一轮）**：README §1.3 原先写的是 2026-11-07 的**目标态**（`400-duanju-shuangdian` + `short-drama-factory` + `code-review` = 5 个技能），但本机实际是 `short-drama-*` 九件 + `cangjie-skill` + `goutoujunshi` = **11 个**。已按实际装机改写 §1.3（列全 11 个 + 装法）、把未落地的换代标成「计划，未装」、并同步 §3 升级段（skills 不走 `pi update`）与新装 skill 四步。名单也按实际 11 个写。
 
 ## 8. 体检与排障
 

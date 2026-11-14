@@ -68,30 +68,35 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 
 ### 1.3 Skills（可选，非扩展）
 
-本机在装 5 个技能，全部落在 `~/.pi/agent/skills/`：
+本机在装 11 个技能，全部落在 `~/.pi/agent/skills/`（索引已按 §1.4 隐藏，名单在 `config/agent/AGENTS.md`）：
 
 | 技能 | 装法 | 用途 |
 |---|---|---|
-| `400-duanju-shuangdian` | `git clone github.com/icooldp/400-duanju-shuangdian` | 《400 个爆款短剧剧本爽点》技能包（26 个子技能，桥段生成 + 爽点校验） |
-| `short-drama-factory` | `git clone github.com/wsf73/short-drama-factory` | 短剧工业化编剧系统（情绪契约单元链 + E1~E24 / S1~S8 机检） |
-| `code-review` | 手工放入 | 代码审查：只报告带证据的问题与修法，不改源码 |
 | `cangjie-skill`（仓颉） | `git clone github.com/kangarooking/cangjie-skill` | 把书 / 长视频 / 播客 / 课程蒸馏成可执行 skills |
 | `goutoujunshi`（狗头军师） | `git clone github.com/shengjidaguai-china/goutoujunshi` | 恋爱军师与情绪支持 |
+| `short-drama` | 仅全局副本（见下） | 短剧/漫剧项目总控：初始化、下一步、Dashboard |
+| `short-drama-develop` | 仅全局副本 | 开发/故事设定/分集地图/导演阐述/画风 |
+| `short-drama-novel-analyze` | 仅全局副本 | 长篇小说 → 原著分析 → 分集候选 |
+| `short-drama-assets` | 仅全局副本 | 人物/造型、地点、道具的视觉设定 |
+| `short-drama-image-prompts` | 仅全局副本 | 人物/场景/道具图片提示词 |
+| `short-drama-pro` | 仅全局副本（自建，含 SHT-31 / PAC-01~05 / CON-08 补丁） | 剧本 + 分镜 + 视频提示词一条链 |
+| `short-drama-produce` | 仅全局副本 | 确认后跑图/跑视频/配音/配乐 |
+| `short-drama-review` | 仅全局副本 | 审稿与跨场连续性检查 |
+| `short-drama-edit` | 仅全局副本 | 剪辑/字幕/响度/交付规格 |
 
-> 技能不再常驻注入系统提示词，需要时用 `omnify` 检索。**新装 skill 要开新会话才加载**（本会话内装的，omnify 当轮检索不到）。
+> **九件 `short-drama-*` 没有仓库镜像**：`git ls-files skills` 只剩 `UPSTREAM.md`，SKILL.md 与脚本只存在于 `~/.pi/agent/skills/`——改它们等于直接改全局，仓库里没有备份（要留底自己另存）。`sync-drama-skills.mjs` 的 `CUSTOM` 已清空，`check` 恒报无漂移。
 >
-> **drama 线已换代**：早期的 `short-drama-*` 九件（含自建的 `short-drama-pro`）已于 2026-11-07 从本仓库与全局删除，改为上面的 `400-duanju-shuangdian` + `short-drama-factory`。因此 `skills/` 目前只剩一份 `UPSTREAM.md`（旧 drama 线的上游快照与吸收流程留档），`sync-drama-skills.mjs` 的 `CUSTOM` 列表已清空（`check` 恒报无漂移）。原九件的定制细节（SHT-31 / PAC-01~05 / CON-08 等）见 CHANGELOG。
-
-> **codemode 内按需加载技能（lazy 路径，2026-11-13 实测）**：codemode 沙箱**没有** skills API（Globals 仅 `searchTools`/`describeTool`/`describeNamespace`/`ALL_TOOLS`/`models`），技能检索唯一入口是 `tools.omnify`。技能不注入全文，按需 `read SKILL.md`：
+> **曾计划的换代未落地**：`400-duanju-shuangdian` + `short-drama-factory` + `code-review` 是 2026-11-07 写进手册的目标态，**本机实际没装**（`~/.pi/agent/skills/` 里没有）。要么按表里命令 clone 装上并补名单，要么把这段计划删掉——别照抄当现状。
+>
+> **新装 skill 四步**：① clone 到 `~/.pi/agent/skills/`；② `node mark-skills-lazy.mjs`（否则索引又常驻）；③ 在 `config/agent/AGENTS.md` 名单补一条 + `node install-project-config.mjs`；④ 开新会话。
+>
+> **备用加载路径（脚本侧）**：`disable-model-invocation` 只影响提示词，不影响 `options.skills` → `omnify` 仍能按 goal 检索到全部技能（含打标技能）；codemode 沙箱没有 skills API，这是唯一脚本侧入口。
 >
 > ```js
-> // codemode 内懒加载：搜技能 → 提路径 → 读全文
-> const r = await tools.omnify({ goal: "越级反杀 绝境翻盘" }); // goal 用触发信号词，BM25 才命中
+> const r = await tools.omnify({ goal: "越级反杀 绝境翻盘" }); // goal 用描述里的触发信号词，BM25 才命中
 > const p = r.match(/（([A-Za-z]:[^）]*SKILL\.md)）/)?.[1];      // 返回含 `（盘符:\...\SKILL.md）`
 > if (p) return await tools.read({ path: p });
 > ```
->
-> **生效注意**：① omnify 在 active 集（lazy-tools `session_start` 无条件写回），`codemode.mode:"only"` 不会砍掉它；② `goal` 太泛会返回"未找到"，用技能描述里的触发信号词（如"越级反杀"）最稳；③ codemode 只管工具呈现，与技能注入无关——技能清单（name+desc+path）由 pi 原生常驻注入，lazy-tools 另把它剥离成一行 SKILLS_NOTE（需新会话生效）。
 
 ### 1.4 技能索引懒加载（纯配置，2026-11-14）
 
@@ -183,7 +188,7 @@ pi list                                # 升完核一遍实际版本
 
 **升级禁用 `pi install`**：对已装包会命中 npm 缓存、不升版本。升级一律走 `pi update --extensions`（不带版本号 = 取各包 npm 最新）。升级后跑 [体检与排障](./docs/体检排障.md)。
 
-> **skills 不走 `pi update`**：`400-duanju-shuangdian` / `short-drama-factory` 是独立 git clone，要更新就在它自己目录 `git pull`（详见 §1.3）。`sync-drama-skills.mjs` 的 `CUSTOM` 已清空，只对旧 drama 线有作用。
+> **skills 不走 `pi update`**：`cangjie-skill` / `goutoujunshi` 是独立 git clone，要更新就在各自目录 `git pull`；九件 `short-drama-*` 没有仓库镜像，更新靠 `sync-drama-skills.mjs save/install`（`CUSTOM` 已清空，实际等于手工维护，详见 §1.3）。打标技能升级后要重跑 `node mark-skills-lazy.mjs`。
 
 > 首次安装（§2.1）同样不带版本号，npm 自动解析 latest；**本仓库任何位置都不写死扩展版本号**。
 > **两个 git 源走同一条命令**
