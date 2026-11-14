@@ -153,6 +153,14 @@ node install-project-config.mjs
 # ⑤ 项目级规则（单条：别写项目级 .pi/settings.json）：仓库根 AGENTS.md 就是模板，按项目拷
 # cp AGENTS.md <项目>/AGENTS.md
 ```
+> **④ 补充：用户级 `~/.pi/agent/settings.json` 确保含 codemode 配置**（与 `codemode-only.ts` 配套；只改用户级，勿写项目 `.pi/settings.json`）：
+> ```jsonc
+> {
+>   "defaultTools": ["read", "edit", "write", "bash", "codemode"],
+>   "codemode": { "mode": "only", "inlineBudget": 0 }
+> }
+> ```
+> `inlineBudget: 0` = 仅列命名空间、不内联声明（省 token）；直调内建工具名由 `codemode-only.ts` 拦截并回指 `tools.x()`。改完 `/reload` 或新会话生效。
 
 > **别再把历史上卸掉的包装回来**（全部 20+ 个，理由都在 CHANGELOG 对应日期）。本机清了它们是为了「一个 user turn = 一个 provider 请求」，装回前先答一遍这个问题。典型黑名单：`pi-web-access` / `pi-agent-browser-native` / `@chendpoc/pi-memory` / `@arhen/pi-core-subagent` / `pi-test-runner` / `pi-ocr` / `pi-cache-compact` / `@tian.zuo/pi-find` / `@trycedar/pi-mdiff` / `pi-mcp-adapter` / `@henryqw/pi-ask-question` / `@ssk_dev/rpiv-todo-lean` / `@narumitw/pi-lsp` / `@narumitw/pi-plan-mode` / `pi-secret-guard` / `pi-smart-reader` / `pi-budget-guard` / `pi-warm-cache` / `pi-deepseek-cache` / `pi-compaction-cache` / `pi-mono-context-guard` / `@bacnh85/pi-checkpoint` / `pi-meter` / `pi-notify`。
 
