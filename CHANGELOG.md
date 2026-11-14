@@ -843,6 +843,14 @@ builtin工具（sourceInfo=<builtin:bash>，由 pi 内部工厂生成、
 
 无专门配置文件残留（pi-checkpoint 的 git ref 留在仓库）。README §1/§2.1/§3.8/§4/§8 同步。
 
+## 2026-11-14 `codemode-only.ts` + `inlineBudget 0 → 400`（`"only"` 漏直调 `bash`）
+
+**症状**：`codemode.mode: "only"` 下模型偶尔直接点名 `bash`，而且**真的被执行**。实测 2026-11-14 一条会话：system 段 tools 只有 `codemode`，transcript 里 43 次 `bash` 调用、43 条结果、`isError` 全 false（同批另两条会话正常只用 codemode）。
+
+**成因**：`only` 只隐藏**声明**，不动 active 集——`hiddenDeclarations` 的语义就是「active 但不声明」，工具仍可调用；而 `bash` 必须保持 active，否则脚本里 `tools.bash()` 也调不动（`direct` exposure 只在 active 时可调用）。`inlineBudget 0` 加剧问题：codemode 描述一个工具名都不列，模型只能猜。
+
+**处置**：① `codemode.inlineBudget` `0` → `400`（最小可见预算：内建四件声明 ≈304 tok）；② 新本地扩展 `extensions/codemode-only.ts`，在 `tool_call` 拦直调、放行嵌套调用，0 提示词开销。
+
 ## 10. 已失效的必做配置（原 README §3，2026-11-07 迁入）
 
 下列小节在 README 里已无对象（包已卸 / 键已删），移到这里留档。README §3 只保留**当前还需要配的**。包装回来时照此照做，§x.y 编号沿用原 README 编号以便对账。

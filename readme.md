@@ -52,16 +52,17 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `git:github.com/BeYourDreams/pi-dsh-pet` | 桌面宠物：Electron 透明浮窗 + 91 个 WebM 动画 | **必须 `pi install`**（光 `npm i -g` 不加载）；上游扩展用 object form 屏蔽（[配置 §3.3](./docs/配置.md)）；**写 `extensions/pi-dsh-pet.json`** |
 | `git:github.com/BeYourDreams/pi-one-ui` | 状态栏 / 主题增强（`/colors`、`pi-one-ui.json`） | **走 git 不走 npm**（npm 0.9.1 主题过不了 pi 严格 schema）；**写 `pi-one-ui.json` 的 `colors.cwd`**（[配置 §3.8](./docs/配置.md)） |
 
-> 另：**本地扩展 1 个** `extensions/pi-pet-autostart.ts`，由 `node install-local-extensions.mjs` 同步（§1.2）。
+> 另：**本地扩展 2 个** `extensions/pi-pet-autostart.ts`、`extensions/codemode-only.ts`，由 `node install-local-extensions.mjs` 同步（§1.2）。
 > 扩展的具体版本号不锁、不记在本清单里：安装命令一律不带 `@版本号`（取 npm 最新），要查本机实际版本跑下面那段脚本。
 
-### 1.2 本地扩展（1 个）
+### 1.2 本地扩展（2 个）
 
 仓库 `extensions/` 是 canonical 源，`node install-local-extensions.mjs` 幂等同步到用户目录（`--check` 只体检、有漂移 exit 1）。
 
 | 文件 | 作用 |
 |---|---|
 | `pi-pet-autostart.ts` | 让 `pi-dsh-pet` **默认常驻且整机只留一只**：TUI 会话一开就派发 `/pet`，已有宠物窗就复用不新开，跨会话/多开 pi 也只一只。不注册工具，只挂 `session_start` + `/pet-auto` 开关。配置见 [配置 §3.3](./docs/配置.md) |
+| `codemode-only.ts` | 让 `codemode.mode: "only"` **真的只剩 codemode 一条入口**：`only` 只隐藏声明（`hiddenDeclarations`：active 但不声明 = 仍可调用），模型硬点名 `bash` 照样执行（2026-11-14 实测 43 次直调全成功）。本扩展在 `tool_call` 拦掉直调的内建 8 个名字，回 reason 指回 `tools.x()`；脚本内的嵌套调用带 `parentToolCallId`，放行。不注册工具、0 提示词开销 |
 
 > 同步是双向的：仓库删掉的本地扩展要跑 `node install-local-extensions.mjs --prune` 才能从用户目录清掉，否则残留副本仍然被加载（`--check` 会把孤儿报 `[orphan]` 并 exit 1）。
 
@@ -112,7 +113,7 @@ pi install git:github.com/BeYourDreams/pi-dsh-pet
 # pi-one-ui 走 git 不走 npm：npm 包 0.9.1 的内置主题过不了 pi 严格 schema
 pi install git:github.com/BeYourDreams/pi-one-ui
 
-# ③ 本地扩展（含 pi-pet-autostart.ts，宠物默认启用就靠它）
+# ③ 本地扩展（pi-pet-autostart.ts 宠物默认常驻 + codemode-only.ts 入口守卫）
 node install-local-extensions.mjs
 
 # ④ 用户级配置：把仓库 config/agent/ 拷进 ~/.pi/agent/（项目级 settings.json **不**拷：会覆盖顶掉全局）
