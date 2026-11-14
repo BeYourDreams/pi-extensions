@@ -61,4 +61,23 @@ if (p) return await tools.read({ path: p });
 ```
 
 - `goal` 太泛会返"未找到"，用技能描述里的触发信号词（如"越级反杀"）最稳。
-- 技能清单（name+desc+path）由 pi 原生常驻注入，lazy-tools 另把它剥离成一行 SKILLS_NOTE（需新会话生效）；codemode 只管工具呈现，与技能注入无关。
+- 技能清单（name+desc+path）由 pi 原生常驻注入。**lazy-tools 的剥离只落在 transcript，真实 payload 里仍是全量**（2026-11-14 复核，见 §6.5）；codemode 只管工具呈现，与技能注入无关。
+
+
+---
+
+### 6.5 技能索引懒加载：纯配置（2026-11-14）
+
+**结论：不写扩展。`disable-model-invocation: true` + 一行名单，首请求 6724 → 4928 tok。**
+
+**先纠正一条旧结论**：`pi-lazy-tools` 在 `before_agent_start` 里把 `sections.skills` 换成一行 `SKILLS_NOTE`，但那只改了 **transcript 里记的 section**，**provider payload 仍是全量 `<available_skills>`**。证据：`before_provider_request` 抓 payload，system 段 9242 字符、`available_skills` 命中；同一次运行的 session jsonl 里 section 却是 67 字符的 shim。反之清空 `options.skills` 或给技能打 `disable-model-invocation` 都能真让 payload 变小——也就是说，只查 jsonl/transcript 会被骗，必须抓 payload 或看 token 计数。
+
+| 方案 | 首请求 prompt | 组成 | 判断 |
+|---|---|---|---|
+| 默认（索引常驻） | 6724 tok | `<available_skills>` 11 条，≈2000 tok | — |
+| **frontmatter `disable-model-invocation: true` + `~/.pi/agent/AGENTS.md` 名单** | **4928 tok** | 名单 ≈180 tok，索引 0 | **采用**（0 扩展、0 新工具，`/skill:name` 与 `read` 不变） |
+| 自写扩展：清 `options.skills` + `skill(goal)` 按需检索 | 4747 tok | 一行提示 + 名单 | 弃用（只多省 180 tok，却多一个要维护的扩展；已存 `~/.pi/agent/extensions/.disabled/lazy-skills`） |
+
+**维护成本**：新装/改名技能要跑一次 `node mark-skills-lazy.mjs`，并在 `config/agent/AGENTS.md` 名单里补一条。要恢复常驻索引：删掉各 SKILL.md 的这行标记即可。
+
+**为什么名单不能省**：`disable-model-invocation` 是「对模型不可见」，不是「可检索」。名单里那 2~4 字提示（如 `short-drama-pro=剧本+分镜+视频提示词`）是唯一路由信号；7 个 `short-drama-*` 只靠名字会串味。

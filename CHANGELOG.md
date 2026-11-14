@@ -660,6 +660,23 @@ Other errors:
 
 **不受影响**：`extensions/no-find.ts`（把 **bash 命令**里的 `find`/`grep` 改写成 `fd`/`rg`）与 `pi-find` 包无关，仍生效。
 
+### 7.33 技能索引懒加载：走纯配置，不写扩展（2026-11-14）
+
+**问题**：11 个技能的 name+description+filePath 常驻系统提示词 ≈2000 tok/请求，而技能正文本来就是按需读的。
+
+**踩到的坑**：`pi-lazy-tools` 把 `sections.skills` 换成一行 `SKILLS_NOTE`，看着像已懒加载——**实际只改了 transcript section，provider payload 里仍是全量 `<available_skills>`**（`before_provider_request` 抓包实证：system 段 9242 字符、index 命中，而同一会话 jsonl 里 section 只有 67 字符）。所以「索引是否真被摘掉」只能看 payload 或 token 计数，别信 jsonl。
+
+**定案**：纯配置，0 扩展。
+
+1. 每个全局 `SKILL.md` frontmatter 加 `disable-model-invocation: true`（pi 的 `formatSkillsForPrompt` 过滤它）；新脚本 `mark-skills-lazy.mjs` 幂等补标记 / `--check` 体检。
+2. 路由交给 `config/agent/AGENTS.md` 的一行名单（名字=2~4 字提示），`node install-project-config.mjs` 同步到 `~/.pi/agent/AGENTS.md`。**这是「user 级 AGENTS.md 保持 0B」定案的第一个例外**（§7.32 / `07f27cf`）：0B 的目的是「别用常驻前缀指挥模型怎么写命令」，而名单是纯资源索引、不给指令；花 180 tok 换回 2000 tok。
+
+**实测（同 cwd、`pi --print` 首请求）**：6724 → **4928 tok**（−1796，−27%）。`/skill:short-drama-pro` 照常展开（实测回答「剧本阶段」）。
+
+**弃用的替代方案**：自写扩展 `extensions/lazy-skills`（清 `options.skills` + `skill(goal)` 中文 bigram 检索）做到 4747 tok，只多省 180 tok，却多一个扩展 + 一套排序逻辑要维护 → 已移到 `~/.pi/agent/extensions/.disabled/lazy-skills`（目录名以 `.` 开头，pi 不加载，留档可捡回）。
+
+**顺带记录**：本地 `~/.pi/agent/skills` 仍是老的 `short-drama-*` 九件 + `cangjie-skill` + `goutoujunshi`，与 README §1.3 写的「drama 线已换代」不符（手册与实际装机有漂移）；名单按**实际装机**写。
+
 ## 8. 体检与排障
 
 本机的体检脚本**没有自动化的**，但有几个手跑的（都在仓库根或 `.sc-test/`，`.sc-test/` 属 gitignore、不入库）：

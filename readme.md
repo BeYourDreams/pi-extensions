@@ -93,6 +93,32 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 >
 > **生效注意**：① omnify 在 active 集（lazy-tools `session_start` 无条件写回），`codemode.mode:"only"` 不会砍掉它；② `goal` 太泛会返回"未找到"，用技能描述里的触发信号词（如"越级反杀"）最稳；③ codemode 只管工具呈现，与技能注入无关——技能清单（name+desc+path）由 pi 原生常驻注入，lazy-tools 另把它剥离成一行 SKILLS_NOTE（需新会话生效）。
 
+### 1.4 技能索引懒加载（纯配置，2026-11-14）
+
+技能索引（name + description + filePath）由 pi 原生**常驻**注入系统提示词，本机 11 个技能实测 ≈ **2000 tok/请求**；技能正文（≈22k tok）本来就已经是按需读的。纯配置（**0 扩展**）就能把索引压到 ≈ **180 tok**：
+
+1. 给每个 `~/.pi/agent/skills/*/SKILL.md` 的 frontmatter 加一行 `disable-model-invocation: true` —— pi 用 `formatSkillsForPrompt` 过滤该标记，整条技能不再出现在提示词里；`/skill:<name>` 和直接 `read SKILL.md` 都不受影响。
+2. 路由改由名单承担：`config/agent/AGENTS.md`（canonical）写「技能名=2~4 字提示」一行到底，`node install-project-config.mjs` 同步到 `~/.pi/agent/AGENTS.md`。**这是模型唯一的路由依据，别省**。
+
+```bash
+node mark-skills-lazy.mjs          # 幂等补标记（新装技能后重跑）
+node mark-skills-lazy.mjs --check  # 体检，有漏标 exit 1
+node install-project-config.mjs    # 名单同步到 ~/.pi/agent/AGENTS.md
+```
+
+**实测（同 cwd、`pi --print` 首请求 prompt tokens）**
+
+| 状态 | 首请求 | 说明 |
+|---|---|---|
+| 默认（索引常驻） | 6724 | `<available_skills>` 全量 |
+| **本机现状（frontmatter + 名单）** | **4928** | 省 1796 tok（−27%），代价 = 名单 ≈180 tok |
+| 试过的扩展方案（已弃用） | 4747 | `skill` 工具按 goal 搜索；只多省 180 tok，却多一个要维护的扩展 → 弃 |
+
+**注意**
+- 生效需新会话或 `/reload`；技能名/路径变了要同步改 `config/agent/AGENTS.md`，否则模型找不到。
+- 别指望 `pi-lazy-tools` 代劳：它只把 `<skills>` 段在 **transcript** 里换成一行 `SKILLS_NOTE`，**真实 provider payload 仍是全量索引**（2026-11-14 用 `before_provider_request` 抓 payload 复核，见 [token优化 §6.5](./docs/token优化.md)）。
+- 只看名字不够时（比如 7 个 `short-drama-*` 分不清），名单里那 2~4 字提示就是分流依据；宁可长 50 字符也别留空。
+
 ## 2. 安装
 
 ### 2.1 顺序循环
