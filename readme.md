@@ -52,7 +52,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `git:github.com/BeYourDreams/pi-dsh-pet` | 桌面宠物：Electron 透明浮窗 + 91 个 WebM 动画 | **必须 `pi install`**（光 `npm i -g` 不加载）；上游扩展用 object form 屏蔽（[配置 §3.3](./docs/配置.md)）；**写 `extensions/pi-dsh-pet.json`** |
 | `git:github.com/BeYourDreams/pi-one-ui` | 状态栏 / 主题增强（`/colors`、`pi-one-ui.json`） | **走 git 不走 npm**（npm 0.9.1 主题过不了 pi 严格 schema）；**写 `pi-one-ui.json` 的 `colors.cwd`**（[配置 §3.8](./docs/配置.md)） |
 
-> 另：**本地扩展 2 个** `extensions/pi-pet-autostart.ts`、`extensions/codemode-only.ts`，由 `node install-local-extensions.mjs` 同步（§1.2）。
+> 另：**本地扩展 1 个** `extensions/pi-pet-autostart.ts`，由 `node install-local-extensions.mjs` 同步（§1.2）。
 > 扩展的具体版本号不锁、不记在本清单里：安装命令一律不带 `@版本号`（取 npm 最新），要查本机实际版本跑下面那段脚本。
 
 ### 1.2 本地扩展（2 个）
@@ -62,7 +62,6 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | 文件 | 作用 |
 |---|---|
 | `pi-pet-autostart.ts` | 让 `pi-dsh-pet` **默认常驻且整机只留一只**：TUI 会话一开就派发 `/pet`，已有宠物窗就复用不新开，跨会话/多开 pi 也只一只。不注册工具，只挂 `session_start` + `/pet-auto` 开关。配置见 [配置 §3.3](./docs/配置.md) |
-| `codemode-only.ts` | 让 `codemode.mode: "only"` **真的只剩 codemode 一条入口**：`only` 只隐藏声明（`hiddenDeclarations`：active 但不声明 = 仍可调用），模型硬点名 `bash` 照样执行（2026-11-14 实测 43 次直调全成功）。本扩展在 `tool_call` 拦掉直调的内建 8 个名字，回 reason 指回 `tools.x()`；脚本内的嵌套调用带 `parentToolCallId`，放行。不注册工具、0 提示词开销 |
 
 > 同步是双向的：仓库删掉的本地扩展要跑 `node install-local-extensions.mjs --prune` 才能从用户目录清掉，否则残留副本仍然被加载（`--check` 会把孤儿报 `[orphan]` 并 exit 1）。
 
@@ -144,7 +143,7 @@ pi install git:github.com/BeYourDreams/pi-dsh-pet
 # pi-one-ui 走 git 不走 npm：npm 包 0.9.1 的内置主题过不了 pi 严格 schema
 pi install git:github.com/BeYourDreams/pi-one-ui
 
-# ③ 本地扩展（pi-pet-autostart.ts 宠物默认常驻 + codemode-only.ts 入口守卫）
+# ③ 本地扩展（pi-pet-autostart.ts 宠物默认常驻）
 node install-local-extensions.mjs
 
 # ④ 用户级配置：把仓库 config/agent/ 拷进 ~/.pi/agent/（项目级 settings.json **不**拷：会覆盖顶掉全局）
@@ -153,14 +152,14 @@ node install-project-config.mjs
 # ⑤ 项目级规则（单条：别写项目级 .pi/settings.json）：仓库根 AGENTS.md 就是模板，按项目拷
 # cp AGENTS.md <项目>/AGENTS.md
 ```
-> **④ 补充：用户级 `~/.pi/agent/settings.json` 确保含 codemode 配置**（与 `codemode-only.ts` 配套；只改用户级，勿写项目 `.pi/settings.json`）：
+> **④ 补充：用户级 `~/.pi/agent/settings.json` 确保含 codemode 配置**（只改用户级，勿写项目 `.pi/settings.json`）：
 > ```jsonc
 > {
 >   "defaultTools": ["read", "edit", "write", "bash", "codemode"],
 >   "codemode": { "mode": "only", "inlineBudget": 0 }
 > }
 > ```
-> `inlineBudget: 0` = 仅列命名空间、不内联声明（省 token）；直调内建工具名由 `codemode-only.ts` 拦截并回指 `tools.x()`。改完 `/reload` 或新会话生效。
+> `inlineBudget: 0` = 仅列命名空间、不内联声明（省 token）；模型可能直调内建工具名（`"only"` 只隐藏声明、不阻执行）。改完 `/reload` 或新会话生效。
 
 > **别再把历史上卸掉的包装回来**（全部 20+ 个，理由都在 CHANGELOG 对应日期）。本机清了它们是为了「一个 user turn = 一个 provider 请求」，装回前先答一遍这个问题。典型黑名单：`pi-web-access` / `pi-agent-browser-native` / `@chendpoc/pi-memory` / `@arhen/pi-core-subagent` / `pi-test-runner` / `pi-ocr` / `pi-cache-compact` / `@tian.zuo/pi-find` / `@trycedar/pi-mdiff` / `pi-mcp-adapter` / `@henryqw/pi-ask-question` / `@ssk_dev/rpiv-todo-lean` / `@narumitw/pi-lsp` / `@narumitw/pi-plan-mode` / `pi-secret-guard` / `pi-smart-reader` / `pi-budget-guard` / `pi-warm-cache` / `pi-deepseek-cache` / `pi-compaction-cache` / `pi-mono-context-guard` / `@bacnh85/pi-checkpoint` / `pi-meter` / `pi-notify`。
 
