@@ -54,7 +54,6 @@
     },
     "npm:@xynogen/pix-optimizer",
     "git:github.com/BeYourDreams/pi-one-ui",
-    "git:github.com/BeYourDreams/pi-lazy-tools",
     "npm:@piotr-oles/pi-reflag"
   ],
   "defaultTools": [

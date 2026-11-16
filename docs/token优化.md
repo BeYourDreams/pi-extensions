@@ -10,7 +10,7 @@
 
 > ⚠️ 这组数字是 **0.87.1 时期的实测**，pi 1.3.0 下**未复测**，按结论用、别按字节抠。完整表格、每步优化（`pi-lean-prompt` / `pi-shell` / `<docs>`+`<skills>` 压缩）、以及为什么第三类工具没有常驻，都在 CHANGELOG [§13](../CHANGELOG.md)。
 
-**当前取舍：内建默认 4 个 + `codemode`**（`read edit write bash codemode`），`grep` / `find` / `ls` / `powershell` 全部走懒加载，搜文件用 `omnify` 一步代理执行。
+**当前取舍：内建默认 4 个 + `codemode`**（`read edit write bash codemode`），`grep` / `find` / `ls` / `powershell` 全部走懒加载，搜文件用 `omnify`（已卸） 一步代理执行。
 
 | 做法 | 代价 | 收益 |
 |---|---|---|
@@ -27,22 +27,22 @@
 
 ### 6.4 `codemode` 常驻：结论与配置（2026-11-13）
 
-**结论：与 `pi-lazy-tools` 不冲突，可共存；配置一律写完整裸名（`+codemode` 也能让 codemode 上场，但不会 pin 其余工具）。本机模式选 `"only"`。**
+**结论：与 `pi-lazy-tools（已卸）` 不冲突，可共存；配置一律写完整裸名（`+codemode` 也能让 codemode 上场，但不会 pin 其余工具）。本机模式选 `"only"`。**
 
-**`+codemode` 的真实行为（2026-11-13 二次实测更正）**：lazy-tools 的 `resolveDefaultTools()` 只 `extractStringArray()`，**原样保留 `+`/`-` 前缀不去符号**，把 `"+codemode"` 当字面量放进 resident 名单，再 `allToolNames.filter(name => !resident.has(name))` 算 lazy 集；`allToolNames` 里只有裸名，`"+codemode"` 命中 0 个。**但它不会把 codemode 隐藏**——codemode 是合成 `builtin:` 源码，进 `nonOmnifiable` 集合，`session_start` 里 `resident = {omnify, ...resolved.resident, ...baselineFallback, ...nonOmnifiable}` 无条件常驻、不进 lazy 集，pi 侧再用 `+name` 激活它，故照常可用（本机实测正是在这种配置下跑通的）。**真实代价**：resident 命中 0 个 → `edit`/`write` 这些可代理的扩展工具全落 lazy 集被隐藏，只剩 `omnify` 一条路（实测 `ALL_TOOLS` 退化为 `read, bash, omnify`）。
+**`+codemode` 的真实行为（2026-11-13 二次实测更正）**：lazy-tools 的 `resolveDefaultTools()` 只 `extractStringArray()`，**原样保留 `+`/`-` 前缀不去符号**，把 `"+codemode"` 当字面量放进 resident 名单，再 `allToolNames.filter(name => !resident.has(name))` 算 lazy 集；`allToolNames` 里只有裸名，`"+codemode"` 命中 0 个。**但它不会把 codemode 隐藏**——codemode 是合成 `builtin:` 源码，进 `nonOmnifiable` 集合，`session_start` 里 `resident = {omnify, ...resolved.resident, ...baselineFallback, ...nonOmnifiable}` 无条件常驻、不进 lazy 集，pi 侧再用 `+name` 激活它，故照常可用（本机实测正是在这种配置下跑通的）。**真实代价**：resident 命中 0 个 → `edit`/`write` 这些可代理的扩展工具全落 lazy 集被隐藏，只剩 `omnify`（已卸） 一条路（实测 `ALL_TOOLS` 退化为 `read, bash, omnify`）。
 
 **所以要写完整裸名**：`"defaultTools": ["read","edit","write","bash","codemode"]`（绝对写法 = pi 整体替换选择，两边语义一致）。`pi --tools +codemode` 只在单次启动有效，持久配置一律写裸名。
 
 **为什么 codemode 必须常驻、没有第二入口**：
 - codemode 是 `builtin:codemode` 扩展，`defaultActive:false`（注册不激活）→ **不写 `defaultTools` 就永远不在 active 集**，模型看不到。
-- 它的 `sourceInfo` 是合成 `builtin:` 路径（`getSyntheticPathSource` → `source:"builtin"`），被 lazy-tools 的 `nonLoadableSourceReason()` 判为不可加载 → **`omnify` 代理不了**（同 `ls`/`powershell` 一类）。
+- 它的 `sourceInfo` 是合成 `builtin:` 路径（`getSyntheticPathSource` → `source:"builtin"`），被 lazy-tools 的 `nonLoadableSourceReason()` 判为不可加载 → **`omnify`（已卸） 代理不了**（同 `ls`/`powershell` 一类）。
 - 两条合起来 = 常驻是唯一启用方式（[§5](使用纪律.md) 第 0 条破例，按「缺失即瘫」归第三类）。
 
 **模式 `"only"`（本机 2026-11-13 起选此，与 `"on"` 对照）**：
-- `"only"`：把全部工具从模型侧隐藏、全列进 codemode 描述，前缀顶到 `codemode.inlineBudget`（**本机 400**；默认 **3000 tok**）。**代价最大，但换来「模型只认 codemode + omnify 两条入口」，工具表由 codemode 描述列出；`searchTools()`/`describeTool()`/`ALL_TOOLS` 只见 **active 集**——被 lazy 藏掉的扩展工具（`edit`/`write` 等）从 codemode 视角不存在，只能经 `omnify` 发现并代调（2026-11-13 实测：`describeTool("edit")` → `undefined`，而 omnify 名单里明列可代调）**，与 lazy-tools「隐藏 + omnify 单入口」方向一致（工具都不直接暴露）。
+- `"only"`：把全部工具从模型侧隐藏、全列进 codemode 描述，前缀顶到 `codemode.inlineBudget`（**本机 400**；默认 **3000 tok**）。**代价最大，但换来「模型只认 codemode + omnify 两条入口」，工具表由 codemode 描述列出；`searchTools()`/`describeTool()`/`ALL_TOOLS` 只见 **active 集**——被 lazy 藏掉的扩展工具（`edit`/`write` 等）从 codemode 视角不存在，只能经 `omnify`（已卸） 发现并代调（2026-11-13 实测：`describeTool("edit")` → `undefined`，而 omnify 名单里明列可代调）**，与 lazy-tools「隐藏 + omnify 单入口」方向一致（工具都不直接暴露）。
 - `"on"`（默认）：codemode 描述只列 non-direct 工具；被 lazy 藏掉的不在 callable 集 → 不会重复列。每个常驻工具尾部追加一行 `Codemode: tools.x(...) resolves to ...`（约 12 tok × 5）。
 - **若嫌 `only` 太贵**（可达 3000 tok），回退到 `"on"`：删 `codemode.mode` 键（保持默认），`/reload` 生效。
-- **`only` + `inlineBudget 400`（本机当前）**：内联内建 4 件声明（`read`/`bash`/`edit`/`write`，≈304 tok），模型可见签名；**无直调拦截器**（`"only"` 只隐藏声明、不改 active 集，直调若发生会执行——为避免拦截带来的额外请求而不装）。其余工具走 `searchTools()`/`describeTool()` 动态发现（脚本内消化，不额外产请求）。**`searchTools` 与 `omnify` 是两条路**：前者在 codemode 沙箱本地算（0 额外轮次），后者是模型侧工具（+1–2 轮）。
+- **`only` + `inlineBudget 400`（本机当前）**：内联内建 4 件声明（`read`/`bash`/`edit`/`write`，≈304 tok），模型可见签名；**无直调拦截器**（`"only"` 只隐藏声明、不改 active 集，直调若发生会执行——为避免拦截带来的额外请求而不装）。其余工具走 `searchTools()`/`describeTool()` 动态发现（脚本内消化，不额外产请求）。**`searchTools` 与 `omnify`（已卸） 是两条路**：前者在 codemode 沙箱本地算（0 额外轮次），后者是模型侧工具（+1–2 轮）。
 
 **成本（`"only"`，实测 pi.exe 实现）**：取决于 `inlineBudget`（**本机 400**；默认 **3000 tok** 上限）。本机内建 4 件声明 ≈304 tok；有 MCP server 时可顶到上限。而 `"on"` 下仅 ≈+400 tok（工具描述主体 ≈355 + 常驻工具尾部备注 ≈60）。**`"only"` 是把预算从 ~400 放大到最高 3000 tok 的开关，按需取舍。**
 
@@ -70,7 +70,7 @@ if (p) return await tools.read({ path: p });
 
 **结论：不写扩展。`disable-model-invocation: true` + 一行名单，首请求 6724 → 4928 tok。**
 
-**先纠正一条旧结论**：`pi-lazy-tools` 在 `before_agent_start` 里把 `sections.skills` 换成一行 `SKILLS_NOTE`，但那只改了 **transcript 里记的 section**，**provider payload 仍是全量 `<available_skills>`**。证据：`before_provider_request` 抓 payload，system 段 9242 字符、`available_skills` 命中；同一次运行的 session jsonl 里 section 却是 67 字符的 shim。反之清空 `options.skills` 或给技能打 `disable-model-invocation` 都能真让 payload 变小——也就是说，只查 jsonl/transcript 会被骗，必须抓 payload 或看 token 计数。
+**先纠正一条旧结论**：`pi-lazy-tools（已卸）` 在 `before_agent_start` 里把 `sections.skills` 换成一行 `SKILLS_NOTE`，但那只改了 **transcript 里记的 section**，**provider payload 仍是全量 `<available_skills>`**。证据：`before_provider_request` 抓 payload，system 段 9242 字符、`available_skills` 命中；同一次运行的 session jsonl 里 section 却是 67 字符的 shim。反之清空 `options.skills` 或给技能打 `disable-model-invocation` 都能真让 payload 变小——也就是说，只查 jsonl/transcript 会被骗，必须抓 payload 或看 token 计数。
 
 | 方案 | 首请求 prompt | 组成 | 判断 |
 |---|---|---|---|

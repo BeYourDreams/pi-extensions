@@ -13,12 +13,12 @@
 
 > 要查某个包为什么被卸、某次体检的原始输出，去 CHANGELOG 找对应日期。
 
-## 1. 清单（在用 9 个扩展 = 6 npm + 3 git）
+## 1. 清单（在用 8 个扩展 = 6 npm + 2 git）
 
 ```
 npm: pi-tps · pi-cache-guardian · pi-prefix-stabilizer · @aboutlo/pi-smart-edit
       @xynogen/pix-optimizer · @piotr-oles/pi-reflag
-git: github.com/BeYourDreams/pi-lazy-tools · pi-dsh-pet（扩展被屏蔽） · pi-one-ui
+git: github.com/BeYourDreams/pi-dsh-pet（扩展被屏蔽） · pi-one-ui
 ```
 
 **本清单以 `pi list` 实数为准**，任何增减都同步改这一节与 §2.1 的安装命令。版本不锁（安装命令一律不带 `@版本号`，取 npm 最新），要查本机实际版本：
@@ -44,11 +44,10 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `npm:@xynogen/pix-optimizer` | **压缩三合一**：caveman（输出，ASD-STE100 四档）+ ponytail（做法，YAGNI 三档）+ RTK（输入，bash 命令改写） | **写 `~/.pi/agent/pix.json`**（[配置 §3.5](./docs/配置.md)）；本机三档全 ultra。不注册工具，唯一入口 `/optimizer` 交互面板；RTK 首次加载自动下二进制到 `~/.pi/agent/bin` |
 | `npm:@piotr-oles/pi-reflag` | 透明把 bash 里的 `find`→`fd`、`grep`→`rg` 改写后执行 | 要求 `fd` / `rg` 在 PATH（[配置 §3.7](./docs/配置.md)） |
 
-**git 源 3 个**（都必须串行 `pi install`，且先 `pi remove` 掉旧的 npm/本地路同源条目）：
+**git 源 2 个**（都必须串行 `pi install`，且先 `pi remove` 掉旧的 npm/本地路同源条目）：
 
 | 包 | 作用 | 装完要做的 |
 |---|---|---|
-| `git:github.com/BeYourDreams/pi-lazy-tools` | 懒加载层，注册 `omnify`（按需代理执行隐藏工具） | 无（fork 已含两个修复，[工具归属 §4](./docs/工具归属.md)）；升完重跑 `fix-lazy-tools-notes.mjs` |
 | `git:github.com/BeYourDreams/pi-dsh-pet` | 桌面宠物：Electron 透明浮窗 + 91 个 WebM 动画 | **必须 `pi install`**（光 `npm i -g` 不加载）；上游扩展用 object form 屏蔽（[配置 §3.3](./docs/配置.md)）；**写 `extensions/pi-dsh-pet.json`** |
 | `git:github.com/BeYourDreams/pi-one-ui` | 状态栏 / 主题增强（`/colors`、`pi-one-ui.json`） | **走 git 不走 npm**（npm 0.9.1 主题过不了 pi 严格 schema）；**写 `pi-one-ui.json` 的 `colors.cwd`**（[配置 §3.8](./docs/配置.md)） |
 
@@ -91,13 +90,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 > **新装 skill 四步**：① clone 到 `~/.pi/agent/skills/`；② `node mark-skills-lazy.mjs`（否则索引又常驻）；③ 在 `config/agent/AGENTS.md` 名单补一条 + `node install-project-config.mjs`；④ 开新会话。  
 > **手工更新技能后**：在更新脚本末尾跑 `node mark-skills-lazy.mjs`；已装本地扩展 `pi-skills-lazy.ts` 时，下次 `session_start` 也会自动补回缺失标记（名单增删/改名仍需手工同步）。
 >
-> **备用加载路径（脚本侧）**：`disable-model-invocation` 只影响提示词，不影响 `options.skills` → `omnify` 仍能按 goal 检索到全部技能（含打标技能）；codemode 沙箱没有 skills API，这是唯一脚本侧入口。
->
-> ```js
-> const r = await tools.omnify({ goal: "越级反杀 绝境翻盘" }); // goal 用描述里的触发信号词，BM25 才命中
-> const p = r.match(/（([A-Za-z]:[^）]*SKILL\.md)）/)?.[1];      // 返回含 `（盘符:\...\SKILL.md）`
-> if (p) return await tools.read({ path: p });
-> ```
+> **脚本侧**：`disable-model-invocation` 只影响提示词；`omnify`（pi-lazy-tools）已卸，codemode 沙箱无 skills API，脚本侧无按 goal 检索技能的入口，需直接 `tools.read` 已知 `SKILL.md` 路径。
 
 ### 1.4 技能索引懒加载（纯配置，2026-11-14）
 
@@ -129,7 +122,7 @@ node install-project-config.mjs    # 名单同步到 ~/.pi/agent/AGENTS.md
 
 ### 2.1 顺序循环
 
-**`pi install` 一次只写一条注册，绝不能并行**（并行会竞写 `settings.json` 丢包）。照序跑，**目标 = `pi list` 9 条**：
+**`pi install` 一次只写一条注册，绝不能并行**（并行会竞写 `settings.json` 丢包）。照序跑，**目标 = `pi list` 8 条**：
 
 ```bash
 # ① npm 源 6 个（循环里少一个就少装一个）
@@ -138,8 +131,7 @@ for p in pi-tps pi-cache-guardian pi-prefix-stabilizer \
   pi install "npm:$p" || echo "[失败] $p"
 done
 
-# ② git 源 3 个，单独串行装
-pi install git:github.com/BeYourDreams/pi-lazy-tools
+# ② git 源 2 个，单独串行装
 # 宠物先 remove 旧的 npm 源 / 本地源，否则两份并存各加载一次（[配置 §3.3](./docs/配置.md)）
 pi install git:github.com/BeYourDreams/pi-dsh-pet
 # pi-one-ui 走 git 不走 npm：npm 包 0.9.1 的内置主题过不了 pi 严格 schema
@@ -178,7 +170,7 @@ node install-project-config.mjs
 >
 > 若 `pi update --extensions` 也超时，同一改写继续生效（git 源的 update 就是 git pull）；装完即可 `/reload`。
 
-**装完自查**：`pi list` 应见 **9 个扩展（6 npm + 3 git）**，且 `git:github.com/BeYourDreams/pi-dsh-pet` 那行带 `(filtered)`（[配置 §3.3](./docs/配置.md)）。不是 9 条就是漏装/多装，回头查。
+**装完自查**：`pi list` 应见 **8 个扩展（6 npm + 2 git）**，且 `git:github.com/BeYourDreams/pi-dsh-pet` 那行带 `(filtered)`（[配置 §3.3](./docs/配置.md)）。不是 9 条就是漏装/多装，回头查。
 
 ### 2.2 硬顺序约束
 
@@ -207,7 +199,7 @@ pi list                                # 升完核一遍实际版本
 
 > `pi-dsh-pet` 换 git 源后 **`pi update` 只拉增量**（clone 就带 `assets/thumb`，91 个 WebM）；只有第一次 `/pet` 要下 Electron ≈100MB。
 
-**升完必须验收两件事**：① `node fix-lazy-tools-notes.mjs --check` 与 `node fix-proper-lockfile-proxy.mjs --check` 都是 exit 0（两个补丁都没被冲掉）；② `pi --no-session -p "reply with: ok"` 里 `extension_error` 0、工具集没变（[token 优化 §6.4](./docs/token优化.md) 基线 5 个 / 5664B）。
+**升完必须验收两件事**：① `node fix-proper-lockfile-proxy.mjs --check` 为 exit 0（补丁没被冲掉）；② `pi --no-session -p "reply with: ok"` 里 `extension_error` 0、工具集没变（[token 优化 §6.4](./docs/token优化.md) 基线 5 个 / 5664B）。
 
 ### 2.4 卸载
 
