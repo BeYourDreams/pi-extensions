@@ -611,8 +611,16 @@ function findOnPath(exe: string): string | null {
 }
 
 /** 只有 node / bun 才配当「跑宿主」的运行时。`pi.exe`（Bun 打包的 pi）在这里被拒。 */
+/**
+ * 只认真可执行文件：node(.exe) / bun(.exe)。
+ *
+ * .cmd / .bat 是 npm/npx 的 shim 批处理，拿它当「运行时」去 spawn，Windows 必须先起一个
+ * cmd.exe 去跑它，于是宿主下面永远挂着一扇 cmd 窗（用户报的「拉起 pet 就弹出 cmd 显示
+ * 运行了」就是它：cmd.exe /d /s /c "pi-pet start" -> node .../pi-pet.cjs start）。
+ * windowsHide 挡不住这条链，只能在这里拒掉，让解析器继续找真正的 node/bun。
+ */
 function isNodeOrBun(bin: string): boolean {
-	return /^(node|bun)(\.exe|\.cmd|\.bat)?$/i.test(path.basename(bin));
+	return /^(node|bun)(\.exe)?$/i.test(path.basename(bin));
 }
 
 /**
