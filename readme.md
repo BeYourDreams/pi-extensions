@@ -148,13 +148,13 @@ pi install git:github.com/BeYourDreams/pi-one-ui
 # ③ 本地扩展（pi-pet-autostart.ts 宠物默认常驻）
 node install-local-extensions.mjs
 
-# ④ 用户级配置：把仓库 config/agent/ 拷进 ~/.pi/agent/（项目级 settings.json **不**拷：会覆盖顶掉全局）
+# ④ 用户级配置：把仓库 config/agent/ 拷进 ~/.pi/agent/（含 settings.json；项目级 .pi/settings.json **不**拷：会覆盖顶掉全局）
 node install-project-config.mjs
 
 # ⑤ 项目级规则（单条：别写项目级 .pi/settings.json）：仓库根 AGENTS.md 就是模板，按项目拷
 # cp AGENTS.md <项目>/AGENTS.md
 ```
-> **④ 补充：用户级 `~/.pi/agent/settings.json` 确保含 codemode 配置**（只改用户级，勿写项目 `.pi/settings.json`）：
+> **④ 说明：`config/agent/settings.json` 为用户级总配置 canonical 源**（含 `defaultTools`/codemode 等），`install-project-config.mjs` 会同步覆盖到 `~/.pi/agent/settings.json`（勿写项目 `.pi/settings.json`）：
 > ```jsonc
 > {
 >   "defaultTools": ["read", "edit", "write", "bash", "codemode"],

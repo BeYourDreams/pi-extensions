@@ -9,11 +9,10 @@
  *
  * 同步面（两个 scope，固定不动）：
  *   config/pi-project/*  →  <仓库根>/.pi/         项目级（本仓库被 pi 使用时生效）
- *   config/agent/*       →  ~/.pi/agent/          用户级（shellCommandPrefix 等跨项目配置）
+ *   config/agent/*       →  ~/.pi/agent/          用户级（AGENTS.md、settings.json 等跨项目配置）
  *
  * 安全约定：
- *   - `config/agent/settings.json` **不搬**（那份是用户级总配置，必须手改；误覆盖会把
- *     packages/defaultTools 等整段冲掉）。要留底请另起文件名（如 `settings.snapshot.json`）。
+ *   - `config/agent/settings.json` 为用户级总配置的 canonical 源，同步时**自动覆盖** `~/.pi/agent/settings.json`。
  *   - 逐字节比对，一致就不写盘（避免无谓的 /reload 抖动）。
  *
  * 用法：
@@ -27,7 +26,6 @@ import { fileURLToPath } from "node:url";
 
 const repo = path.dirname(fileURLToPath(import.meta.url));
 const checkOnly = process.argv.includes("--check");
-const NEVER_COPY = new Set(["settings.json"]); // config/agent 下禁止自动覆盖的名字
 /** `pi-project/` 下的留档件：放仓库只为「重装时手动拷」，不参与同步。
  *  settings.json 自 2026-11-13 转留档：项目级 defaultTools 会**整体覆盖**用户级，
  *  一旦某项目里有这份，全局改动就被它顶掉（「改一处生效」变成「改 N 处」）。
@@ -66,10 +64,6 @@ for (const { label, src, dest } of scopes) {
 	for (const f of fs.readdirSync(src).sort()) {
 		const from = path.join(src, f);
 		if (!fs.statSync(from).isFile()) continue;
-		if (path.basename(src) === "agent" && NEVER_COPY.has(f)) {
-			console.log(`[skip] ${label} ${f}（禁止自动覆盖用户级总配置）`);
-			continue;
-		}
 		if (isArchived(path.basename(src), f)) {
 			console.log(`[skip] ${label} ${f}（留档件，不参与同步）`);
 			continue;

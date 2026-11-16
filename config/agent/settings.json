@@ -1,0 +1,78 @@
+{
+  "defaultModel": "1",
+  "defaultProvider": "1",
+  "defaultThinkingLevel": "high",
+  "lastChangelogVersion": "1.5.2",
+  "theme": "light/dark",
+  "quietStartup": true,
+  "tuiMode": "fullscreen",
+  "defaultProjectTrust": "always",
+  "collapseChangelog": true,
+  "showCacheMissNotices": true,
+  "markdown": {
+    "mermaid": "streaming"
+  },
+  "httpIdleTimeoutMs": 0,
+  "showHardwareCursor": true,
+  "images": {
+    "blockImages": true
+  },
+  "compaction": {
+    "enabled": true,
+    "reserveTokens": 32768,
+    "keepRecentTokens": 8000
+  },
+  "terminal": {
+    "showTerminalProgress": true,
+    "clearOnShrink": true
+  },
+  "hideThinkingBlock": true,
+  "doubleEscapeAction": "tree",
+  "treeFilterMode": "default",
+  "whimsical": {
+    "enabled": true,
+    "weights": {
+      "A": 15,
+      "B": 10,
+      "C": 10,
+      "D": 15,
+      "E": 0,
+      "F": 25,
+      "G": 25
+    },
+    "spinnerPreset": "sleekOrbit"
+  },
+  "fullscreenCopyOnSelect": true,
+  "packages": [
+    "npm:pi-cache-guardian",
+    "npm:pi-tps",
+    "npm:pi-prefix-stabilizer",
+    "npm:@aboutlo/pi-smart-edit",
+    {
+      "source": "git:github.com/BeYourDreams/pi-dsh-pet",
+      "extensions": []
+    },
+    "npm:@xynogen/pix-optimizer",
+    "git:github.com/BeYourDreams/pi-one-ui",
+    "git:github.com/BeYourDreams/pi-lazy-tools",
+    "npm:@piotr-oles/pi-reflag"
+  ],
+  "defaultTools": [
+    "read",
+    "edit",
+    "write",
+    "bash",
+    "codemode"
+  ],
+  "codemode": {
+    "mode": "only",
+    "inlineBudget": 400
+  },
+  "fullscreenWheelScrollLines": "auto",
+  "extensionChangelogVersions": {
+    "{\"source\":\"npm:pi-agent-browser-native\",\"scope\":\"user\"}": "0.9.16",
+    "{\"source\":\"npm:@bacnh85/pi-checkpoint\",\"scope\":\"user\"}": "0.1.9",
+    "{\"source\":\"npm:pi-web-access\",\"scope\":\"user\"}": "0.46.0",
+    "{\"source\":\"git:github.com/BeYourDreams/pi-one-ui\",\"scope\":\"user\"}": "0.9.2"
+  }
+}
