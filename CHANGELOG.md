@@ -1,3 +1,9 @@
+## 2026-11-19 codemode：inlineBudget 400→0（隐藏工具声明）
+
+- 用户级 `~/.pi/agent/settings.json` 与仓库 canonical `config/agent/settings.json`：`codemode.inlineBudget` `400 → 0`（`mode: "only"` 不变）。
+- 效果：codemode 描述只列命名空间、不内联工具声明；工具靠脚本内 `searchTools()`/`describeTool()` 发现；无直调拦截器（`only` 只隐藏声明、不改 active 集，硬点名直调仍可能执行）。
+- 同步 `readme.md`、`docs/配置.md`、`docs/token优化.md`；`/reload` 或新会话生效。
+
 ## 2026-11-15 卸载 omnify（pi-lazy-tools）
 
 - **卸载**：从全局 `~/.pi/agent/settings.json` 与仓库 `config/agent/settings.json` 的 `packages` 移除 `git:github.com/BeYourDreams/pi-lazy-tools`（该包注册 `omnify` 懒加载代理工具）。
