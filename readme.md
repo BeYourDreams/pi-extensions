@@ -51,10 +51,10 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `git:github.com/BeYourDreams/pi-dsh-pet` | 桌面宠物：Electron 透明浮窗 + 91 个 WebM 动画 | **必须 `pi install`**（光 `npm i -g` 不加载）；上游扩展用 object form 屏蔽（[配置 §3.3](./docs/配置.md)）；**写 `extensions/pi-dsh-pet.json`** |
 | `git:github.com/BeYourDreams/pi-one-ui` | 状态栏 / 主题增强（`/colors`、`pi-one-ui.json`） | **走 git 不走 npm**（npm 0.9.1 主题过不了 pi 严格 schema）；**写 `pi-one-ui.json` 的 `colors.cwd`**（[配置 §3.8](./docs/配置.md)） |
 
-> 另：**本地扩展 2 个**（`extensions/pi-pet-autostart.ts`、`extensions/pi-skills-lazy.ts`），由 `node install-local-extensions.mjs` 同步（§1.2）。
+> 另：**本地扩展 3 个**（`extensions/pi-pet-autostart.ts`、`extensions/pi-skills-lazy.ts`、`extensions/skill-updater.ts`），由 `node install-local-extensions.mjs` 同步（§1.2）。
 > 扩展的具体版本号不锁、不记在本清单里：安装命令一律不带 `@版本号`（取 npm 最新），要查本机实际版本跑下面那段脚本。
 
-### 1.2 本地扩展（2 个）
+### 1.2 本地扩展（3 个）
 
 仓库 `extensions/` 是 canonical 源，`node install-local-extensions.mjs` 幂等同步到用户目录（`--check` 只体检、有漂移 exit 1）。
 
@@ -62,8 +62,10 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 |---|---|
 | `pi-pet-autostart.ts` | 让 `pi-dsh-pet` **默认常驻且整机只留一只**：TUI 会话一开就派发 `/pet`，已有宠物窗就复用不新开，跨会话/多开 pi 也只一只。不注册工具，只挂 `session_start` + `/pet-auto` 开关。配置见 [配置 §3.3](./docs/配置.md) |
 | `pi-skills-lazy.ts` | 会话启动时自愈技能懒加载标记：扫描 `~/.pi/agent/skills/*/SKILL.md`，缺 `disable-model-invocation: true` 就自动补回（幂等）。不注册工具；手工更新脚本仍建议末尾跑 `node mark-skills-lazy.mjs`（§1.4） |
+| `skill-updater.ts` | 技能自动更新：`startup`/`reload` 时按 6 小时节流检查；git 技能干净才 `git pull --ff-only`，短剧套件按上游 ref 整目录覆盖（先备份、本地有改动则跳过），cangjie/goutou 只采用不覆盖。注册 `/skill-update` 强制立即检查。配置 `config/agent/skill-updater.json`（同步到 `~/.pi/agent/skill-updater.json`），状态/缓存/备份在 `~/.pi/agent/skill-updater-*` |
 
 > 同步是双向的：仓库删掉的本地扩展要跑 `node install-local-extensions.mjs --prune` 才能从用户目录清掉，否则残留副本仍然被加载（`--check` 会把孤儿报 `[orphan]` 并 exit 1）。
+> `/skill-update` 只在交互 TUI 有效：`pi -p "/skill-update"` 不执行命令（print 模式吞 slash 命令、exit 0 无输出）。体检启动钩子：临时把配置 `checkIntervalHours` 设 0 起一次会话，看 `~/.pi/agent/skill-updater-state.json` 的 `lastCheck` 是否前移，再改回。
 
 ### 1.3 Skills（可选，非扩展）
 
@@ -189,7 +191,7 @@ pi list                                # 升完核一遍实际版本
 
 **升级禁用 `pi install`**：对已装包会命中 npm 缓存、不升版本。升级一律走 `pi update --extensions`（不带版本号 = 取各包 npm 最新）。升级后跑 [体检与排障](./docs/体检排障.md)。
 
-打标技能升级后要重跑 `node mark-skills-lazy.mjs`（或依赖本地扩展 `pi-skills-lazy.ts` 在下次启动自愈标记）。
+打标技能升级后要重跑 `node mark-skills-lazy.mjs`（或依赖本地扩展 `pi-skills-lazy.ts` 在下次启动自愈标记）。技能内容更新走 `skill-updater.ts`（§1.2）的启动检查 / `/skill-update`，与 `pi update --extensions` 是两条线：后者只升 npm/git 扩展包。
 
 > 首次安装（§2.1）同样不带版本号，npm 自动解析 latest；**本仓库任何位置都不写死扩展版本号**。
 > **两个 git 源走同一条命令**

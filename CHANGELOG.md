@@ -1,3 +1,11 @@
+## 2026-11-21 技能自动更新扩展纳入仓库
+
+- 昨天只装在用户目录的 `~/.pi/agent/extensions/skill-updater.ts` 与 `~/.pi/agent/skill-updater.json` 收进仓库 canonical（`extensions/`、`config/agent/`），由两个 install 脚本幂等同步；否则 `install-local-extensions.mjs --prune` 会把它当孤儿删掉。
+- 实测有效：临时把 `checkIntervalHours=0` 起一次 `pi --no-session -p ok`，`skill-updater-state.json` 的 `lastCheck` 前移，配置已还原。`/skill-update` 只在交互 TUI 有效，print 模式吞掉 slash 命令。
+- `config/agent/settings.json` 的 `lastChangelogVersion` 1.5.2→1.6.0（对齐用户级实际值，防止同步后 changelog 重播）。
+- `readme.md` §1.2 本地扩展 2→3 并补配置/验证说明；§2.3 区分技能自动更新与 `pi update --extensions`。
+- 执行 `pi update --extensions`：`npm:pi-prefix-stabilizer` 0.3.0 → 0.4.1（其余 7 个未变，`pi list` 仍 8 条）。验收：`fix-proper-lockfile-proxy.mjs --check`、`fix-pi-one-ui-theme.mjs --check`、两个 install 脚本 `--check`、`mark-skills-lazy.mjs --check` 全 exit 0，冒烟无 extension_error。
+
 ## 2026-11-19 codemode：inlineBudget 400→0（隐藏工具声明）
 
 - 用户级 `~/.pi/agent/settings.json` 与仓库 canonical `config/agent/settings.json`：`codemode.inlineBudget` `400 → 0`（`mode: "only"` 不变）。

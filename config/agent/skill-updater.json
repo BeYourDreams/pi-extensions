@@ -1,0 +1,74 @@
+{
+  "checkIntervalHours": 6,
+  "gitRoots": [
+    "~/.pi/agent/skills",
+    "~/.pi/skills"
+  ],
+  "repos": [
+    {
+      "repo": "https://github.com/zenstory-ai/drama-skills.git",
+      "branch": "main",
+      "mode": "sync",
+      "items": [
+        {
+          "from": "skills/short-drama",
+          "to": "~/.pi/skills/short-drama"
+        },
+        {
+          "from": "skills/short-drama-breakdown",
+          "to": "~/.pi/skills/short-drama-breakdown"
+        },
+        {
+          "from": "skills/short-drama-assets",
+          "to": "~/.pi/skills/short-drama-assets"
+        },
+        {
+          "from": "skills/short-drama-develop",
+          "to": "~/.pi/skills/short-drama-develop"
+        },
+        {
+          "from": "skills/short-drama-edit",
+          "to": "~/.pi/skills/short-drama-edit"
+        },
+        {
+          "from": "skills/short-drama-image-prompts",
+          "to": "~/.pi/skills/short-drama-image-prompts"
+        },
+        {
+          "from": "skills/short-drama-novel-analyze",
+          "to": "~/.pi/skills/short-drama-novel-analyze"
+        },
+        {
+          "from": "skills/short-drama-produce",
+          "to": "~/.pi/skills/short-drama-produce"
+        },
+        {
+          "from": "skills/short-drama-review",
+          "to": "~/.pi/skills/short-drama-review"
+        }
+      ]
+    },
+    {
+      "repo": "https://github.com/kangarooking/cangjie-skill.git",
+      "branch": "main",
+      "mode": "adopt",
+      "items": [
+        {
+          "from": ".",
+          "to": "~/.pi/agent/skills/cangjie-skill"
+        }
+      ]
+    },
+    {
+      "repo": "https://github.com/shengjidaguai-china/goutoujunshi.git",
+      "branch": "main",
+      "mode": "adopt",
+      "items": [
+        {
+          "from": ".",
+          "to": "~/.pi/agent/skills/goutoujunshi"
+        }
+      ]
+    }
+  ]
+}

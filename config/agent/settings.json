@@ -2,7 +2,7 @@
   "defaultModel": "1",
   "defaultProvider": "1",
   "defaultThinkingLevel": "low",
-  "lastChangelogVersion": "1.5.2",
+  "lastChangelogVersion": "1.6.0",
   "theme": "light/dark",
   "quietStartup": true,
   "tuiMode": "fullscreen",
