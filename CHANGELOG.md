@@ -1,3 +1,9 @@
+## 2026-11-22 技能更新检测并发化
+
+- `extensions/skill-updater.ts`：启动检查把 3 个配置仓库 + `gitRoots` 的远端 ref 并发取回（原来串行 5 次 `git ls-remote`），实测同一台机 7.2s → 3.3s；失败按仓库记账，不影响其他仓库。
+- 实测确认镜像生效：5 次远端查询都带 `-c url.https://ghfast.top/...insteadOf=...`，直连 `github.com` 约 20s（且常失败），SSH 4.6–7s，镜像 1–2s —— 进程列表里显示 `github.com` URL 是 `insteadOf` 改写前的原始参数，不代表走直连。
+- `skill-updater.check.mjs` 加并发断言（峰值并发 ≥3）并跑通；同步仓库副本到 `~/.pi/agent/extensions/`（`/reload` 生效）。
+
 ## 2026-11-21 技能自动更新扩展纳入仓库
 
 - 昨天只装在用户目录的 `~/.pi/agent/extensions/skill-updater.ts` 与 `~/.pi/agent/skill-updater.json` 收进仓库 canonical（`extensions/`、`config/agent/`），由两个 install 脚本幂等同步；否则 `install-local-extensions.mjs --prune` 会把它当孤儿删掉。

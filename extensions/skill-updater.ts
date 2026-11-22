@@ -105,11 +105,44 @@ async function runUpdate(pi: ExtensionAPI, force: boolean, checkOnly = false, fo
   if (!force && !checkOnly && state.lastCheck && Date.now() - state.lastCheck < (cfg.checkIntervalHours ?? 6) * 3600_000) return result;
 
   await mkdir(CACHE, { recursive: true });
+  // 远端 ref 一次性并发取回：串行 5 个仓库会叠加镜像延迟；失败逐个记账，不拖垮其他仓库。
+  const refs = new Map<string, string>();
+  const refErrors = new Map<string, string>();
+  const probes: Promise<void>[] = [];
+  for (const repo of cfg.repos) {
+    const key = createHash("sha1").update(repo.repo).digest("hex").slice(0, 12);
+    probes.push((async () => {
+      try {
+        const ref = (await git(pi, ["ls-remote", repo.repo, "refs/heads/" + (repo.branch ?? "main")])).split("\t")[0];
+        if (!ref) throw new Error("无法获取远端 ref");
+        refs.set(key, ref);
+      } catch (err) { refErrors.set(key, (err as Error).message); }
+    })());
+  }
+  const localDirs: string[] = [];
+  for (const root of cfg.gitRoots ?? []) {
+    const dir = resolve(root);
+    let entries;
+    try { entries = await readdir(dir, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      if (e.isDirectory() && existsSync(path.join(dir, e.name, ".git"))) localDirs.push(path.join(dir, e.name));
+    }
+  }
+  if (checkOnly) for (const p of localDirs) probes.push((async () => {
+    try {
+      const branch = await git(pi, ["rev-parse", "--abbrev-ref", "HEAD"], p);
+      const ref = (await git(pi, ["ls-remote", "origin", "refs/heads/" + branch], p)).split("\t")[0];
+      if (!ref) throw new Error("无法获取远端 ref");
+      refs.set(p, ref);
+    } catch (err) { refErrors.set(p, (err as Error).message); }
+  })());
+  await Promise.all(probes);
   for (const repo of cfg.repos) {
     const key = createHash("sha1").update(repo.repo).digest("hex").slice(0, 12);
     const branch = repo.branch ?? "main";
     try {
-      const ref = (await git(pi, ["ls-remote", repo.repo, "refs/heads/" + branch])).split("\t")[0];
+      const ref = refs.get(key);
+      if (refErrors.has(key)) throw new Error(refErrors.get(key));
       if (!ref) throw new Error("无法获取远端 ref");
       const changed = state.repos[key]?.ref !== ref || !existsSync(path.join(CACHE, key, ".git"));
       const cache = checkOnly ? "" : await prepareCache(pi, repo, key, branch, changed);
@@ -137,43 +170,38 @@ async function runUpdate(pi: ExtensionAPI, force: boolean, checkOnly = false, fo
     } catch (err) { result.errors.push(repo.repo + ": " + (err as Error).message); }
   }
 
-  for (const root of cfg.gitRoots ?? []) {
-    const dir = resolve(root);
-    let entries;
-    try { entries = await readdir(dir, { withFileTypes: true }); } catch { continue; }
-    for (const e of entries) {
-      if (!e.isDirectory() || !existsSync(path.join(dir, e.name, ".git"))) continue;
-      const p = path.join(dir, e.name);
-      try {
-        if (checkOnly) {
-          const branch = await git(pi, ["rev-parse", "--abbrev-ref", "HEAD"], p);
-          const remoteRef = (await git(pi, ["ls-remote", "origin", "refs/heads/" + branch], p)).split("\t")[0];
-          const localRef = await git(pi, ["rev-parse", "HEAD"], p);
-          if (remoteRef && remoteRef !== localRef) result.updated.push(e.name + " (可更新)");
+  for (const p of localDirs) {
+    const name = path.basename(p);
+    try {
+      if (checkOnly) {
+        if (refErrors.has(p)) throw new Error(refErrors.get(p));
+        const remoteRef = refs.get(p);
+        if (!remoteRef) throw new Error("无法获取远端 ref");
+        const localRef = await git(pi, ["rev-parse", "HEAD"], p);
+        if (remoteRef !== localRef) result.updated.push(name + " (可更新)");
+        continue;
+      }
+      const status = await git(pi, ["status", "--porcelain"], p);
+      let note = "";
+      if (status) {
+        const files = status.split("\n").filter(Boolean).map((r) => r.replace(/^[MARCD?! ]{1,2}\s/, ""));
+        const diff = await git(pi, ["diff", "HEAD", "--unified=0", "--", ...files], p);
+        if (markerOnly(status, diff)) {
+          await git(pi, ["checkout", "--", ...files], p);
+        } else if (forceLocal) {
+          await cp(p, path.join(BACKUPS, name + "-force-" + Date.now()), { recursive: true });
+          await git(pi, ["reset", "--hard"], p);
+          await git(pi, ["clean", "-fd"], p);
+          note = " (本地修改已备份并丢弃)";
+        } else {
+          result.skipped.push(name + " (git 有本地修改)");
           continue;
         }
-        const status = await git(pi, ["status", "--porcelain"], p);
-        let note = "";
-        if (status) {
-          const files = status.split("\n").filter(Boolean).map((r) => r.replace(/^[MARCD?! ]{1,2}\s/, ""));
-          const diff = await git(pi, ["diff", "HEAD", "--unified=0", "--", ...files], p);
-          if (markerOnly(status, diff)) {
-            await git(pi, ["checkout", "--", ...files], p);
-          } else if (forceLocal) {
-            await cp(p, path.join(BACKUPS, e.name + "-force-" + Date.now()), { recursive: true });
-            await git(pi, ["reset", "--hard"], p);
-            await git(pi, ["clean", "-fd"], p);
-            note = " (本地修改已备份并丢弃)";
-          } else {
-            result.skipped.push(e.name + " (git 有本地修改)");
-            continue;
-          }
-        }
-        const out = await git(pi, ["pull", "--ff-only"], p);
-        if (!/already up to date/i.test(out) || status) result.updated.push(e.name + note);
-        await markSkills(p);
-      } catch (err) { result.errors.push(e.name + ": " + (err as Error).message); }
-    }
+      }
+      const out = await git(pi, ["pull", "--ff-only"], p);
+      if (!/already up to date/i.test(out) || status) result.updated.push(name + note);
+      await markSkills(p);
+    } catch (err) { result.errors.push(name + ": " + (err as Error).message); }
   }
   if (!checkOnly) {
     state.lastCheck = Date.now();

@@ -69,6 +69,32 @@ while (!fallbackNotes.length && Date.now() < deadline) await new Promise((r) => 
 assert.ok(fallbackCalls.includes('-c') && fallbackCalls.includes('ls-remote'), '加速源失败未回退直连');
 assert.match(fallbackNotes[0], /最新/, '回退后检查结果不对');
 assert.equal(readFileSync(state, 'utf8'), before, '回退流程修改了状态文件');
+// 并发探测：多个远端同时进行，慢仓库不会串行叠加延迟
+let concurrentStart;
+let inFlight = 0;
+let peak = 0;
+let concurrentNotes = [];
+init({
+  on: (name, fn) => { if (name === 'session_start') concurrentStart = fn; },
+  registerCommand: () => {},
+  exec: async (_cmd, args) => {
+    if (args[0] === '-c' || args[0] === 'ls-remote') {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 40));
+      inFlight--;
+    }
+    const call = args[0] === '-c' ? args.slice(2) : args;
+    const key = createHash('sha1').update(call[1] ?? '').digest('hex').slice(0, 12);
+    const ref = saved.repos[key]?.ref ?? 'deadbeef';
+    return { code: 0, stdout: call[0] === 'ls-remote' ? ref + '\trefs/heads/main' : ref, stderr: '' };
+  },
+});
+await concurrentStart({ reason: 'startup' }, { hasUI: true, ui: { notify: (m) => concurrentNotes.push(m) } });
+while (!concurrentNotes.length && Date.now() < deadline) await new Promise((r) => setTimeout(r, 20));
+assert.ok(peak >= 3, '远端检查没有并发: ' + peak);
+assert.match(concurrentNotes[0] ?? '', /最新/, '并发后检查结果不对');
+assert.equal(readFileSync(state, 'utf8'), before, '并发流程修改了状态文件');
 // 懒加载标记由插件自己管：递归补回、不重复；只有标记的脏文件算干净
 const tmp = mkdtempSync(path.join(tmpdir(), 'skill-updater-test-'));
 mkdirSync(path.join(tmp, 'sub'), { recursive: true });
