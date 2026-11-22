@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, globSync } from "node:fs";
 import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -19,6 +19,27 @@ type State = { lastCheck: number; repos: Record<string, { ref: string }>; skills
 type Result = { updated: string[]; skipped: string[]; errors: string[] };
 
 const resolve = (p: string) => p.startsWith("~") ? path.join(homedir(), p.slice(1).replace(/^[\/]/, "")) : p;
+
+const MARK = "disable-model-invocation: true";
+/** 插件自己加的标记不算本地修改：更新后重打，避免每次都被 git 脏检查拦住。 */
+export async function markSkills(dir: string): Promise<number> {
+  let marked = 0;
+  for (const rel of globSync("**/SKILL.md", { cwd: dir })) {
+    const file = path.join(dir, rel);
+    const src = await readFile(file, "utf8");
+    const close = src.indexOf("---", 3);
+    if (!src.startsWith("---") || close < 0 || src.slice(0, close).includes(MARK)) continue;
+    await writeFile(file, src.slice(0, close) + MARK + "\n" + src.slice(close));
+    marked++;
+  }
+  return marked;
+}
+export function markerOnly(status: string, diff: string): boolean {
+  const rows = status.split("\n").filter(Boolean).map((r) => r.trimStart());
+  if (!rows.length || !rows.every((r) => /^M /.test(r))) return false;
+  const lines = diff.split("\n");
+  return !lines.some((l) => /^-[^-]/.test(l)) && lines.filter((l) => /^\+[^+]/.test(l)).every((l) => l === "+" + MARK);
+}
 
 async function readJson<T>(file: string): Promise<T | null> {
   try { return JSON.parse(await readFile(file, "utf8")) as T; } catch { return null; }
@@ -76,7 +97,7 @@ async function syncItem(src: string, to: string) {
   await rm(to, { recursive: true, force: true });
   await cp(src, to, { recursive: true });
 }
-async function runUpdate(pi: ExtensionAPI, force: boolean, checkOnly = false): Promise<Result> {
+async function runUpdate(pi: ExtensionAPI, force: boolean, checkOnly = false, forceLocal = false): Promise<Result> {
   const result: Result = { updated: [], skipped: [], errors: [] };
   const cfg = await readJson<Config>(CONFIG);
   if (!cfg) { result.errors.push("缺少配置文件 " + CONFIG); return result; }
@@ -132,9 +153,25 @@ async function runUpdate(pi: ExtensionAPI, force: boolean, checkOnly = false): P
           continue;
         }
         const status = await git(pi, ["status", "--porcelain"], p);
-        if (status) { result.skipped.push(e.name + " (git 有本地修改)"); continue; }
+        let note = "";
+        if (status) {
+          const files = status.split("\n").filter(Boolean).map((r) => r.replace(/^[MARCD?! ]{1,2}\s/, ""));
+          const diff = await git(pi, ["diff", "HEAD", "--unified=0", "--", ...files], p);
+          if (markerOnly(status, diff)) {
+            await git(pi, ["checkout", "--", ...files], p);
+          } else if (forceLocal) {
+            await cp(p, path.join(BACKUPS, e.name + "-force-" + Date.now()), { recursive: true });
+            await git(pi, ["reset", "--hard"], p);
+            await git(pi, ["clean", "-fd"], p);
+            note = " (本地修改已备份并丢弃)";
+          } else {
+            result.skipped.push(e.name + " (git 有本地修改)");
+            continue;
+          }
+        }
         const out = await git(pi, ["pull", "--ff-only"], p);
-        if (!/already up to date/i.test(out)) result.updated.push(e.name);
+        if (!/already up to date/i.test(out) || status) result.updated.push(e.name + note);
+        await markSkills(p);
       } catch (err) { result.errors.push(e.name + ": " + (err as Error).message); }
     }
   }
@@ -154,8 +191,8 @@ function format(r: Result, checkOnly = false): string {
 
 export default function (pi: ExtensionAPI) {
   let running: Promise<Result> | undefined;
-  const update = (force: boolean) => {
-    if (!running) running = runUpdate(pi, force).finally(() => { running = undefined; });
+  const update = (force: boolean, forceLocal = false) => {
+    if (!running) running = runUpdate(pi, force, false, forceLocal).finally(() => { running = undefined; });
     return running;
   };
   pi.on("session_start", (event, ctx: ExtensionContext) => {
@@ -172,9 +209,11 @@ export default function (pi: ExtensionAPI) {
     }).catch((err: Error) => tell("技能更新检查失败: " + err.message, "warning"));
   });
   pi.registerCommand("skill-update", {
-    description: "立即检查并更新所有技能（备份后覆盖，跳过本地有修改的）",
-    handler: async (_args, ctx) => {
-      const r = await update(true);
+    description: "立即更新所有技能；--force 备份并丢弃 git 技能的本地修改后更新（插件标记的懒加载行会自动补回）",
+    getArgumentCompletions: (prefix: string) => "--force".startsWith(prefix) ? [{ value: "--force", label: "--force 强制更新" }] : null,
+    handler: async (args, ctx) => {
+      const forceLocal = args.trim() === "force" || /(?:^|\s)--force(?:\s|$)/.test(args);
+      const r = await update(true, forceLocal);
       ctx.ui.notify(format(r), r.errors.length ? "warning" : "info");
     },
   });

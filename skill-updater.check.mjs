@@ -1,15 +1,15 @@
 // 启动只提醒、不更新，且不阻塞 session_start：node ~/.pi/agent/skill-updater.check.mjs
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 
 const root = path.join(homedir(), '.pi', 'agent');
 const state = path.join(root, 'skill-updater-state.json');
 const before = readFileSync(state, 'utf8');
 const saved = JSON.parse(before);
-const { default: init } = await import(new URL('./extensions/skill-updater.ts', import.meta.url).href);
+const { default: init, markSkills, markerOnly } = await import(new URL('./extensions/skill-updater.ts', import.meta.url).href);
 
 let onStart;
 let command;
@@ -69,4 +69,17 @@ while (!fallbackNotes.length && Date.now() < deadline) await new Promise((r) => 
 assert.ok(fallbackCalls.includes('-c') && fallbackCalls.includes('ls-remote'), '加速源失败未回退直连');
 assert.match(fallbackNotes[0], /最新/, '回退后检查结果不对');
 assert.equal(readFileSync(state, 'utf8'), before, '回退流程修改了状态文件');
-console.log('OK 启动不阻塞、只读、加速源失败回退直连；提醒:', notes.join(' | ') || '(无可用更新)');
+// 懒加载标记由插件自己管：递归补回、不重复；只有标记的脏文件算干净
+const tmp = mkdtempSync(path.join(tmpdir(), 'skill-updater-test-'));
+mkdirSync(path.join(tmp, 'sub'), { recursive: true });
+const skill = path.join(tmp, 'sub', 'SKILL.md');
+writeFileSync(skill, '---\nname: x\n---\nbody\n');
+assert.equal(await markSkills(tmp), 1);
+assert.match(readFileSync(skill, 'utf8'), /name: x\ndisable-model-invocation: true\n---/);
+assert.equal(await markSkills(tmp), 0);
+const markerDiff = '--- a/SKILL.md\n+++ b/SKILL.md\n@@ -1 +1 @@\n+disable-model-invocation: true\n';
+assert.ok(markerOnly(' M SKILL.md', markerDiff));
+assert.ok(!markerOnly(' M SKILL.md', markerDiff + '+real change\n'));
+assert.ok(!markerOnly('?? new.md', markerDiff));
+rmSync(tmp, { recursive: true, force: true });
+console.log('OK 启动不阻塞、只读、加速源失败回退直连；标记自愈；提醒:', notes.join(' | ') || '(无可用更新)');
