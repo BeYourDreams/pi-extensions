@@ -62,7 +62,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 |---|---|
 | `pi-pet-autostart.ts` | 让 `pi-dsh-pet` **默认常驻且整机只留一只**：TUI 会话一开就派发 `/pet`，已有宠物窗就复用不新开，跨会话/多开 pi 也只一只。不注册工具，只挂 `session_start` + `/pet-auto` 开关。配置见 [配置 §3.3](./docs/配置.md) |
 | `pi-skills-lazy.ts` | 会话启动时自愈技能懒加载标记：扫描 `~/.pi/agent/skills/*/SKILL.md`，缺 `disable-model-invocation: true` 就自动补回（幂等）。不注册工具；手工更新脚本仍建议末尾跑 `node mark-skills-lazy.mjs`（§1.4） |
-| `skill-updater.ts` | 技能自动更新：`startup`/`reload` 时按 6 小时节流检查；git 技能干净才 `git pull --ff-only`，短剧套件按上游 ref 整目录覆盖（先备份、本地有改动则跳过），cangjie/goutou 只采用不覆盖。注册 `/skill-update` 强制立即检查。配置 `config/agent/skill-updater.json`（同步到 `~/.pi/agent/skill-updater.json`），状态/缓存/备份在 `~/.pi/agent/skill-updater-*` |
+| `skill-updater.ts` | 技能自动更新：`startup`/`reload` 时按 6 小时节流检查；git 技能干净才 `git pull --ff-only`，短剧套件按上游 ref 整目录覆盖（先备份、本地有改动则跳过），cangjie/goutou 只采用不覆盖。注册 `/skill-update` 强制立即检查；远端 git 在本插件内走 `ghfast.top` 加速源，失败回退直连（不写全局 git config）。配置 `config/agent/skill-updater.json`（同步到 `~/.pi/agent/skill-updater.json`），状态/缓存/备份在 `~/.pi/agent/skill-updater-*` |
 
 > 同步是双向的：仓库删掉的本地扩展要跑 `node install-local-extensions.mjs --prune` 才能从用户目录清掉，否则残留副本仍然被加载（`--check` 会把孤儿报 `[orphan]` 并 exit 1）。
 > `/skill-update` 只在交互 TUI 有效：`pi -p "/skill-update"` 不执行命令（print 模式吞 slash 命令、exit 0 无输出）。体检启动钩子：临时把配置 `checkIntervalHours` 设 0 起一次会话，看 `~/.pi/agent/skill-updater-state.json` 的 `lastCheck` 是否前移，再改回。

@@ -44,8 +44,14 @@ async function hashDir(dir: string): Promise<string | null> {
   await walk(dir, "");
   return hash.digest("hex");
 }
+// ponytail: 单个加速源 + 失败回退直连；换源只改这里，不做健康探测。
+const MIRROR_CONFIG = "url.https://ghfast.top/https://github.com/.insteadOf=https://github.com/";
+const REMOTE_GIT = new Set(["ls-remote", "clone", "fetch", "pull"]);
 async function git(pi: ExtensionAPI, args: string[], cwd?: string): Promise<string> {
-  const r = await pi.exec("git", args, { cwd, timeout: 120000 });
+  const opts = { cwd, timeout: 120000 };
+  const useMirror = REMOTE_GIT.has(args[0]);
+  let r = await pi.exec("git", useMirror ? ["-c", MIRROR_CONFIG, ...args] : args, opts);
+  if (useMirror && r.code !== 0) r = await pi.exec("git", args, opts);
   if (r.code !== 0) throw new Error("git " + args.join(" ") + ": " + (r.stderr || r.stdout).slice(0, 300));
   return r.stdout.trim();
 }
