@@ -65,7 +65,7 @@
   ],
   "codemode": {
     "mode": "only",
-    "inlineBudget": 0
+    "inlineBudget": 1200
   },
   "fullscreenWheelScrollLines": "auto",
   "extensionChangelogVersions": {

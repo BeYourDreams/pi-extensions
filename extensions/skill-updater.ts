@@ -68,12 +68,12 @@ async function syncItem(src: string, to: string) {
   await rm(to, { recursive: true, force: true });
   await cp(src, to, { recursive: true });
 }
-async function runUpdate(pi: ExtensionAPI, force: boolean): Promise<Result> {
+async function runUpdate(pi: ExtensionAPI, force: boolean, checkOnly = false): Promise<Result> {
   const result: Result = { updated: [], skipped: [], errors: [] };
   const cfg = await readJson<Config>(CONFIG);
   if (!cfg) { result.errors.push("缺少配置文件 " + CONFIG); return result; }
   const state = await readJson<State>(STATE) ?? { lastCheck: 0, repos: {}, skills: {} };
-  if (!force && state.lastCheck && Date.now() - state.lastCheck < (cfg.checkIntervalHours ?? 6) * 3600_000) return result;
+  if (!force && !checkOnly && state.lastCheck && Date.now() - state.lastCheck < (cfg.checkIntervalHours ?? 6) * 3600_000) return result;
 
   await mkdir(CACHE, { recursive: true });
   for (const repo of cfg.repos) {
@@ -83,7 +83,7 @@ async function runUpdate(pi: ExtensionAPI, force: boolean): Promise<Result> {
       const ref = (await git(pi, ["ls-remote", repo.repo, "refs/heads/" + branch])).split("\t")[0];
       if (!ref) throw new Error("无法获取远端 ref");
       const changed = state.repos[key]?.ref !== ref || !existsSync(path.join(CACHE, key, ".git"));
-      const cache = await prepareCache(pi, repo, key, branch, changed);
+      const cache = checkOnly ? "" : await prepareCache(pi, repo, key, branch, changed);
       for (const item of repo.items) {
         const to = resolve(item.to);
         const name = path.basename(to);
@@ -97,13 +97,14 @@ async function runUpdate(pi: ExtensionAPI, force: boolean): Promise<Result> {
           }
           if (!changed && rec?.ref === ref) continue;
           if (rec && rec.hash !== hash) { result.skipped.push(name + " (本地有修改)"); continue; }
+          if (checkOnly) { result.updated.push(name + " (可更新)"); continue; }
           const src = item.from === "." ? cache : path.join(cache, item.from);
           await syncItem(src, to);
           state.skills[item.to] = { hash: await hashDir(to), ref };
           result.updated.push(name);
         } catch (err) { result.errors.push(name + ": " + (err as Error).message); }
       }
-      state.repos[key] = { ref };
+      if (!checkOnly) state.repos[key] = { ref };
     } catch (err) { result.errors.push(repo.repo + ": " + (err as Error).message); }
   }
 
@@ -115,6 +116,13 @@ async function runUpdate(pi: ExtensionAPI, force: boolean): Promise<Result> {
       if (!e.isDirectory() || !existsSync(path.join(dir, e.name, ".git"))) continue;
       const p = path.join(dir, e.name);
       try {
+        if (checkOnly) {
+          const branch = await git(pi, ["rev-parse", "--abbrev-ref", "HEAD"], p);
+          const remoteRef = (await git(pi, ["ls-remote", "origin", "refs/heads/" + branch], p)).split("\t")[0];
+          const localRef = await git(pi, ["rev-parse", "HEAD"], p);
+          if (remoteRef && remoteRef !== localRef) result.updated.push(e.name + " (可更新)");
+          continue;
+        }
         const status = await git(pi, ["status", "--porcelain"], p);
         if (status) { result.skipped.push(e.name + " (git 有本地修改)"); continue; }
         const out = await git(pi, ["pull", "--ff-only"], p);
@@ -122,13 +130,15 @@ async function runUpdate(pi: ExtensionAPI, force: boolean): Promise<Result> {
       } catch (err) { result.errors.push(e.name + ": " + (err as Error).message); }
     }
   }
-  state.lastCheck = Date.now();
-  await saveJson(STATE, state);
+  if (!checkOnly) {
+    state.lastCheck = Date.now();
+    await saveJson(STATE, state);
+  }
   return result;
 }
-function format(r: Result): string {
+function format(r: Result, checkOnly = false): string {
   const parts: string[] = [];
-  if (r.updated.length) parts.push("已更新: " + r.updated.join(", "));
+  if (r.updated.length) parts.push((checkOnly ? "可更新: " : "已更新: ") + r.updated.join(", "));
   if (r.skipped.length) parts.push("已跳过: " + r.skipped.join(", "));
   if (r.errors.length) parts.push("失败: " + r.errors.join("; "));
   return parts.length ? parts.join(" | ") : "技能均为最新";
@@ -140,10 +150,18 @@ export default function (pi: ExtensionAPI) {
     if (!running) running = runUpdate(pi, force).finally(() => { running = undefined; });
     return running;
   };
-  pi.on("session_start", async (event, ctx: ExtensionContext) => {
+  pi.on("session_start", (event, ctx: ExtensionContext) => {
     if (event.reason !== "startup" && event.reason !== "reload") return;
-    const r = await update(false);
-    if (ctx.hasUI && (r.updated.length || r.skipped.length || r.errors.length)) ctx.ui.notify("技能更新: " + format(r), r.errors.length ? "warning" : "info");
+    // ctx 在会话替换后会失效；后台回调只用启动时抓到的 notify
+    const hasUI = ctx.hasUI;
+    const notify = hasUI ? ctx.ui.notify.bind(ctx.ui) : undefined;
+    const tell = (msg: string, level: "info" | "warning") => {
+      try { notify?.(msg, level); } catch { /* 会话已替换，丢弃提示 */ }
+    };
+    // 远端检查不 await，否则 git ls-remote 会卡住 session_start
+    void runUpdate(pi, false, true).then((r) => {
+      tell("技能检查: " + format(r, true) + "。如需更新运行 /skill-update", "info");
+    }).catch((err: Error) => tell("技能更新检查失败: " + err.message, "warning"));
   });
   pi.registerCommand("skill-update", {
     description: "立即检查并更新所有技能（备份后覆盖，跳过本地有修改的）",
