@@ -65,15 +65,15 @@ async function hashDir(dir: string): Promise<string | null> {
   await walk(dir, "");
   return hash.digest("hex");
 }
-// ponytail: 加速源 5s 没结果就回退直连；换源只改这里，不做健康探测。
+// ponytail: 加速源只给 ref 探测 5s，clone/fetch 用足 120s；换源只改这里，不做健康探测。
 const MIRROR_CONFIG = "url.https://ghfast.top/https://github.com/.insteadOf=https://github.com/";
 const MIRROR_TIMEOUT_MS = 5000;
 const GIT_TIMEOUT_MS = 120000;
 const REMOTE_GIT = new Set(["ls-remote", "clone", "fetch", "pull"]);
 async function git(pi: ExtensionAPI, args: string[], cwd?: string): Promise<string> {
   const useMirror = REMOTE_GIT.has(args[0]);
-  let r = await pi.exec("git", useMirror ? ["-c", MIRROR_CONFIG, ...args] : args,
-    { cwd, timeout: useMirror ? MIRROR_TIMEOUT_MS : GIT_TIMEOUT_MS });
+  const timeout = useMirror && args[0] === "ls-remote" ? MIRROR_TIMEOUT_MS : GIT_TIMEOUT_MS;
+  let r = await pi.exec("git", useMirror ? ["-c", MIRROR_CONFIG, ...args] : args, { cwd, timeout });
   if (useMirror && (r.killed || r.code !== 0)) r = await pi.exec("git", args, { cwd, timeout: GIT_TIMEOUT_MS });
   if (r.code !== 0) throw new Error("git " + args.join(" ") + ": " + (r.stderr || r.stdout).slice(0, 300));
   return r.stdout.trim();
@@ -85,6 +85,7 @@ async function prepareCache(pi: ExtensionAPI, repo: Repo, key: string, branch: s
     await mkdir(CACHE, { recursive: true });
     await git(pi, ["clone", "--depth", "1", "--branch", branch, repo.repo, dir]);
   } else {
+    await rm(path.join(dir, ".git", "shallow.lock"), { force: true });
     await git(pi, ["fetch", "--depth", "1", "origin", branch], dir);
     await git(pi, ["reset", "--hard", "FETCH_HEAD"], dir);
   }
