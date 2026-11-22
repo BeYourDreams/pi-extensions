@@ -45,12 +45,19 @@ assert.equal(readFileSync(state, 'utf8'), before, '启动修改了状态文件')
 // 加速源挂掉时必须回退直连，结果不变
 let startFallback;
 const fallbackCalls = [];
+let mirrorAttempts = 0;
 init({
   on: (name, fn) => { if (name === 'session_start') startFallback = fn; },
   registerCommand: () => {},
-  exec: async (_cmd, args) => {
+  exec: async (_cmd, args, opts) => {
     fallbackCalls.push(args[0]);
-    if (args[0] === '-c') return { code: 1, stdout: '', stderr: 'mirror down' };
+    if (args[0] === '-c') {
+      assert.ok(opts?.timeout < 30000, '加速源没有快速超时');
+      mirrorAttempts++;
+      return mirrorAttempts % 2
+        ? { code: 0, stdout: '', stderr: '', killed: true }
+        : { code: 1, stdout: '', stderr: 'mirror down' };
+    }
     const key = createHash('sha1').update(args[1] ?? '').digest('hex').slice(0, 12);
     const ref = saved.repos[key]?.ref ?? 'deadbeef';
     return { code: 0, stdout: args[0] === 'ls-remote' ? ref + '\trefs/heads/main' : ref, stderr: '' };
