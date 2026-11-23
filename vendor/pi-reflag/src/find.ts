@@ -4,6 +4,9 @@
  * Ported from:
  *   - kaofelix/greprip-rs src/fnd.rs (MIT)
  *   - kluzzebass/reflag translator/find2fd/translator.go (MIT)
+ *
+ * Local fork: one table of per-flag actions covering GNU find 4.10 --help.
+ * Flags with no fd equivalent leave the command unrewritten.
  */
 import type { CommandRewrite } from "./types.js";
 import { xargs } from "./xargs.js";
@@ -87,44 +90,94 @@ export function shouldDisableIgnore(paths: string[], mode: IgnoreMode): boolean 
   return paths.some((p) => p.split(/[/\\]/).some((component) => ignoredSet.has(component)));
 }
 
-export function createFind(ignoreMode: IgnoreMode): CommandRewrite {
-  return xargs((command) => {
-    if (command.name === "find") {
-      const args = translateFindArgs(command.args, ignoreMode);
-      if (args) {
-        return { name: "fd", args };
-      }
-    }
-  });
-}
+type Action =
+  | { kind: "drop" }
+  | { kind: "emit"; to: string[] }
+  | { kind: "value"; to: string[]; map?: (v: string) => string[] }
+  | { kind: "mapped"; map: (v: string) => string[] | undefined }
+  | { kind: "pattern"; target: "glob" | "path" | "regex"; icase?: boolean }
+  | { kind: "exec" }
+  | { kind: "unsupported" };
+
+const DROP: Action = { kind: "drop" };
+const NO: Action = { kind: "unsupported" };
+const emit = (...to: string[]): Action => ({ kind: "emit", to });
+const value = (...to: string[]): Action => ({ kind: "value", to });
+const glob = (icase = false): Action => ({ kind: "pattern", target: "glob", icase });
+const pathPattern = (icase = false): Action => ({ kind: "pattern", target: "path", icase });
+const regex = (icase = false): Action => ({ kind: "pattern", target: "regex", icase });
 
 function translateDuration(val: string, unit: "d" | "min"): string[] | undefined {
   if (val.startsWith("-")) {
-    return ["--changed-within", `${val.slice(1)}${unit}`];
+    return ["--changed-within", val.slice(1) + unit];
   }
   if (val.startsWith("+")) {
-    return ["--changed-before", `${val.slice(1)}${unit}`];
+    return ["--changed-before", val.slice(1) + unit];
   }
   // Unsigned means "exactly N days/mins ago" — fd has no equivalent, bail
   return undefined;
 }
 
-function translateSize(val: string): string | undefined {
-  // find 'c' = bytes; fd 'b' = bytes
-  if (val.endsWith("c")) {
-    return `${val.slice(0, -1)}b`;
+function translateSize(val: string): string[] | undefined {
+  const m = /^([+-]?)(\d+)([cwkMGb])?$/.exec(val);
+  if (!m) return undefined;
+  const [, sign, num, unit] = m;
+  // find: c=bytes, M/G=MiB/GiB; bare/k/w/b count 512-byte blocks or words
+  switch (unit) {
+    case "c": return [sign + num + "b"];
+    case "M": return [sign + num + "mi"];
+    case "G": return [sign + num + "gi"];
+    default: return undefined;
   }
-  // find 'k' = 512-byte blocks; fd 'k' = 1024 bytes — semantically different, bail
-  if (val.endsWith("k")) {
-    return undefined;
-  }
-  return val;
 }
 
-function parseExecArgs(
-  args: string[],
-  startIndex: number,
-): { execArgs: string[]; isBatch: boolean; endIndex: number } {
+/** One entry per GNU find flag; long names omit the leading "--". */
+const FLAGS: ReadonlyMap<string, Action> = new Map<string, Action>([
+  // positional options
+  ["H", DROP], ["L", emit("-L")], ["P", DROP], ["follow", emit("-L")],
+  ["daystart", NO], ["warn", DROP], ["nowarn", DROP], ["regextype", NO],
+  ["help", NO], ["version", NO],
+  // normal options
+  ["depth", DROP], ["files0-from", NO], ["maxdepth", value("-d")], ["mindepth", value("--min-depth")],
+  ["mount", emit("--one-file-system")], ["xdev", emit("--one-file-system")],
+  ["noleaf", DROP], ["ignore_readdir_race", DROP], ["noignore_readdir_race", DROP],
+  // tests: fd only tracks mtime, so atime/ctime variants bail
+  ["amin", NO], ["anewer", NO], ["atime", NO], ["cmin", NO], ["cnewer", NO], ["ctime", NO],
+  ["context", NO], ["empty", emit("-t", "e")], ["false", NO], ["true", DROP], ["fstype", NO],
+  ["gid", { kind: "mapped", map: (v) => ["--owner", ":" + v] }],
+  ["group", { kind: "mapped", map: (v) => ["--owner", ":" + v] }],
+  ["ilname", NO], ["lname", NO],
+  ["iname", glob(true)], ["name", glob()],
+  ["inum", NO], ["links", NO], ["used", NO],
+  ["ipath", pathPattern(true)], ["iwholename", pathPattern(true)],
+  ["path", pathPattern()], ["wholename", pathPattern()],
+  ["iregex", regex(true)], ["regex", regex()],
+  ["mmin", { kind: "mapped", map: (v) => translateDuration(v, "min") ?? [] }],
+  ["mtime", { kind: "mapped", map: (v) => translateDuration(v, "d") ?? [] }],
+  ["newer", value("--newer")], ["nouser", NO], ["nogroup", NO], ["perm", NO],
+  ["readable", NO], ["writable", NO], ["executable", emit("-t", "x")],
+  ["size", { kind: "mapped", map: (v) => { const s = translateSize(v); return s ? ["-S", ...s] : []; } }],
+  ["type", value("-t")],
+  ["uid", value("--owner")], ["user", value("--owner")], ["xtype", NO],
+  // actions
+  ["delete", NO], ["print0", emit("-0")], ["print", DROP], ["ls", emit("-l")],
+  ["fprint", NO], ["fprint0", NO], ["printf", NO], ["fprintf", NO], ["fls", NO],
+  ["prune", DROP], ["quit", emit("-1")],
+  ["exec", { kind: "exec" }], ["execdir", { kind: "exec" }],
+  ["ok", NO], ["okdir", NO],
+]);
+
+function stripAnchors(pat: string): string {
+  return pat
+    .replace(/^\.\//, "")
+    .replace(/^\*\//, "")
+    .replace(/\/\*$/, "")
+    .replace(/\*$/, "");
+}
+
+function parseExecArgs(args: string[], startIndex: number): {
+  execArgs: string[]; isBatch: boolean; endIndex: number;
+} {
   const execArgs: string[] = [];
   let i = startIndex;
   let isBatch = false;
@@ -144,7 +197,7 @@ function parseExecArgs(
   return { execArgs, isBatch, endIndex: i };
 }
 
-function collectLeadingOptions(args: string[]): { options: string[]; cursor: number } {
+function collectLeadingOptions(args: string[]): { options: string[]; cursor: number } | undefined {
   const options: string[] = [];
   let cursor = 0;
   while (cursor < args.length) {
@@ -154,6 +207,9 @@ function collectLeadingOptions(args: string[]): { options: string[]; cursor: num
       cursor++;
     } else if (arg === "-H" || arg === "-P") {
       cursor++;
+    } else if (arg === "-D" || arg === "-O" || /^-O\d+$/.test(arg)) {
+      // fd has no optimizer/debug-option equivalent
+      return undefined;
     } else {
       break;
     }
@@ -177,259 +233,10 @@ function collectPaths(args: string[], cursor: number): { paths: string[]; cursor
   return { paths, cursor };
 }
 
-interface ExpressionResult {
-  translated: string[];
-  globPatterns: string[];
-  regexPattern: string | null;
-  execArgs: string[];
-  caseInsensitive: boolean;
-  hasIname: boolean;
-  hasName: boolean;
-}
-
-function translateExpressions(args: string[], cursor: number): ExpressionResult | undefined {
-  const translated: string[] = [];
-  const globPatterns: string[] = [];
-  let regexPattern: string | null = null;
-  const execArgs: string[] = [];
-  let caseInsensitive = false;
-  let hasIname = false;
-  let hasName = false;
-
-  let i = cursor;
-
-  while (i < args.length) {
-    const arg = args[i];
-
-    if (
-      arg === "(" ||
-      arg === ")" ||
-      arg === "-o" ||
-      arg === "-or" ||
-      arg === "-a" ||
-      arg === "-and"
-    ) {
-      i++;
-      continue;
-    }
-
-    // ! -name PAT or -not -name PAT → exclude glob pattern
-    if ((arg === "!" || arg === "-not") && i + 2 < args.length && args[i + 1] === "-name") {
-      translated.push("-E", args[i + 2]);
-      i += 3;
-      continue;
-    }
-
-    // ! -path PAT or -not -path PAT → strip glob anchors and exclude
-    if ((arg === "!" || arg === "-not") && i + 2 < args.length && args[i + 1] === "-path") {
-      const pat = args[i + 2]
-        .replace(/^\.\//, "")
-        .replace(/^\*\//, "")
-        .replace(/\/\*$/, "")
-        .replace(/\*$/, "");
-      translated.push("-E", pat);
-      i += 3;
-      continue;
-    }
-
-    // ! or -not followed by anything other than -name/-path → bail
-    if (arg === "!" || arg === "-not") {
-      return undefined;
-    }
-
-    if (arg === "-name" && i + 1 < args.length) {
-      hasName = true;
-      globPatterns.push(args[i + 1]);
-      i += 2;
-      continue;
-    }
-
-    if (arg === "-iname" && i + 1 < args.length) {
-      hasIname = true;
-      caseInsensitive = true;
-      globPatterns.push(args[i + 1]);
-      i += 2;
-      continue;
-    }
-
-    if (arg === "-regex" && i + 1 < args.length) {
-      regexPattern = args[i + 1];
-      i += 2;
-      continue;
-    }
-
-    if (arg === "-iregex" && i + 1 < args.length) {
-      caseInsensitive = true;
-      regexPattern = args[i + 1];
-      i += 2;
-      continue;
-    }
-
-    if (arg === "-type" && i + 1 < args.length) {
-      translated.push("-t", args[i + 1]);
-      i += 2;
-      continue;
-    }
-
-    if (arg === "-maxdepth" && i + 1 < args.length) {
-      translated.push("-d", args[i + 1]);
-      i += 2;
-      continue;
-    }
-
-    if (arg === "-mindepth" && i + 1 < args.length) {
-      translated.push("--min-depth", args[i + 1]);
-      i += 2;
-      continue;
-    }
-
-    if (arg === "-size" && i + 1 < args.length) {
-      const sizeVal = translateSize(args[i + 1]);
-      if (sizeVal === undefined) {
-        return undefined;
-      }
-      translated.push("-S", sizeVal);
-      i += 2;
-      continue;
-    }
-
-    if (arg === "-newer" && i + 1 < args.length) {
-      translated.push("--newer", args[i + 1]);
-      i += 2;
-      continue;
-    }
-
-    if (arg === "-mtime" && i + 1 < args.length) {
-      const dur = translateDuration(args[i + 1], "d");
-      if (!dur) {
-        return undefined;
-      }
-      translated.push(...dur);
-      i += 2;
-      continue;
-    }
-
-    // -atime and -ctime track access/inode-change time; fd only tracks mtime → bail
-    if (arg === "-atime" || arg === "-ctime") {
-      return undefined;
-    }
-
-    if (arg === "-mmin" && i + 1 < args.length) {
-      const dur = translateDuration(args[i + 1], "min");
-      if (!dur) {
-        return undefined;
-      }
-      translated.push(...dur);
-      i += 2;
-      continue;
-    }
-
-    // -amin and -cmin track access/inode-change time; fd only tracks mtime → bail
-    if (arg === "-amin" || arg === "-cmin") {
-      return undefined;
-    }
-
-    if (arg === "-user" && i + 1 < args.length) {
-      translated.push("--owner", args[i + 1]);
-      i += 2;
-      continue;
-    }
-
-    if (arg === "-group" && i + 1 < args.length) {
-      translated.push("--owner", `:${args[i + 1]}`);
-      i += 2;
-      continue;
-    }
-
-    if (arg === "-path" && i + 1 < args.length) {
-      if (i + 2 < args.length && args[i + 2] === "-prune") {
-        // -path PAT -prune → exclude directory: strip leading ./, */ and trailing /*, *
-        const pat = args[i + 1]
-          .replace(/^\.\//, "")
-          .replace(/^\*\//, "")
-          .replace(/\/\*$/, "")
-          .replace(/\*$/, "");
-        translated.push("-E", pat);
-        i += 3;
-        if (i < args.length && (args[i] === "-o" || args[i] === "-or")) {
-          i++;
-        }
-      } else {
-        translated.push("-p", args[i + 1]);
-        i += 2;
-      }
-      continue;
-    }
-
-    if (arg === "-perm" && i + 1 < args.length) {
-      // no fd equivalent — silently dropping would change semantics → bail
-      return undefined;
-    }
-
-    // -delete has no fd equivalent and silently dropping it would be wrong → bail
-    if (arg === "-delete") {
-      return undefined;
-    }
-
-    if (arg === "-exec" || arg === "-execdir") {
-      const { execArgs: cmdArgs, isBatch, endIndex } = parseExecArgs(args, i + 1);
-      execArgs.push(isBatch ? "-X" : "-x", ...cmdArgs);
-      i = endIndex;
-      continue;
-    }
-
-    if (arg === "-print0") {
-      translated.push("-0");
-      i++;
-      continue;
-    }
-    if (arg === "-print") {
-      i++;
-      continue;
-    }
-    if (arg === "-L" || arg === "-follow") {
-      translated.push("-L");
-      i++;
-      continue;
-    }
-    if (arg === "-H" || arg === "-P") {
-      i++;
-      continue;
-    }
-    if (arg === "-empty") {
-      translated.push("-t", "e");
-      i++;
-      continue;
-    }
-    if (arg === "-executable") {
-      translated.push("-t", "x");
-      i++;
-      continue;
-    }
-    if (arg === "-xdev" || arg === "-mount") {
-      translated.push("--one-file-system");
-      i++;
-      continue;
-    }
-    if (arg === "-quit") {
-      translated.push("-1");
-      i++;
-      continue;
-    }
-    if (arg === "-prune" || arg === "-depth" || arg === "-daystart") {
-      i++;
-      continue;
-    }
-
-    // unknown expression - bail
-    if (arg.startsWith("-")) {
-      return undefined;
-    }
-    i++;
-  }
-
-  return { translated, globPatterns, regexPattern, execArgs, caseInsensitive, hasIname, hasName };
-}
+type Token =
+  | { kind: "raw"; text: string }
+  | { kind: "glob" | "path"; value: string; negate?: boolean }
+  | { kind: "regex"; value: string };
 
 export function translateFindArgs(
   args: string[],
@@ -437,56 +244,156 @@ export function translateFindArgs(
 ): string[] | undefined {
   const result: string[] = ["-H"];
 
-  const leadingForPaths = collectLeadingOptions(args);
-  const pathsForDetection = collectPaths(args, leadingForPaths.cursor).paths;
-  if (shouldDisableIgnore(pathsForDetection, ignoreMode)) {
-    result.push("--no-ignore");
-  }
-
-  const leading = collectLeadingOptions(args);
-  result.push(...leading.options);
-
-  const pathsResult = collectPaths(args, leading.cursor);
+  const leadingPaths = collectLeadingOptions(args);
+  if (!leadingPaths) return undefined;
+  result.push(...leadingPaths.options);
+  const pathsResult = collectPaths(args, leadingPaths.cursor);
   const { paths } = pathsResult;
 
-  const exprResult = translateExpressions(args, pathsResult.cursor);
-  if (!exprResult) {
+  const out: Token[] = [];
+  const execArgs: string[] = [];
+  const caseModes = new Set<boolean>();
+  let negate = false;
+  let i = pathsResult.cursor;
+
+  while (i < args.length) {
+    const arg = args[i];
+
+    // Operators are consumed, but a comma is a distinct find OR — can't express it
+    if (arg === "(" || arg === ")" || arg === "-a" || arg === "-and" || arg === "-o" || arg === "-or") {
+      i++;
+      continue;
+    }
+    if (arg === "," || arg === "--") {
+      return undefined;
+    }
+    if (arg === "!" || arg === "-not") {
+      negate = true;
+      i++;
+      continue;
+    }
+
+    if (!arg.startsWith("-")) {
+      // find allows paths interleaved with expressions
+      if (arg !== ".") paths.push(arg);
+      i++;
+      continue;
+    }
+
+    // GNU find flags are whole words (some take values), not short clusters
+    const eq = arg.startsWith("--") ? arg.indexOf("=") : -1;
+    const name = eq < 0 ? arg.replace(/^-+/, "") : arg.slice(2, eq);
+    const inline = eq < 0 ? undefined : arg.slice(eq + 1);
+    const action = FLAGS.get(name);
+    if (!action) return undefined;
+
+    if (action.kind === "unsupported") return undefined;
+    if (action.kind === "drop") {
+      if (negate) return undefined;
+      if (name === "prune") {
+        const last = out[out.length - 1];
+        if (last && (last.kind === "glob" || last.kind === "path") && !last.negate) {
+          last.negate = true;
+          if (last.kind === "path") last.value = stripAnchors(last.value);
+        }
+      }
+      i++;
+      continue;
+    }
+    if (action.kind === "pattern") {
+      const val = inline ?? args[i + 1];
+      if (val === undefined) return undefined;
+      caseModes.add(!!action.icase);
+      if (action.icase) out.push({ kind: "raw", text: "-i" });
+      if (action.target === "regex") {
+        if (negate) return undefined;
+        out.push({ kind: "regex", value: val });
+      } else {
+        out.push({
+          kind: action.target,
+          value: action.target === "path" && negate ? stripAnchors(val) : val,
+          negate,
+        });
+      }
+      i += inline === undefined ? 2 : 1;
+      continue;
+    }
+
+    if (action.kind === "exec") {
+      if (negate) return undefined;
+      const { execArgs: cmd, isBatch, endIndex } = parseExecArgs(args, i + 1);
+      execArgs.push(isBatch ? "-X" : "-x", ...cmd);
+      i = endIndex;
+      continue;
+    }
+
+    if (negate) return undefined;
+    let emitted: string[];
+    let consumed = 1;
+    if (action.kind === "emit") {
+      if (inline !== undefined) return undefined;
+      emitted = action.to;
+    } else {
+      const val = inline ?? args[i + 1];
+      if (val === undefined) return undefined;
+      consumed = inline === undefined ? 2 : 1;
+      if (action.kind === "mapped") {
+        emitted = action.map(val) ?? [];
+        if (emitted.length === 0) return undefined;
+      } else {
+        emitted = [...action.to, ...(action.map ? action.map(val) : [val])];
+      }
+    }
+    for (const text of emitted) out.push({ kind: "raw", text });
+    i += consumed;
+  }
+
+  // fd has one case mode and one glob flag; mixed case patterns can't be expressed
+  if (caseModes.size > 1) return undefined;
+  // fd ORs repeated --type/--owner filters; find ANDs them
+  const rawFlags = out.filter((t) => t.kind === "raw").map((t) => t.text);
+  if (["-t", "--owner"].some((flag) => rawFlags.filter((f) => f === flag).length > 1)) {
     return undefined;
   }
-
-  const { translated, globPatterns, regexPattern, execArgs, caseInsensitive, hasIname, hasName } =
-    exprResult;
-
-  // fd can't do per-pattern case sensitivity → bail when -iname and -name are mixed
-  if (hasIname && hasName) {
-    return undefined;
+  if (out.filter((t) => t.kind === "regex").length > 1) return undefined;
+  if (shouldDisableIgnore(paths, ignoreMode)) {
+    result.splice(1, 0, "--no-ignore");
   }
 
-  // Comma in any pattern would corrupt brace expansion → bail
-  if (globPatterns.some((p) => p.includes(","))) {
-    return undefined;
+  const globs: string[] = [];
+  for (const token of out) {
+    if (token.kind === "raw") {
+      result.push(token.text);
+    } else if (token.kind === "regex") {
+      result.push(token.value);
+    } else if (token.negate) {
+      result.push("-E", token.value);
+    } else if (token.kind === "glob") {
+      globs.push(token.value);
+    } else {
+      result.push("-p", token.value);
+    }
   }
 
-  result.push(...translated);
-
-  if (caseInsensitive) {
-    result.push("-i");
-  }
-
-  // glob patterns take priority over regex pattern
-  if (globPatterns.length === 1) {
-    result.push("-g", globPatterns[0]);
-  } else if (globPatterns.length > 1) {
-    result.push("-g", `{${globPatterns.join(",")}}`);
-  } else if (regexPattern !== null) {
-    result.push(regexPattern);
-  } else if (paths.length > 0) {
+  if (globs.length > 0) {
+    if (globs.some((g) => g.includes(","))) return undefined;
+    result.push("-g", globs.length === 1 ? globs[0] : "{" + globs.join(",") + "}");
+  } else if (!out.some((t) => t.kind === "regex") && paths.length > 0) {
     // fd requires a pattern before path args; "." matches everything
     result.push(".");
   }
 
-  result.push(...paths);
-  result.push(...execArgs);
-
+  result.push(...paths, ...execArgs);
   return result;
+}
+
+export function createFind(ignoreMode: IgnoreMode): CommandRewrite {
+  return xargs((command) => {
+    if (command.name === "find") {
+      const args = translateFindArgs(command.args, ignoreMode);
+      if (args) {
+        return { name: "fd", args };
+      }
+    }
+  });
 }
