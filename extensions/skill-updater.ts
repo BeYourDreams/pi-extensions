@@ -163,6 +163,7 @@ async function runUpdate(pi: ExtensionAPI, force: boolean, checkOnly = false, fo
           if (checkOnly) { result.updated.push(name + " (可更新)"); continue; }
           const src = item.from === "." ? cache : path.join(cache, item.from);
           await syncItem(src, to);
+          await markSkills(to);
           state.skills[item.to] = { hash: await hashDir(to), ref };
           result.updated.push(name);
         } catch (err) { result.errors.push(name + ": " + (err as Error).message); }

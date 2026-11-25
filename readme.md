@@ -13,12 +13,13 @@
 
 > 要查某个包为什么被卸、某次体检的原始输出，去 CHANGELOG 找对应日期。
 
-## 1. 清单（在用 8 个扩展 = 6 npm + 2 git）
+## 1. 清单（在用 8 个扩展 = 5 npm + 2 git + 1 本地 fork）
 
 ```
 npm: pi-tps · pi-cache-guardian · pi-prefix-stabilizer · @aboutlo/pi-smart-edit
-      @xynogen/pix-optimizer · @piotr-oles/pi-reflag
+      @xynogen/pix-optimizer
 git: github.com/BeYourDreams/pi-dsh-pet（扩展被屏蔽） · pi-one-ui
+本地: vendor/pi-reflag（本地 fork，替代 npm:@piotr-oles/pi-reflag）
 ```
 
 **本清单以 `pi list` 实数为准**，任何增减都同步改这一节与 §2.1 的安装命令。版本不锁（安装命令一律不带 `@版本号`，取 npm 最新），要查本机实际版本：
@@ -26,14 +27,14 @@ git: github.com/BeYourDreams/pi-dsh-pet（扩展被屏蔽） · pi-one-ui
 
 ```bash
 node -e 'const{execSync}=require("child_process"),fs=require("fs");
-execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.test(l)).map(l=>l.trim())
- .forEach(s=>{const n=s.split(":").slice(1).join(":").replace(/@latest$/,"");
-  try{console.log(n,"→",JSON.parse(fs.readFileSync(process.env.USERPROFILE+"/.pi/agent/npm/node_modules/"+n+"/package.json","utf8")).version)}catch{console.log(n,"→ (git)")}})'
+execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^  \S/.test(l)).map(l=>l.trim())
+ .forEach(s=>{const n=s.split(" ")[0].replace(/@latest$/,""),pkg=n.replace(/^(npm|git):/,"");
+  try{console.log(n,"→",JSON.parse(fs.readFileSync(process.env.USERPROFILE+"/.pi/agent/npm/node_modules/"+pkg+"/package.json","utf8")).version)}catch{console.log(n,"→ (git/本地)")}})
 ```
 
 ### 1.1 装什么（先装，装完先跑一次冒烟）
 
-**npm 源 6 个**：
+**npm 源 5 个**：
 
 | 包 | 作用 | 装完要做的 |
 |---|---|---|
@@ -42,7 +43,6 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `npm:pi-prefix-stabilizer` | 系统提示词前缀稳定 + 漂移检测 | 无；**当前无顺序约束**（§2.2） |
 | `npm:@aboutlo/pi-smart-edit` | 覆盖内建 `edit`，容忍引号/空白不匹配 | 无；`edit` 归它，匹配走「精确 → NFKC 归一化行」（[配置 §3.6](./docs/配置.md)） |
 | `npm:@xynogen/pix-optimizer` | **压缩三合一**：caveman（输出，ASD-STE100 四档）+ ponytail（做法，YAGNI 三档）+ RTK（输入，bash 命令改写） | **写 `~/.pi/agent/pix.json`**（[配置 §3.5](./docs/配置.md)）；本机三档全 ultra。不注册工具，唯一入口 `/optimizer` 交互面板；RTK 首次加载自动下二进制到 `~/.pi/agent/bin` |
-| `npm:@piotr-oles/pi-reflag` | 透明把 bash 里的 `find`→`fd`、`grep`→`rg` 改写后执行 | 要求 `fd` / `rg` 在 PATH（[配置 §3.7](./docs/配置.md)） |
 
 **git 源 2 个**（都必须串行 `pi install`，且先 `pi remove` 掉旧的 npm/本地路同源条目）：
 
@@ -50,6 +50,12 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 |---|---|---|
 | `git:github.com/BeYourDreams/pi-dsh-pet` | 桌面宠物：Electron 透明浮窗 + 91 个 WebM 动画 | **必须 `pi install`**（光 `npm i -g` 不加载）；上游扩展用 object form 屏蔽（[配置 §3.3](./docs/配置.md)）；**写 `extensions/pi-dsh-pet.json`** |
 | `git:github.com/BeYourDreams/pi-one-ui` | 状态栏 / 主题增强（`/colors`、`pi-one-ui.json`） | **走 git 不走 npm**（npm 0.9.1 主题过不了 pi 严格 schema）；**写 `pi-one-ui.json` 的 `colors.cwd`**（[配置 §3.8](./docs/配置.md)） |
+
+**本地 fork 1 个**（不随 `pi update --extensions` 升级；改动记录见 [vendor/pi-reflag/UPSTREAM.md](./vendor/pi-reflag/UPSTREAM.md)）：
+
+| 包 | 作用 | 装完要做的 |
+|---|---|---|
+| `vendor/pi-reflag` | 透明把 bash 里的 `find`→`fd`、`grep`→`rg` 改写后执行；本地版覆盖 GNU find `--help` 全部 flag 与 grep 命令族 | 用 `pi install` 注册本地路径；要求 `fd` / `rg` 在 PATH（[配置 §3.7](./docs/配置.md)） |
 
 > 另：**本地扩展 3 个**（`extensions/pi-pet-autostart.ts`、`extensions/pi-skills-lazy.ts`、`extensions/skill-updater.ts`），由 `node install-local-extensions.mjs` 同步（§1.2）。
 > 扩展的具体版本号不锁、不记在本清单里：安装命令一律不带 `@版本号`（取 npm 最新），要查本机实际版本跑下面那段脚本。
@@ -61,21 +67,22 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | 文件 | 作用 |
 |---|---|
 | `pi-pet-autostart.ts` | 让 `pi-dsh-pet` **默认常驻且整机只留一只**：TUI 会话一开就派发 `/pet`，已有宠物窗就复用不新开，跨会话/多开 pi 也只一只。不注册工具，只挂 `session_start` + `/pet-auto` 开关。配置见 [配置 §3.3](./docs/配置.md) |
-| `pi-skills-lazy.ts` | 会话启动时自愈技能懒加载标记：扫描 `~/.pi/agent/skills/*/SKILL.md`，缺 `disable-model-invocation: true` 就自动补回（幂等）。不注册工具；手工更新脚本仍建议末尾跑 `node mark-skills-lazy.mjs`（§1.4） |
-启动检查并发取回所有远端 ref；远端 git 在本插件内走 `ghfast.top` 加速源，失败回退直连（不写全局 git config）
+| `pi-skills-lazy.ts` | 会话启动时自愈技能懒加载标记：扫描 `~/.pi/agent/skills/*/SKILL.md` 与 `~/.pi/skills/*/SKILL.md`，缺 `disable-model-invocation: true` 就自动补回（幂等）。不注册工具；手工更新脚本仍建议末尾跑 `node mark-skills-lazy.mjs`（§1.4） |
+| `skill-updater.ts` | 启动检查并发取回所有远端 ref；远端 git 在本插件内走 `ghfast.top` 加速源，失败回退直连（不写全局 git config） |
 
 > 同步是双向的：仓库删掉的本地扩展要跑 `node install-local-extensions.mjs --prune` 才能从用户目录清掉，否则残留副本仍然被加载（`--check` 会把孤儿报 `[orphan]` 并 exit 1）。
 > `/skill-update` 只在交互 TUI 有效：`pi -p "/skill-update"` 不执行命令（print 模式吞 slash 命令、exit 0 无输出）。体检启动钩子：临时把配置 `checkIntervalHours` 设 0 起一次会话，看 `~/.pi/agent/skill-updater-state.json` 的 `lastCheck` 是否前移，再改回。
 
 ### 1.3 Skills（可选，非扩展）
 
-本机在装 11 个技能，全部落在 `~/.pi/agent/skills/`（索引已按 §1.4 隐藏，名单在 `config/agent/AGENTS.md`）：
+本机在装 15 个技能目录（14 个有顶层 SKILL.md）：`~/.pi/agent/skills/` 5 个 + `~/.pi/skills/` 10 个（drama 线）（索引已按 §1.4 隐藏，名单在 `config/agent/AGENTS.md`）：
 
 | 技能 | 装法 | 用途 |
 |---|---|---|
-| `cangjie-skill`（仓颉） | `git clone github.com/kangarooking/cangjie-skill` | 把书 / 长视频 / 播客 / 课程蒸馏成可执行 skills |
-| `goutoujunshi`（狗头军师） | `git clone github.com/shengjidaguai-china/goutoujunshi` | 恋爱军师与情绪支持 |
+| `cangjie-skill`（仓颉） | adopt 副本（源 `github.com/kangarooking/cangjie-skill`） | 把书 / 长视频 / 播客 / 课程蒸馏成可执行 skills |
+| `goutoujunshi`（狗头军师） | adopt 副本（源 `github.com/shengjidaguai-china/goutoujunshi`） | 恋爱军师与情绪支持 |
 | `short-drama` | 仅全局副本（见下） | 短剧/漫剧项目总控：初始化、下一步、Dashboard |
+| `short-drama-breakdown` | 仅全局副本 | 对标成片拆解：集长/镜长/对白密度/留钩节奏，反推剧本 |
 | `short-drama-develop` | 仅全局副本 | 开发/故事设定/分集地图/导演阐述/画风 |
 | `short-drama-novel-analyze` | 仅全局副本 | 长篇小说 → 原著分析 → 分集候选 |
 | `short-drama-assets` | 仅全局副本 | 人物/造型、地点、道具的视觉设定 |
@@ -84,10 +91,13 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 | `short-drama-produce` | 仅全局副本 | 确认后跑图/跑视频/配音/配乐 |
 | `short-drama-review` | 仅全局副本 | 审稿与跨场连续性检查 |
 | `short-drama-edit` | 仅全局副本 | 剪辑/字幕/响度/交付规格 |
+| `short-drama-factory` | git clone `github.com/wsf73/short-drama-factory`（`~/.pi/agent/skills/`） | 工业化编剧系统 v4.4：题材/钩子/反转矩阵、分档剧本与合规红线 |
+| `code-review` | 普通副本（`~/.pi/agent/skills/`） | 审查代码项目，输出带证据的 Markdown 问题报告，不改源码 |
+| `400-duanju-shuangdian` | git clone `github.com/icooldp/400-duanju-shuangdian`（`~/.pi/agent/skills/`） | 400 个短剧爽点子技能包：无顶层 SKILL.md，按 a/b/c/d/meta 分类按需读子技能 |
 
-> **九件 `short-drama-*` 没有仓库镜像**：`git ls-files skills` 只剩 `UPSTREAM.md`，SKILL.md 与脚本只存在于 `~/.pi/agent/skills/`——改它们等于直接改全局，仓库里没有备份（要留底自己另存）。`sync-drama-skills.mjs` 的 `CUSTOM` 已清空，`check` 恒报无漂移。
+> **十件 `short-drama-*` 没有仓库镜像**（其中 `short-drama-pro` 自建）：`git ls-files skills` 只剩 `UPSTREAM.md`，SKILL.md 与脚本只存在于 `~/.pi/skills/`——改它们等于直接改全局，仓库里没有备份（要留底自己另存）。九件上游技能由 `skill-updater.ts` 从 drama-skills 同步，`sync-drama-skills.mjs` 的 `CUSTOM` 已清空、`check` 恒报无漂移。
 >
-> **曾计划的换代未落地**：`400-duanju-shuangdian` + `short-drama-factory` + `code-review` 是 2026-11-07 写进手册的目标态，**本机实际没装**（`~/.pi/agent/skills/` 里没有）。要么按表里命令 clone 装上并补名单，要么把这段计划删掉——别照抄当现状。
+> **换代技能已落地**：`400-duanju-shuangdian`（git clone，无顶层 SKILL.md，子技能在子目录）、`short-drama-factory`（git clone）、`code-review`（普通副本）均装在 `~/.pi/agent/skills/`；前两个由 `skill-updater.ts` 的本地 git 扫描拉取。三者尚未进 `config/agent/AGENTS.md` 的路由名单。
 >
 > **新装 skill 四步**：① clone 到 `~/.pi/agent/skills/`；② `node mark-skills-lazy.mjs`（否则索引又常驻）；③ 在 `config/agent/AGENTS.md` 名单补一条 + `node install-project-config.mjs`；④ 开新会话。  
 > **手工更新技能后**：在更新脚本末尾跑 `node mark-skills-lazy.mjs`；已装本地扩展 `pi-skills-lazy.ts` 时，下次 `session_start` 也会自动补回缺失标记（名单增删/改名仍需手工同步）。
@@ -96,9 +106,9 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^\s+(npm|git):/.tes
 
 ### 1.4 技能索引懒加载（纯配置，2026-11-14）
 
-技能索引（name + description + filePath）由 pi 原生**常驻**注入系统提示词，本机 11 个技能实测 ≈ **2000 tok/请求**；技能正文（≈22k tok）本来就已经是按需读的。纯配置（**0 扩展**）就能把索引压到 ≈ **180 tok**：
+技能索引（name + description + filePath）由 pi 原生**常驻**注入系统提示词，本机 11 个技能实测 ≈ **2000 tok/请求**（现 15 个技能目录）；技能正文（≈22k tok）本来就已经是按需读的。纯配置（**0 扩展**）就能把索引压到 ≈ **180 tok**：
 
-1. 给每个 `~/.pi/agent/skills/*/SKILL.md` 的 frontmatter 加一行 `disable-model-invocation: true` —— pi 用 `formatSkillsForPrompt` 过滤该标记，整条技能不再出现在提示词里；`/skill:<name>` 和直接 `read SKILL.md` 都不受影响。
+1. 给每个 `~/.pi/agent/skills/*/SKILL.md` 与 `~/.pi/skills/*/SKILL.md` 的 frontmatter 加一行 `disable-model-invocation: true` —— pi 用 `formatSkillsForPrompt` 过滤该标记，整条技能不再出现在提示词里；`/skill:<name>` 和直接 `read SKILL.md` 都不受影响。
 2. 路由改由名单承担：`config/agent/AGENTS.md`（canonical）写「技能名=2~4 字提示」一行到底，`node install-project-config.mjs` 同步到 `~/.pi/agent/AGENTS.md`。**这是模型唯一的路由依据，别省**。
 
 ```bash
@@ -124,12 +134,12 @@ node install-project-config.mjs    # 名单同步到 ~/.pi/agent/AGENTS.md
 
 ### 2.1 顺序循环
 
-**`pi install` 一次只写一条注册，绝不能并行**（并行会竞写 `settings.json` 丢包）。照序跑，**目标 = `pi list` 8 条**：
+**`pi install` 一次只写一条注册，绝不能并行**（并行会竞写 `settings.json` 丢包）。照序跑，**目标 = `pi list` 8 条（5 npm + 2 git + 1 本地 fork）**：
 
 ```bash
-# ① npm 源 6 个（循环里少一个就少装一个）
+# ① npm 源 5 个（循环里少一个就少装一个）
 for p in pi-tps pi-cache-guardian pi-prefix-stabilizer \
-         @aboutlo/pi-smart-edit @xynogen/pix-optimizer @piotr-oles/pi-reflag; do
+         @aboutlo/pi-smart-edit @xynogen/pix-optimizer; do
   pi install "npm:$p" || echo "[失败] $p"
 done
 
@@ -139,16 +149,19 @@ pi install git:github.com/BeYourDreams/pi-dsh-pet
 # pi-one-ui 走 git 不走 npm：npm 包 0.9.1 的内置主题过不了 pi 严格 schema
 pi install git:github.com/BeYourDreams/pi-one-ui
 
-# ③ 本地扩展（pi-pet-autostart.ts 宠物默认常驻）
+# ③ 本地 fork（替代已卸的 npm:@piotr-oles/pi-reflag；本地包不装依赖，自带 web-tree-sitter）
+pi install "D:/AI/pi插件安装清单/vendor/pi-reflag"
+
+# ④ 本地扩展（pi-pet-autostart.ts 宠物默认常驻）
 node install-local-extensions.mjs
 
-# ④ 用户级配置：把仓库 config/agent/ 拷进 ~/.pi/agent/（含 settings.json；项目级 .pi/settings.json **不**拷：会覆盖顶掉全局）
+# ⑤ 用户级配置：把仓库 config/agent/ 拷进 ~/.pi/agent/（含 settings.json；项目级 .pi/settings.json **不**拷：会覆盖顶掉全局）
 node install-project-config.mjs
 
-# ⑤ 项目级规则（单条：别写项目级 .pi/settings.json）：仓库根 AGENTS.md 就是模板，按项目拷
+# ⑥ 项目级规则（单条：别写项目级 .pi/settings.json）：仓库根 AGENTS.md 就是模板，按项目拷
 # cp AGENTS.md <项目>/AGENTS.md
 ```
-> **④ 说明：`config/agent/settings.json` 为用户级总配置 canonical 源**（含 `defaultTools`/codemode 等），`install-project-config.mjs` 会同步覆盖到 `~/.pi/agent/settings.json`（勿写项目 `.pi/settings.json`）：
+> **⑤ 说明：`config/agent/settings.json` 为用户级总配置 canonical 源**
 > ```jsonc
 > {
 >   "defaultTools": ["read", "edit", "write", "bash", "codemode"],
@@ -156,6 +169,8 @@ node install-project-config.mjs
 > }
 > ```
 > `inlineBudget: 0` = 仅列命名空间、不内联工具声明（最省 token）；模型看不到工具签名，脚本内用 `searchTools()`/`describeTool()` 发现；`mode:"only"` 只隐藏声明、不改 active 集，**无直调拦截器**（模型硬点名直调仍可能被执行）。改完 `/reload` 或新会话生效。
+
+要保留 fork 就在同步后重跑 §2.1 ③ 的 `pi install`
 
 > **别再把历史上卸掉的包装回来**（全部 20+ 个，理由都在 CHANGELOG 对应日期）。本机清了它们是为了「一个 user turn = 一个 provider 请求」，装回前先答一遍这个问题。典型黑名单：`pi-web-access` / `pi-agent-browser-native` / `@chendpoc/pi-memory` / `@arhen/pi-core-subagent` / `pi-test-runner` / `pi-ocr` / `pi-cache-compact` / `@tian.zuo/pi-find` / `@trycedar/pi-mdiff` / `pi-mcp-adapter` / `@henryqw/pi-ask-question` / `@ssk_dev/rpiv-todo-lean` / `@narumitw/pi-lsp` / `@narumitw/pi-plan-mode` / `pi-secret-guard` / `pi-smart-reader` / `pi-budget-guard` / `pi-warm-cache` / `pi-deepseek-cache` / `pi-compaction-cache` / `pi-mono-context-guard` / `@bacnh85/pi-checkpoint` / `pi-meter` / `pi-notify`。
 
@@ -172,7 +187,7 @@ node install-project-config.mjs
 >
 > 若 `pi update --extensions` 也超时，同一改写继续生效（git 源的 update 就是 git pull）；装完即可 `/reload`。
 
-**装完自查**：`pi list` 应见 **8 个扩展（6 npm + 2 git）**，且 `git:github.com/BeYourDreams/pi-dsh-pet` 那行带 `(filtered)`（[配置 §3.3](./docs/配置.md)）。不是 9 条就是漏装/多装，回头查。
+**装完自查**：`pi list` 应见 **8 个扩展（5 npm + 2 git + 1 本地 fork）**，且 `git:github.com/BeYourDreams/pi-dsh-pet` 那行带 `(filtered)`（[配置 §3.3](./docs/配置.md)）。不是 8 条就是漏装/多装，回头查。
 
 ### 2.2 硬顺序约束
 
@@ -189,9 +204,9 @@ pi update --extensions        # 只升扩展，不动 pi 本体（--all 会连 p
 pi list                                # 升完核一遍实际版本
 ```
 
-**升级禁用 `pi install`**：对已装包会命中 npm 缓存、不升版本。升级一律走 `pi update --extensions`（不带版本号 = 取各包 npm 最新）。升级后跑 [体检与排障](./docs/体检排障.md)。
+**升级禁用 `pi install`**：对已装包会命中 npm 缓存、不升版本。升级一律走 `pi update --extensions`（不带版本号 = 取各包 npm 最新）。升级后跑 [体检与排障](./docs/体检排障.md)。本地 fork `vendor/pi-reflag` 不走 `pi update`；要合上游按 [UPSTREAM.md](./vendor/pi-reflag/UPSTREAM.md) 重放补丁并跑 `check-find.mjs`。
 
-打标技能升级后要重跑 `node mark-skills-lazy.mjs`（或依赖本地扩展 `pi-skills-lazy.ts` 在下次启动自愈标记）。技能内容更新走 `skill-updater.ts`（§1.2）的启动检查 / `/skill-update`，与 `pi update --extensions` 是两条线：后者只升 npm/git 扩展包。
+打标技能升级后要重跑 `node mark-skills-lazy.mjs`（或依赖本地扩展 `pi-skills-lazy.ts` 在下次启动自愈标记）；`skill-updater.ts` 同步技能后也会立即补回标记，两个技能根目录都覆盖。
 
 > 首次安装（§2.1）同样不带版本号，npm 自动解析 latest；**本仓库任何位置都不写死扩展版本号**。
 > **两个 git 源走同一条命令**

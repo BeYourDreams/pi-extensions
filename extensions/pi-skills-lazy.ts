@@ -14,8 +14,8 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 const MARK = "disable-model-invocation: true";
 
 function markMissing(): { marked: number; total: number } {
-	const root = join(homedir(), ".pi", "agent", "skills");
-	const files = existsSync(root) ? globSync("*/SKILL.md", { cwd: root }).map((f) => join(root, f)) : [];
+	const roots = [join(homedir(), ".pi", "agent", "skills"), join(homedir(), ".pi", "skills")];
+	const files = roots.flatMap((root) => existsSync(root) ? globSync("*/SKILL.md", { cwd: root }).map((f) => join(root, f)) : []);
 	let marked = 0;
 	for (const file of files) {
 		let src: string;

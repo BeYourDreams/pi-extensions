@@ -19,8 +19,8 @@ import { join } from "node:path";
 
 const MARK = "disable-model-invocation: true";
 const check = process.argv.includes("--check");
-const root = join(homedir(), ".pi", "agent", "skills");
-const files = existsSync(root) ? globSync("*\/SKILL.md", { cwd: root }).map((f) => join(root, f)) : [];
+const roots = [join(homedir(), ".pi", "agent", "skills"), join(homedir(), ".pi", "skills")];
+const files = roots.flatMap((root) => existsSync(root) ? globSync("*/SKILL.md", { cwd: root }).map((f) => join(root, f)) : []);
 
 let changed = 0;
 for (const file of files) {
