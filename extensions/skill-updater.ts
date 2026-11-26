@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createHash } from "node:crypto";
-import { existsSync, globSync } from "node:fs";
+import { existsSync, globSync, readFileSync, writeFileSync } from "node:fs";
 import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -10,6 +10,8 @@ const CONFIG = path.join(ROOT, "skill-updater.json");
 const STATE = path.join(ROOT, "skill-updater-state.json");
 const CACHE = path.join(ROOT, "skill-updater-cache");
 const BACKUPS = path.join(ROOT, "skill-updater-backups");
+const STARTUP_STAMP = path.join(ROOT, "skill-updater-check-stamp");
+const STARTUP_INTERVAL_MS = 5 * 60_000;
 
 type Item = { from: string; to: string };
 type Repo = { repo: string; branch?: string; mode?: "sync" | "adopt"; items: Item[] };
@@ -227,6 +229,12 @@ export default function (pi: ExtensionAPI) {
   };
   pi.on("session_start", (event, ctx: ExtensionContext) => {
     if (event.reason !== "startup" && event.reason !== "reload") return;
+    // 只节流启动检测：时间戳落在用户目录，多开/多项目共享；手动 /skill-update 不走这里
+    const now = Date.now();
+    let last = 0;
+    try { last = Number(readFileSync(STARTUP_STAMP, "utf8")) || 0; } catch { /* 首次 */ }
+    if (now - last < STARTUP_INTERVAL_MS) return;
+    try { writeFileSync(STARTUP_STAMP, String(now)); } catch { /* 只读目录仍允许检查 */ }
     // ctx 在会话替换后会失效；后台回调只用启动时抓到的 notify
     const hasUI = ctx.hasUI;
     const notify = hasUI ? ctx.ui.notify.bind(ctx.ui) : undefined;

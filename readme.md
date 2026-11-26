@@ -68,7 +68,7 @@ execSync("pi list",{encoding:"utf8"}).split("\n").filter(l=>/^  \S/.test(l)).map
 |---|---|
 | `pi-pet-autostart.ts` | 让 `pi-dsh-pet` **默认常驻且整机只留一只**：TUI 会话一开就派发 `/pet`，已有宠物窗就复用不新开，跨会话/多开 pi 也只一只。不注册工具，只挂 `session_start` + `/pet-auto` 开关。配置见 [配置 §3.3](./docs/配置.md) |
 | `pi-skills-lazy.ts` | 会话启动时自愈技能懒加载标记：扫描 `~/.pi/agent/skills/*/SKILL.md` 与 `~/.pi/skills/*/SKILL.md`，缺 `disable-model-invocation: true` 就自动补回（幂等）。不注册工具；手工更新脚本仍建议末尾跑 `node mark-skills-lazy.mjs`（§1.4） |
-| `skill-updater.ts` | 启动检查并发取回所有远端 ref；远端 git 在本插件内走 `ghfast.top` 加速源，失败回退直连（不写全局 git config） |
+| `skill-updater.ts` | 启动检查并发取回所有远端 ref，时间戳 `~/.pi/agent/skill-updater-check-stamp` 全局共享、5 分钟内只查一次（手动 `/skill-update` 不限）；远端 git 在本插件内走 `ghfast.top` 加速源，失败回退直连（不写全局 git config） |
 
 > 同步是双向的：仓库删掉的本地扩展要跑 `node install-local-extensions.mjs --prune` 才能从用户目录清掉，否则残留副本仍然被加载（`--check` 会把孤儿报 `[orphan]` 并 exit 1）。
 > `/skill-update` 只在交互 TUI 有效：`pi -p "/skill-update"` 不执行命令（print 模式吞 slash 命令、exit 0 无输出）。体检启动钩子：临时把配置 `checkIntervalHours` 设 0 起一次会话，看 `~/.pi/agent/skill-updater-state.json` 的 `lastCheck` 是否前移，再改回。
