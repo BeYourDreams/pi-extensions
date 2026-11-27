@@ -165,10 +165,10 @@ node install-project-config.mjs
 > ```jsonc
 > {
 >   "defaultTools": ["read", "edit", "write", "bash", "codemode"],
->   "codemode": { "mode": "only", "inlineBudget": 0 }
+>   "codemode": { "mode": "only", "inlineBudget": 1000 }
 > }
 > ```
-> `inlineBudget: 0` = 仅列命名空间、不内联工具声明（最省 token）；模型看不到工具签名，脚本内用 `searchTools()`/`describeTool()` 发现；`mode:"only"` 只隐藏声明、不改 active 集，**无直调拦截器**（模型硬点名直调仍可能被执行）。改完 `/reload` 或新会话生效。
+> `inlineBudget: 1000` = 内联默认四工具签名（实测 850 起 `read/bash/edit/write` 全齐；400 只见 read/write、800 见 read/bash/write、0 只列命名空间）；`mode:"only"` 只隐藏声明、不改 active 集，**无直调拦截器**（模型硬点名直调仍可能被执行）。改完 `/reload` 或新会话生效。
 
 要保留 fork 就在同步后重跑 §2.1 ③ 的 `pi install`
 

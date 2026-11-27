@@ -2,7 +2,7 @@
   "defaultModel": "1",
   "defaultProvider": "1",
   "defaultThinkingLevel": "low",
-  "lastChangelogVersion": "1.6.0",
+  "lastChangelogVersion": "1.6.1",
   "theme": "light/dark",
   "quietStartup": true,
   "tuiMode": "fullscreen",
@@ -44,17 +44,17 @@
   },
   "fullscreenCopyOnSelect": true,
   "packages": [
-    "npm:pi-cache-guardian",
     "npm:pi-tps",
+    "npm:pi-cache-guardian",
     "npm:pi-prefix-stabilizer",
     "npm:@aboutlo/pi-smart-edit",
+    "npm:@xynogen/pix-optimizer",
     {
       "source": "git:github.com/BeYourDreams/pi-dsh-pet",
       "extensions": []
     },
-    "npm:@xynogen/pix-optimizer",
     "git:github.com/BeYourDreams/pi-one-ui",
-    "npm:@piotr-oles/pi-reflag"
+    "D:\\AI\\pi插件安装清单\\vendor\\pi-reflag"
   ],
   "defaultTools": [
     "read",
@@ -65,7 +65,7 @@
   ],
   "codemode": {
     "mode": "only",
-    "inlineBudget": 1200
+    "inlineBudget": 1000
   },
   "fullscreenWheelScrollLines": "auto",
   "extensionChangelogVersions": {

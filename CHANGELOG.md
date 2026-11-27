@@ -1,3 +1,10 @@
+## 2026-11-27 codemode：inlineBudget 0→1000（恢复默认工具签名内联）
+
+- 用户级 `~/.pi/agent/settings.json` 与仓库 canonical `config/agent/settings.json`：`codemode.inlineBudget` `0 → 1000`（`mode: "only"` 不变）。
+- 实测（临时 agent dir + `before_provider_request` dump，默认 4 工具）：`0` 只列命名空间，0 声明；`400` 内联 `read,write`；`800` 内联 `read,bash,write`；`850` 起 `read,bash,edit,write` 全齐；`1000` 与 `1200` 描述完全一致（4627 字符）。取 1000 留余量。
+- 效果：模型重新看到内建四工具的 TS 签名；`only` 仍隐藏声明式工具、无直调拦截器；其余发现走 `searchTools()`/`describeTool()`。
+- 同步 `readme.md`、`docs/配置.md`、`docs/token优化.md`；`/reload` 或新会话生效。
+
 ## 2026-11-22 技能更新检测并发化
 
 - `extensions/skill-updater.ts`：启动检查把 3 个配置仓库 + `gitRoots` 的远端 ref 并发取回（原来串行 5 次 `git ls-remote`），实测同一台机 7.2s → 3.3s；失败按仓库记账，不影响其他仓库。
